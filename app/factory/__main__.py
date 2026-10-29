@@ -24,6 +24,7 @@ from app.core.plugin import AppPlugin
 from app.factory.input import UserTookOver
 from app.factory.pipeline import HANDS_OFF_S, LessonFactory, run_test
 from app.factory.prove import ProveError, prove
+from app.factory.tester import agent_refusal
 from app.factory.video import VideoError
 from app.meta.client import MetaClient, MetaError
 
@@ -101,6 +102,9 @@ def _test(args: argparse.Namespace) -> int:
         raise _Refused(f'"{lesson.title}" is not proven yet, so it cannot be tested: prove it first with: '
                        f"python -m app.factory prove {Path(args.folder).as_posix()}")
     plugin = plugin_for(lesson.app)
+    refusal = agent_refusal(plugin)
+    if refusal:
+        raise _Refused(f"{refusal} The lesson keeps its proven badge.")
     _say(f"Hands off the mouse and keyboard: Meta's agent takes over in {HANDS_OFF_S:g} s. "
          "Moving the mouse stops the test.")
     time.sleep(HANDS_OFF_S)

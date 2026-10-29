@@ -430,3 +430,25 @@ def test_excels_macro_keys_are_refused_in_excel(tmp_path):
     assert "refused keypress alt+f11: That key opens the app's macros, which a lesson never needs." in lines
     assert "refused keypress alt+f8: That key opens the app's macros, which a lesson never needs." in lines
     assert tester.allowed({"type": "keypress", "keys": ["alt", "f11"]}, APP, "mouse") == (True, "")   # elsewhere
+
+
+class VsCode(Recording):
+    app_id, title = "vscode", "VS Code"
+
+
+class Paint(Recording):
+    app_id, title = "paint", "Paint"
+
+
+@pytest.mark.parametrize("plugin, why", [
+    (VsCode(), "its terminal would let the agent run any command on this computer, with your Meta key in reach"),
+    (Paint(), "nobody has checked yet what the agent could reach there"),
+])
+def test_the_agent_plays_lessons_only_in_apps_checked_for_it(tmp_path, plugin, why):
+    script, hands = Script(), FakeHands(plugin)
+
+    with pytest.raises(tester.NotForAgent) as refused:
+        run(script, plugin=plugin, hands=hands, workdir=tmp_path)
+
+    assert str(refused.value) == f"Meta's agent does not test {plugin.title} lessons: {why}."
+    assert not hasattr(plugin, "opened") and script.calls == [] and hands.done == [] and hands.grabs == []

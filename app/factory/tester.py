@@ -60,6 +60,23 @@ _LEAVING = [{vk_for(k) for k in keys} for keys in
              ["alt", "space"], ["ctrl", "alt", "delete"])]
 # Keys that open an app's macros, where code runs. A lesson never needs them.
 APP_REFUSED = {"excel": [{vk_for(k) for k in keys} for keys in (["alt", "f11"], ["alt", "f8"])]}
+# Apps whose lessons Meta's agent may play. Its keys and clicks land on this computer, so an app is added only
+# once nothing the agent can reach in it would let it run commands of its own.
+AGENT_APPS = {"excel", "fake"}
+NOT_FOR_AGENT = {"vscode": "its terminal would let the agent run any command on this computer, with your Meta key "
+                           "in reach"}
+
+
+class NotForAgent(Exception):
+    """Meta's agent may not play this app's lessons; the message says why in plain words."""
+
+
+def agent_refusal(plugin: AppPlugin) -> str | None:
+    """Why Meta's agent may not test this app's lessons, or None when it may."""
+    if plugin.app_id in AGENT_APPS:
+        return None
+    why = NOT_FOR_AGENT.get(plugin.app_id, "nobody has checked yet what the agent could reach there")
+    return f"Meta's agent does not test {plugin.title} lessons: {why}."
 
 
 # Where things go on the screen.
@@ -175,8 +192,12 @@ def _keys_allowed(keys: Any) -> tuple[bool, str]:
 def test_lesson(lesson: Lesson, plugin: AppPlugin, workdir: Path, client, *, model: str = MODEL, runs: int = 5,
                 mode: Mode = "mouse", max_actions_per_step: int = 25, hands=None,
                 on_line: Callable[[str], None] | None = None) -> TestResult:
-    """Run the lesson `runs` times with Meta's agent as the learner. Raises UserTookOver when a person moves
-    the mouse, ProveError when the app itself gets in the way, and NoKey or SpendLimitReached from Meta."""
+    """Run the lesson `runs` times with Meta's agent as the learner. Raises NotForAgent before anything opens
+    when the agent may not play this app, UserTookOver when a person moves the mouse, ProveError when the app
+    itself gets in the way, and NoKey or SpendLimitReached from Meta."""
+    refusal = agent_refusal(plugin)
+    if refusal:
+        raise NotForAgent(refusal)
     hands = hands or WindowsHands()
     say = on_line or (lambda line: None)
     need = -(-runs * PASS_OF[0] // PASS_OF[1])

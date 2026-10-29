@@ -119,3 +119,20 @@ def test_a_test_stopped_by_a_person_saves_nothing(tmp_path, monkeypatch, capsys)
 
     assert load_lesson(folder).test is None
     assert "You moved the mouse, so the test stopped. Nothing was saved." in capsys.readouterr().err
+
+
+def test_a_vs_code_lesson_is_refused_before_the_countdown(tmp_path, monkeypatch, capsys):
+    folder = _saved(tmp_path, app="vscode", proof=Proof(True, AT, (), ()))
+    waited, played = [], []
+    monkeypatch.setattr(cli.time, "sleep", waited.append)
+    monkeypatch.setattr(tester, "test_lesson", lambda *args, **kwargs: played.append(args))
+    monkeypatch.setattr(tester, "WindowsHands", lambda: "the hands")
+
+    assert main(["test", str(folder)]) == 1
+
+    assert waited == [] and played == []
+    assert load_lesson(folder).test is None
+    out = capsys.readouterr()
+    assert "Hands off" not in out.out
+    assert ("Meta's agent does not test VS Code lessons: its terminal would let the agent run any command on this "
+            "computer, with your Meta key in reach. The lesson keeps its proven badge.") in out.err
