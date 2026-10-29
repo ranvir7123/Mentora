@@ -3,6 +3,7 @@ PySide6==6.12.0              # the screens: home, panel, pointer (Qt Quick, shap
 pywin32==312                 # Excel through COM, and its change events
 comtypes==1.4.17             # Windows UI Automation, to find ribbon buttons
 openai==3.41.0               # talks to Meta's API, which accepts the OpenAI format
+httpx2==2.16.0               # Meta's raw answers and the test connection (openai's own web library)
 yt-dlp==2026.10.26           # downloads a tutorial video to make a lesson from
 imageio-ffmpeg==0.7.0        # a bundled ffmpeg, to cut videos into frames
 openpyxl==3.1.5              # builds each lesson's starting workbook
