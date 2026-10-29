@@ -1,5 +1,10 @@
 # The plan (agreed 29 Oct 2026)
 
+> Replaced later on 29 Oct 2026: lessons are now made from YouTube tutorials, not recorded by an expert.
+> The current design is
+> [superpowers/specs/2026-10-29-tutorial-to-practice-design.md](superpowers/specs/2026-10-29-tutorial-to-practice-design.md).
+> This file is kept as the record of the first plan.
+
 ## Who uses it, and where they get stuck
 
 **The learner** is someone who watched Excel tutorials and still can't do the task alone. They want to make a
