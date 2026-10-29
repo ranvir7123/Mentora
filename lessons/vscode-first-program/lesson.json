@@ -1,0 +1,312 @@
+{
+  "format": 1,
+  "id": "vscode-first-program",
+  "title": "Your first Python program",
+  "app": "vscode",
+  "course": "vscode",
+  "source": null,
+  "goal": {
+    "sentence": "Write a program that asks your name and greets you.",
+    "picture": null
+  },
+  "starter": {
+    "files": {}
+  },
+  "steps": [
+    {
+      "id": "file",
+      "instruction": "Make a new file named hello.py.",
+      "why": "Python programs live in files whose names end in .py.",
+      "target": {
+        "kind": "explorer_item",
+        "ref": "hello.py"
+      },
+      "check": {
+        "kind": "file_exists",
+        "args": {
+          "path": "hello.py"
+        }
+      },
+      "replay": {
+        "kind": "new_file",
+        "args": {
+          "path": "hello.py"
+        }
+      },
+      "hints": [
+        "Files live in the Explorer, on the left of VS Code.",
+        "Point at the folder's name and click the New File icon.",
+        "Click New File, type hello.py, then press Enter."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "new_file",
+            "args": {
+              "path": "hello.txt"
+            }
+          },
+          "not_yet": "Not yet: that file is hello.txt. Python files end in .py: rename it hello.py.",
+          "code": "named:hello.txt"
+        },
+        {
+          "replay": {
+            "kind": "new_file",
+            "args": {
+              "path": "helo.py"
+            }
+          },
+          "not_yet": "Not yet: that file is helo.py. Check the spelling: rename it hello.py.",
+          "code": "named:helo.py"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "print",
+      "instruction": "On line 1, type print(\"Hello, world!\") and save.",
+      "why": "print shows text in the terminal when the program runs.",
+      "target": {
+        "kind": "editor_line",
+        "ref": "hello.py:1"
+      },
+      "check": {
+        "kind": "calls",
+        "args": {
+          "path": "hello.py",
+          "name": "print"
+        }
+      },
+      "replay": {
+        "kind": "write_file",
+        "args": {
+          "path": "hello.py",
+          "text": "print(\"Hello, world!\")\n"
+        }
+      },
+      "hints": [
+        "print( ) shows whatever you put inside its brackets.",
+        "Words go inside quotes, and the quotes go inside the brackets.",
+        "Type print(\"Hello, world!\") on line 1, then save with Ctrl+S."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "write_file",
+            "args": {
+              "path": "hello.py",
+              "text": "Print(\"Hello, world!\")\n"
+            }
+          },
+          "not_yet": "Not yet: Python reads capitals exactly. Write print with a small p.",
+          "code": "named:Print"
+        },
+        {
+          "replay": {
+            "kind": "write_file",
+            "args": {
+              "path": "hello.py",
+              "text": "print \"Hello, world!\"\n"
+            }
+          },
+          "not_yet": "Not yet: print needs brackets around the words: print(\"Hello, world!\")",
+          "code": "syntax"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "name",
+      "instruction": "On line 2, type name = \"Asha\" and save.",
+      "why": "A variable keeps a value, so later lines can use it.",
+      "target": {
+        "kind": "editor_line",
+        "ref": "hello.py:2"
+      },
+      "check": {
+        "kind": "assigns",
+        "args": {
+          "path": "hello.py",
+          "name": "name"
+        }
+      },
+      "replay": {
+        "kind": "append_line",
+        "args": {
+          "path": "hello.py",
+          "text": "name = \"Asha\""
+        }
+      },
+      "hints": [
+        "A variable is a name that holds a value.",
+        "The variable goes left of =, its value goes right, in quotes.",
+        "Type name = \"Asha\" on line 2. Your own name works too."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "append_line",
+            "args": {
+              "path": "hello.py",
+              "text": "Name = \"Asha\""
+            }
+          },
+          "not_yet": "Not yet: you wrote Name. Capitals matter: write name, all small letters.",
+          "code": "named:Name"
+        },
+        {
+          "replay": {
+            "kind": "append_line",
+            "args": {
+              "path": "hello.py",
+              "text": "nmae = \"Asha\""
+            }
+          },
+          "not_yet": "Not yet: you wrote nmae. Check the spelling: write name.",
+          "code": "named:nmae"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "greet",
+      "instruction": "On line 3, print a greeting using name, then save.",
+      "why": "An f before the quotes tells Python to fill in {name}.",
+      "target": {
+        "kind": "editor_line",
+        "ref": "hello.py:3"
+      },
+      "check": {
+        "kind": "prints",
+        "args": {
+          "path": "hello.py",
+          "name": "name"
+        }
+      },
+      "replay": {
+        "kind": "append_line",
+        "args": {
+          "path": "hello.py",
+          "text": "print(f\"Nice to meet you, {name}!\")"
+        }
+      },
+      "hints": [
+        "print can show a variable, not only fixed words.",
+        "Put f before the quotes and name in curly brackets: {name}.",
+        "Type print(f\"Nice to meet you, {name}!\") on line 3."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "append_line",
+            "args": {
+              "path": "hello.py",
+              "text": "print(\"Nice to meet you, {name}!\")"
+            }
+          },
+          "not_yet": "Not yet: put f before the quotes, so Python fills in {name}.",
+          "code": "no_f:name"
+        },
+        {
+          "replay": {
+            "kind": "append_line",
+            "args": {
+              "path": "hello.py",
+              "text": "print(f\"Nice to meet you, {Name}!\")"
+            }
+          },
+          "not_yet": "Not yet: inside the curly brackets, write name with a small n.",
+          "code": "named:Name"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "ask",
+      "instruction": "Make line 2 ask for the name with input, then save.",
+      "why": "input waits for someone to type, so everyone gets their own greeting.",
+      "target": {
+        "kind": "editor_line",
+        "ref": "hello.py:2"
+      },
+      "check": {
+        "kind": "calls",
+        "args": {
+          "path": "hello.py",
+          "name": "input"
+        }
+      },
+      "replay": {
+        "kind": "write_file",
+        "args": {
+          "path": "hello.py",
+          "text": "print(\"Hello, world!\")\nname = input(\"What is your name? \")\nprint(f\"Nice to meet you, {name}!\")\n"
+        }
+      },
+      "hints": [
+        "input( ) asks a question and waits for the answer.",
+        "Replace \"Asha\" with input( ), and put the question in quotes.",
+        "Make line 2 read name = input(\"What is your name? \")"
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "write_file",
+            "args": {
+              "path": "hello.py",
+              "text": "print(\"Hello, world!\")\nname = Input(\"What is your name? \")\nprint(f\"Nice to meet you, {name}!\")\n"
+            }
+          },
+          "not_yet": "Not yet: Python reads capitals exactly. Write input with a small i.",
+          "code": "named:Input"
+        },
+        {
+          "replay": {
+            "kind": "write_file",
+            "args": {
+              "path": "hello.py",
+              "text": "print(\"Hello, world!\")\nname = input\nprint(f\"Nice to meet you, {name}!\")\n"
+            }
+          },
+          "not_yet": "Not yet: input needs brackets to run: input(\"What is your name? \")",
+          "code": "not_called:input"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "run",
+      "instruction": "Run hello.py, then type your name in the terminal.",
+      "why": "Running it is how you see your program work.",
+      "target": {
+        "kind": "run_button",
+        "ref": ""
+      },
+      "check": {
+        "kind": "run_ok",
+        "args": {
+          "path": "hello.py",
+          "printed": true
+        }
+      },
+      "replay": {
+        "kind": "run_file",
+        "args": {
+          "path": "hello.py",
+          "input": "Asha"
+        }
+      },
+      "hints": [
+        "Save the file first, then run it.",
+        "Click the Run button at the top right of the editor.",
+        "Or type python hello.py in the terminal and press Enter."
+      ],
+      "mistakes": [],
+      "clip": null
+    }
+  ],
+  "made_by": "hand",
+  "edited_by_hand": false,
+  "proof": null,
+  "test": null
+}
