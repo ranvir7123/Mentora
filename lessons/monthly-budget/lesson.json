@@ -1,0 +1,454 @@
+{
+  "format": 1,
+  "id": "monthly-budget",
+  "title": "Monthly budget",
+  "app": "excel",
+  "course": "excel",
+  "source": null,
+  "goal": {
+    "sentence": "Make a monthly budget that adds itself up and shows where money goes.",
+    "picture": "goal.png"
+  },
+  "starter": {
+    "sheets": [
+      {
+        "name": "Budget",
+        "cells": {
+          "A1": "Item",
+          "B1": "Amount",
+          "C1": "Share",
+          "A2": "Rent",
+          "B2": 12000,
+          "A3": "Food",
+          "B3": 6000,
+          "A4": "Travel",
+          "B4": 2500,
+          "A5": "Phone",
+          "B5": 500,
+          "A6": "Fun",
+          "B6": 2000,
+          "A8": "Total"
+        },
+        "widths": {
+          "A": 14,
+          "B": 12,
+          "C": 10
+        }
+      }
+    ],
+    "active": "Budget"
+  },
+  "steps": [
+    {
+      "id": "bold",
+      "instruction": "Make the headings bold.",
+      "why": "Bold headings show where the table starts.",
+      "target": {
+        "kind": "range",
+        "ref": "Budget!A1:C1"
+      },
+      "check": {
+        "kind": "bold",
+        "args": {
+          "range": "Budget!A1:C1"
+        }
+      },
+      "replay": {
+        "kind": "set_bold",
+        "args": {
+          "range": "Budget!A1:C1"
+        }
+      },
+      "hints": [
+        "Headings are the top row: Item, Amount, Share.",
+        "Select A1 to C1, then Bold on Home.",
+        "Select A1:C1 and press Ctrl+B."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_bold",
+            "args": {
+              "range": "Budget!A1:B1"
+            }
+          },
+          "not_yet": "Not yet: Share in C1 needs bold too.",
+          "code": ""
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "total",
+      "instruction": "Add up the amounts in B8.",
+      "why": "A formula keeps the total right when amounts change.",
+      "target": {
+        "kind": "cell",
+        "ref": "Budget!B8"
+      },
+      "check": {
+        "kind": "formula",
+        "args": {
+          "cell": "Budget!B8",
+          "value": 23000,
+          "covers": "Budget!B2:B6"
+        }
+      },
+      "replay": {
+        "kind": "set_formula",
+        "args": {
+          "cell": "Budget!B8",
+          "formula": "=SUM(B2:B6)"
+        }
+      },
+      "hints": [
+        "Click B8, below the amounts.",
+        "Type =SUM( then select B2 to B6.",
+        "Type =SUM(B2:B6) and press Enter."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Budget!B8",
+              "formula": "=SUM(B2:B5)"
+            }
+          },
+          "not_yet": "Not yet: your total skips B6. Include Fun too.",
+          "code": ""
+        },
+        {
+          "replay": {
+            "kind": "set_value",
+            "args": {
+              "cell": "Budget!B8",
+              "value": 23000
+            }
+          },
+          "not_yet": "Not yet: that's a typed number. Start with = instead.",
+          "code": ""
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "rupees",
+      "instruction": "Show the amounts as rupees.",
+      "why": "Money is easier to read with a ₹ sign.",
+      "target": {
+        "kind": "range",
+        "ref": "Budget!B2:B8"
+      },
+      "check": {
+        "kind": "number_format",
+        "args": {
+          "range": "Budget!B2:B8",
+          "kind": "currency"
+        }
+      },
+      "replay": {
+        "kind": "set_format",
+        "args": {
+          "range": "Budget!B2:B8",
+          "kind": "currency"
+        }
+      },
+      "hints": [
+        "Select B2 down to B8 first.",
+        "Open the number format list on Home.",
+        "Pick Currency from that list."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_format",
+            "args": {
+              "range": "Budget!B2:B8",
+              "kind": "percent"
+            }
+          },
+          "not_yet": "Not yet: that's percent. Pick Currency instead.",
+          "code": ""
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "share",
+      "instruction": "Work out rent's share of the total in C2.",
+      "why": "Shares show where most of your money goes.",
+      "target": {
+        "kind": "cell",
+        "ref": "Budget!C2"
+      },
+      "check": {
+        "kind": "formula",
+        "args": {
+          "cell": "Budget!C2",
+          "value": 0.52173913,
+          "covers": "Budget!B2",
+          "absolute": [
+            "Budget!B8"
+          ]
+        }
+      },
+      "replay": {
+        "kind": "set_formula",
+        "args": {
+          "cell": "Budget!C2",
+          "formula": "=B2/$B$8"
+        }
+      },
+      "hints": [
+        "Share is the amount divided by the total.",
+        "Type =B2/B8, then press F4 to lock B8.",
+        "Type =B2/$B$8 and press Enter."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Budget!C2",
+              "formula": "=B2/B8"
+            }
+          },
+          "not_yet": "Not yet: lock the total as $B$8 so it stays put.",
+          "code": ""
+        },
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Budget!C2",
+              "formula": "=B8/B2"
+            }
+          },
+          "not_yet": "Not yet: divide the amount by the total, not the other way.",
+          "code": ""
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "filldown",
+      "instruction": "Copy the share formula down to C6.",
+      "why": "One formula, filled down, does every row.",
+      "target": {
+        "kind": "range",
+        "ref": "Budget!C2:C6"
+      },
+      "check": {
+        "kind": "filled_formula",
+        "args": {
+          "range": "Budget!C2:C6",
+          "first": "=B2/$B$8"
+        }
+      },
+      "replay": {
+        "kind": "fill_down",
+        "args": {
+          "source": "Budget!C2",
+          "range": "Budget!C2:C6"
+        }
+      },
+      "hints": [
+        "Click C2 and find the small square at its corner.",
+        "Drag that square down to C6.",
+        "Or select C2:C6 and press Ctrl+D."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "fill_down",
+            "args": {
+              "source": "Budget!C2",
+              "range": "Budget!C2:C4"
+            }
+          },
+          "not_yet": "Not yet: fill all the way down to C6.",
+          "code": ""
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "percent",
+      "instruction": "Show the shares as percentages.",
+      "why": "Percent is how people talk about shares.",
+      "target": {
+        "kind": "range",
+        "ref": "Budget!C2:C6"
+      },
+      "check": {
+        "kind": "number_format",
+        "args": {
+          "range": "Budget!C2:C6",
+          "kind": "percent"
+        }
+      },
+      "replay": {
+        "kind": "set_format",
+        "args": {
+          "range": "Budget!C2:C6",
+          "kind": "percent"
+        }
+      },
+      "hints": [
+        "Select C2 down to C6.",
+        "Find the % button on Home.",
+        "Press Ctrl+Shift+% with them selected."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_format",
+            "args": {
+              "range": "Budget!C2:C6",
+              "kind": "currency"
+            }
+          },
+          "not_yet": "Not yet: that's currency. Use percent here.",
+          "code": ""
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "chart",
+      "instruction": "Make a pie chart of your spending.",
+      "why": "A picture shows the biggest cost at a glance.",
+      "target": {
+        "kind": "control",
+        "ref": "Insert > Pie"
+      },
+      "check": {
+        "kind": "chart",
+        "args": {
+          "chart_type": "pie",
+          "over": "Budget!B2:B6"
+        }
+      },
+      "replay": {
+        "kind": "add_chart",
+        "args": {
+          "chart_type": "pie",
+          "source": "Budget!A1:B6"
+        }
+      },
+      "hints": [
+        "Select A1 to B6: items and amounts.",
+        "Open the Insert tab and find the pie.",
+        "Insert, Pie, then the first flat pie."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "add_chart",
+            "args": {
+              "chart_type": "column",
+              "source": "Budget!A1:B6"
+            }
+          },
+          "not_yet": "Not yet: that's a column chart. Pick the pie.",
+          "code": ""
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "freeze",
+      "instruction": "Keep the headings in view as you scroll.",
+      "why": "Frozen headings stay put on long sheets.",
+      "target": {
+        "kind": "control",
+        "ref": "View > Freeze Panes"
+      },
+      "check": {
+        "kind": "frozen",
+        "args": {
+          "rows": 1,
+          "cols": 0
+        }
+      },
+      "replay": {
+        "kind": "freeze",
+        "args": {
+          "rows": 1,
+          "cols": 0
+        }
+      },
+      "hints": [
+        "This is on the View tab.",
+        "Look for Freeze Panes.",
+        "Choose Freeze Top Row."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "freeze",
+            "args": {
+              "rows": 1,
+              "cols": 1
+            }
+          },
+          "not_yet": "Not yet: freeze only the top row.",
+          "code": ""
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "sort",
+      "instruction": "Sort the items from biggest to smallest.",
+      "why": "Your biggest costs come first.",
+      "target": {
+        "kind": "control",
+        "ref": "Data > Sort Largest to Smallest"
+      },
+      "check": {
+        "kind": "sorted",
+        "args": {
+          "range": "Budget!A2:C6",
+          "column": "B",
+          "order": "desc"
+        }
+      },
+      "replay": {
+        "kind": "sort",
+        "args": {
+          "range": "Budget!A1:C6",
+          "column": "B",
+          "order": "desc",
+          "header": true
+        }
+      },
+      "hints": [
+        "Click any amount in column B.",
+        "Open the Data tab.",
+        "Choose Sort Largest to Smallest."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "sort",
+            "args": {
+              "range": "Budget!A1:C6",
+              "column": "B",
+              "order": "asc",
+              "header": true
+            }
+          },
+          "not_yet": "Not yet: that's smallest first. Flip it.",
+          "code": ""
+        }
+      ],
+      "clip": null
+    }
+  ],
+  "made_by": "hand",
+  "edited_by_hand": false,
+  "proof": null,
+  "test": null
+}
