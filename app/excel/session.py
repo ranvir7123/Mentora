@@ -33,6 +33,7 @@ from app.win import windows
 
 CLOSED_CHECK_S = 1.0
 CLOSED_CHECK_SOON_S = 0.25         # after BeforeClose: the learner is probably closing
+IDLE_REREAD_S = 1.0                # while a step waits: freezing panes and renaming fire no event
 
 
 def _new_excel():
@@ -116,6 +117,9 @@ class ExcelSession:
         self._stopping = False         # the program is closing the session
         self._save = False
         self._check_token = 0
+        self._waiting = False
+        self._waiting_token = 0
+        self._read_waiters: list[Future] = []
 
         if not (resume and self.path.exists()):
             build_starter(lesson.starter, self.path)
@@ -128,6 +132,26 @@ class ExcelSession:
 
     def latest(self) -> Any | None:
         return self._latest
+
+    def read_now(self) -> Future:
+        """A Future for the next snapshot delivered after this call."""
+        fut: Future = Future()
+        if self._closed or self._stopping:
+            fut.set_exception(RuntimeError("Excel was closed"))
+            return fut
+
+        def ask() -> None:
+            if self._closed or self._stopping or self._scheduler is None:
+                fut.set_exception(RuntimeError("Excel was closed"))
+                return
+            self._read_waiters.append(fut)
+            self._scheduler.read_soon()
+        self._com.submit(ask)
+        return fut
+
+    def set_waiting(self, waiting: bool) -> None:
+        """While a step waits, read once a second even when Excel says nothing changed."""
+        self._com.submit(lambda: self._set_waiting(waiting))
 
     def place(self, rect: Rect) -> Future:
         def move() -> None:
@@ -166,7 +190,34 @@ class ExcelSession:
         if snap is None or self._closed or self._stopping:
             return
         self._latest = snap
+        waiters, self._read_waiters = self._read_waiters, []
+        for fut in waiters:
+            fut.set_result(snap)
         self._on_snapshot(snap)
+
+    def _fail_read_waiters(self) -> None:
+        waiters, self._read_waiters = self._read_waiters, []
+        for fut in waiters:
+            fut.set_exception(RuntimeError("Excel was closed"))
+
+    def _set_waiting(self, waiting: bool) -> None:
+        if waiting == self._waiting:
+            return
+        self._waiting = waiting
+        self._waiting_token += 1           # a stopped loop's pending tick finds a newer token
+        if waiting:
+            self._idle_tick(self._waiting_token)
+
+    def _idle_tick(self, token: int) -> None:
+        if token != self._waiting_token or self._closed or self._stopping:
+            return
+        self._com.call_later(IDLE_REREAD_S, lambda: self._idle_reread(token))
+
+    def _idle_reread(self, token: int) -> None:
+        if token != self._waiting_token or self._closed or self._stopping:
+            return
+        self._scheduler.read_soon()
+        self._idle_tick(token)
 
     def _on_change(self) -> None:
         if not (self._closed or self._stopping) and self._scheduler is not None:
@@ -188,6 +239,7 @@ class ExcelSession:
         state = self._workbook_state()
         if state == "closed":
             self._closed = True
+            self._fail_read_waiters()
             self._on_closed()
             return
         self._schedule_check(CLOSED_CHECK_SOON_S if state == "unknown" else CLOSED_CHECK_S)
@@ -207,6 +259,7 @@ class ExcelSession:
     def _teardown(self) -> None:
         """Let go of Excel in the order that leaves no EXCEL.EXE behind; every step runs."""
         self._closed = True
+        self._fail_read_waiters()
         steps = (self._close_sink, self._no_alerts, self._close_workbook, self._quit)
         for step in steps:
             try:
