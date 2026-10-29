@@ -15,6 +15,7 @@ from PySide6.QtGui import QFontDatabase, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
 from app.core.screen import ScreenBackend
+from app.ui import winstyle
 from app.ui.bridge import Bridge
 
 QML_DIR = Path(__file__).resolve().with_name("qml")
@@ -58,6 +59,15 @@ def load_window(engine: QQmlApplicationEngine, name: str, view: Mapping | None =
     return root
 
 
+def attach_window(bridge: Bridge, name: str, root: QObject) -> None:
+    """Hook an opened window up. The panel tells the bridge where it is (the mascot keeps out of it, and on
+    Windows it never takes focus from the app); the overlay lets every click through to the app below."""
+    if name == "panel":
+        bridge.register_panel(root)
+    elif name == "overlay" and QGuiApplication.platformName() == "windows":
+        winstyle.make_click_through(int(root.winId()))
+
+
 def run_screens(backend: ScreenBackend, *, show: Iterable[str] = ("home",)) -> int:
     """Open the named windows on `backend` and run until the learner quits."""
     app = QGuiApplication.instance() or QGuiApplication(sys.argv)
@@ -66,8 +76,10 @@ def run_screens(backend: ScreenBackend, *, show: Iterable[str] = ("home",)) -> i
     engine = make_engine(bridge)
     views = getattr(backend, "view", {}) or {}
     for name in show:
-        if load_window(engine, name, views.get(name)) is None:
+        root = load_window(engine, name, views.get(name))
+        if root is None:
             return 1
+        attach_window(bridge, name, root)
     app._screens = (bridge, engine)      # keep both alive as long as the application
     return app.exec()
 

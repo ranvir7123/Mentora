@@ -15,6 +15,7 @@ Item {
     property real size: 48
     property var lookAt: null           // a point in the window's coordinates; null looks ahead
     property real heading: 0            // degrees, 0 = to the right, clockwise like rotation
+    property bool dotsLeft: false       // the thinking dots go on the left, away from a target on the right
     signal landed()
 
     states: [
@@ -229,7 +230,7 @@ Item {
         // Three dots beside the head while thinking, lit one after another.
         Rectangle {
             visible: root.state === "thinking"
-            x: 44
+            x: root.dotsLeft ? 4 - width : 44
             y: -10
             width: 26
             height: 12

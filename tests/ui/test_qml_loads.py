@@ -68,3 +68,19 @@ def test_gallery_shows_every_component_without_qml_warnings(qapp):
         engine.deleteLater()
         _settle(qapp, 0.01)
     assert problems == []
+
+
+def test_an_opened_panel_keeps_the_mascot_out_of_its_area(qapp):
+    # The panel tells the bridge where it is once it opens, wherever the learner has put it.
+    from PySide6.QtCore import QRect, QRectF
+
+    from app.ui.app import attach_window
+
+    bridge = Bridge(DemoBackend("lesson_step"))
+    engine = make_engine(bridge)
+    panel = load_window(engine, "panel")
+    attach_window(bridge, "panel", panel)
+    panel.setGeometry(QRect(0, 0, 360, 600))           # moved to the left edge
+    spot = bridge.landingSpot(QRectF(400, 300, 64, 20), 48, 23)
+    assert not QRectF(spot.x(), spot.y() - 23, 48, 71).intersects(QRectF(panel.geometry()))
+    engine.deleteLater()
