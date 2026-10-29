@@ -1,0 +1,37 @@
+{
+  "name": "projectx",
+  "displayName": "Project X lessons",
+  "description": "Lets the Project X program see your lesson's files, problems and runs, so it can tick your steps.",
+  "version": "0.1.0",
+  "publisher": "projectx",
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Education"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {},
+  "scripts": {
+    "compile": "tsc -p .",
+    "test": "tsc -p . && node --test \"out/test/**/*.test.js\"",
+    "package": "tsc -p . && vsce package --allow-missing-repository --skip-license"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/vscode": "1.99.1",
+    "@vscode/vsce": "3.9.2",
+    "typescript": "5.9.3"
+  }
+}
