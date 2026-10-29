@@ -228,6 +228,20 @@ def ffmpeg_audio_args(src: Path | str, dst: Path | str) -> list[str]:
     return ["-y", "-i", str(src), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(dst)]
 
 
+def ffmpeg_still_args(src: Path | str, seconds: float, dst: Path | str) -> list[str]:
+    return ["-y", "-loglevel", "error", "-ss", f"{max(0.0, seconds):.3f}", "-i", str(src), "-frames:v", "1", str(dst)]
+
+
+def frame_at(src: Path, seconds: float, dst: Path) -> Path:
+    """One full-size picture from the video at `seconds`, such as the lesson's goal picture."""
+    dst = Path(dst)
+    _ffmpeg(ffmpeg_still_args(src, seconds, dst), "take a still picture")
+    if not dst.exists() or dst.stat().st_size == 0:          # ffmpeg asked past the end writes nothing
+        dst.unlink(missing_ok=True)
+        raise VideoError(f"the video has no picture at {seconds:g} s")
+    return dst
+
+
 def thin(items: Sequence[T], n: int) -> list[T]:
     """At most n items, spread evenly, keeping the first and the last."""
     if len(items) <= n:

@@ -151,7 +151,7 @@ def _read(answer: Answer, info: VideoInfo, plugin: AppPlugin, lessons_dir: Path)
     if not isinstance(data, dict):
         return None, ["its answer was not a lesson in JSON"]
     title = data.get("title") if isinstance(data.get("title"), str) else info.title
-    lesson_id = _unique_id(title, lessons_dir)
+    lesson_id = unique_id(title, lessons_dir)
     goal = data.get("goal")
     try:
         lesson = lesson_from_dict({
@@ -181,7 +181,8 @@ def _writer_problems(lesson: Lesson, info: VideoInfo) -> list[str]:
     return problems
 
 
-def _unique_id(title: str, lessons_dir: Path) -> str:
+def unique_id(title: str, lessons_dir: Path) -> str:
+    """A folder name made from the title that no lesson in `lessons_dir` has yet."""
     base = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60].strip("-") or "lesson"
     lesson_id, n = base, 1
     while (Path(lessons_dir) / lesson_id).exists():

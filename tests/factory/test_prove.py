@@ -79,6 +79,7 @@ def test_dropping_a_step_reproves_the_rest_without_it(tmp_path, fix):
     assert [s.id for s in proved.lesson.steps] == ["s0", "s2", "s3"]
     assert proved.dropped == ["s1"] and proved.lesson.proof.dropped == ("s1",)
     assert "step s1 was dropped: its check was already true before the step" in proved.notes
+    assert proved.why == {"s1": "its check was already true before the step"}
     assert proved.lesson.proof.passed is True                  # three proven steps are left
     if fixer:
         assert len(fixer.reasons) == 1                         # sent back once, never twice

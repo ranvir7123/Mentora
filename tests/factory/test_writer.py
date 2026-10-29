@@ -6,7 +6,6 @@ from app.core.fake_plugin import FakePlugin
 from app.core.lesson import Lesson, Source, lesson_json_schema, validate
 from app.factory.video import Prepared, VideoInfo
 from app.factory.writer import NotReady, write_lesson
-from app.meta.client import MetaClient
 
 INFO = VideoInfo("vid1", "https://youtu.be/vid1", "Fill in the keys", "Key Teacher", "https://youtube.com/@keys",
                  "Creative Commons Attribution license (reuse allowed)", 120)
@@ -31,36 +30,6 @@ def _lesson(steps=None, title="Fill in the keys"):
             "steps": steps if steps is not None else [_step(1), _step(2)]}
 
 
-def _content(part):
-    return {"id": "resp_1", "output": [{"type": "message", "role": "assistant", "content": [part]}],
-            "usage": {"input_tokens": 9000, "output_tokens": 1200}}
-
-
-class Saved:
-    """Saved Meta answers for one test, replayed by a real MetaClient."""
-
-    def __init__(self, folder):
-        self.folder = folder
-        folder.mkdir()
-        self.client = MetaClient(mode="replay", saved_dir=folder)
-
-    def _write(self, label, record):
-        (self.folder / f"{label}.json").write_text(json.dumps({"request": {"label": label}, **record}))
-
-    def file(self, label, file_id="file-abc"):
-        self._write(label, {"response": {"id": file_id, "object": "file"}})
-
-    def answer(self, label, payload):
-        text = payload if isinstance(payload, str) else json.dumps(payload)
-        self._write(label, {"response": _content({"type": "output_text", "text": text})})
-
-    def refusal(self, label, words):
-        self._write(label, {"response": _content({"type": "refusal", "refusal": words})})
-
-    def error(self, label, **error):
-        self._write(label, {"error": error})
-
-
 class Spy:
     """Passes calls on to the real client and keeps what was sent."""
 
@@ -74,11 +43,6 @@ class Spy:
     def respond(self, model, input, *, label, schema=None, **extra):
         self.responds.append({"model": model, "input": input, "label": label, "schema": schema})
         return self.inner.respond(model, input, label=label, schema=schema, **extra)
-
-
-@pytest.fixture
-def saved(tmp_path):
-    return Saved(tmp_path / "saved")
 
 
 @pytest.fixture

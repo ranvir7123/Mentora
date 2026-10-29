@@ -1,5 +1,6 @@
 import json
 import re
+import struct
 import subprocess
 
 import imageio_ffmpeg
@@ -7,8 +8,9 @@ import pytest
 from yt_dlp.utils import DownloadError
 
 from app.factory import video
-from app.factory.video import (Fetched, Prepared, VideoInfo, VideoRefused, fetch, ffmpeg_frames_args,
-                               ffmpeg_small_args, pick_captions, prepare, vtt_to_segments)
+from app.factory.video import (Fetched, Prepared, VideoError, VideoInfo, VideoRefused, fetch, ffmpeg_frames_args,
+                               ffmpeg_small_args, ffmpeg_still_args, frame_at, pick_captions, prepare,
+                               vtt_to_segments)
 from app.meta.client import MetaClient
 
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
@@ -131,17 +133,6 @@ def test_ffmpeg_args():
     assert frames[-1].replace("\\", "/") == "frames/frame_%04d.png"
 
 
-@pytest.fixture(scope="module")
-def clip(tmp_path_factory):
-    """A real 3-second video with sound, made by ffmpeg."""
-    path = tmp_path_factory.mktemp("clip") / "video.mp4"
-    subprocess.run([FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
-                    "-f", "lavfi", "-i", "testsrc=size=1280x720:rate=10:duration=3",
-                    "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
-                    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(path)], check=True)
-    return path
-
-
 def _width(path):
     out = subprocess.run([FFMPEG, "-hide_banner", "-i", str(path)], capture_output=True, text=True).stderr
     return int(re.search(r"Video:.*?(\d{3,4})x\d{3,4}", out).group(1))
@@ -199,3 +190,18 @@ def test_settle_moves_a_download_into_its_video_folder(tmp_path):
     assert (old / "video.mp4").read_text() == "new"
     assert not (old / "small.mp4").exists()               # an older download of the same video is replaced whole
     assert not incoming.exists()
+
+
+def test_a_still_picture_is_taken_at_a_time_in_the_video(tmp_path, clip):
+    assert ffmpeg_still_args("in.mp4", 2.5, "goal.png") == ["-y", "-loglevel", "error", "-ss", "2.500", "-i", "in.mp4",
+                                                            "-frames:v", "1", "goal.png"]
+    still = frame_at(clip, 2.5, tmp_path / "goal.png")
+    data = still.read_bytes()
+    assert still == tmp_path / "goal.png" and data[:8] == b"\x89PNG\r\n\x1a\n"
+    assert struct.unpack(">II", data[16:24]) == (1280, 720)
+
+
+def test_a_time_past_the_end_of_the_video_has_no_picture(tmp_path, clip):
+    with pytest.raises(VideoError, match="the video has no picture at 10 s"):
+        frame_at(clip, 10, tmp_path / "goal.png")
+    assert not (tmp_path / "goal.png").exists()

@@ -35,6 +35,7 @@ class Proved:
     lesson: Lesson                               # with `proof` filled and each mistake's `code`
     dropped: list[str]                           # ids of the steps taken out
     notes: list[str]                             # plain words: what went back, what was dropped and why
+    why: dict[str, str]                          # each dropped step's id: why it was dropped
 
 
 @dataclass(frozen=True)
@@ -50,7 +51,7 @@ class _StepFailed(Exception):
 
 
 def prove(lesson: Lesson, plugin: AppPlugin, workdir: Path, *, fix: Fix | None = None) -> Proved:
-    current, dropped, notes = lesson, [], []
+    current, dropped, notes, why = lesson, [], [], {}
     sent_back: set[str] = set()
     fixes_left = len(lesson.steps)               # a fix may rename steps; this keeps the retries finite
     changed = False
@@ -71,6 +72,7 @@ def prove(lesson: Lesson, plugin: AppPlugin, workdir: Path, *, fix: Fix | None =
             notes.append(f"{at} went back to Muse Spark, which could not fix it: {fixed.reason}")
         if failed.step_id not in dropped:
             dropped.append(failed.step_id)
+        why[failed.step_id] = failed.reason
         notes.append(f"{at} was dropped: {failed.reason}")
         current = replace(current, steps=tuple(s for s in current.steps if s.id != failed.step_id))
 
@@ -84,7 +86,7 @@ def prove(lesson: Lesson, plugin: AppPlugin, workdir: Path, *, fix: Fix | None =
     proof = Proof(passed=n >= MIN_STEPS, at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                   dropped=tuple(dropped), notes=tuple(notes))
     proven = replace(current, steps=steps, proof=proof, test=None if changed else current.test)
-    return Proved(proven, dropped, notes)
+    return Proved(proven, dropped, notes, why)
 
 
 def _run(lesson: Lesson, plugin: AppPlugin, workdir: Path) -> tuple[_Failed | None, dict[tuple[str, int], str]]:
