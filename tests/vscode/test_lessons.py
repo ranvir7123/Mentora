@@ -140,6 +140,9 @@ def test_the_lesson_loads_and_follows_every_rule(folder):
         for mistake in step.mistakes:
             assert mistake.not_yet.startswith("Not yet: ") and len(mistake.not_yet.split()) <= MAX_WORDS, \
                 f"step {step.id}: {mistake.not_yet!r}"
+        if step.replay.kind in ("write_file", "append_line"):
+            # Checks read the saved file, and VS Code does not save by itself, so each typing step says so.
+            assert "save" in step.instruction.lower(), f"step {step.id}: {step.instruction!r} never says to save"
 
 
 def test_your_first_program_walks_through_like_the_prover(walk):
@@ -165,6 +168,8 @@ def test_the_meta_lesson_keeps_the_key_out_and_credits_meta():
     assert lesson.source is not None and lesson.source.creator == "Meta"
     assert lesson.source.url == "https://dev.meta.ai/docs/quickstart"
     key_step = next(s for s in lesson.steps if s.id == "key")
+    assert key_step.check == Call("reads_setting", {"path": "ask.py", "name": "META_API_KEY"})
+    assert {m.code for m in key_step.mistakes} == {"key", "quoted:META_API_KEY"}
     assert any(CHECKS[key_step.check.kind].run(_only(m.replay), key_step.check.args).code == "key"
                for m in key_step.mistakes), "pasting a key is a predicted mistake, refused with the key line"
     real_key = os.environ.get("META_API_KEY", "")

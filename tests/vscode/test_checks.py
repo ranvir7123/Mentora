@@ -75,6 +75,13 @@ RIGHT = [
     ("uses_text", {"path": "ask.py", "text": "https://api.meta.ai/v1"},
      snap({"ask.py": 'client = OpenAI(\n    base_url = "https://api.meta.ai/v1",\n)\n'})),
 
+    ("reads_setting", {"path": "ask.py", "name": "META_API_KEY"},
+     snap({"ask.py": 'import os\nclient = OpenAI(api_key=os.environ["META_API_KEY"])\n'})),
+    ("reads_setting", {"path": "ask.py", "name": "META_API_KEY"},
+     snap({"ask.py": "from os import getenv\nclient = OpenAI(api_key=getenv('META_API_KEY'))\n"})),
+    ("reads_setting", {"path": "ask.py", "name": "META_API_KEY"},
+     snap({"ask.py": 'import os\nkey = os.environ.get("META_API_KEY")\nclient = OpenAI(api_key=key)\n'})),
+
     ("run_ok", {"path": "hello.py"}, snap({"hello.py": ""}, run=ran("python hello.py", 0, "Hello\n"))),
     ("run_ok", {"path": "hello.py"},
      snap({"hello.py": ""}, run=ran("& C:/py/python.exe c:/work/lesson/hello.py", 0, ""))),
@@ -143,6 +150,16 @@ WRONG = [
     ("run_ok", {"path": "hello.py"}, snap({"hello.py": ""}, run=ran("python other.py", 0, "")), "other_file"),
     ("run_ok", {"path": "hello.py", "printed": True}, snap({"hello.py": ""}, run=ran("python hello.py", 0, "  \n")),
      "no_output"),
+    # The learner closed the terminal while the program waited at input(): it never finished.
+    ("run_ok", {"path": "hello.py", "printed": True},
+     snap({"hello.py": ""}, run=ran("python hello.py", None, "Hello, world!\nWhat is your name? ")), "stopped"),
+
+    ("reads_setting", {"path": "ask.py", "name": "META_API_KEY"},
+     snap({"ask.py": 'client = OpenAI(api_key="META_API_KEY")\n'}), "quoted:META_API_KEY"),
+    ("reads_setting", {"path": "ask.py", "name": "META_API_KEY"},
+     snap({"ask.py": 'import os\nkey = os.environ["META_APIKEY"]\n'}), "named:META_APIKEY"),
+    ("reads_setting", {"path": "ask.py", "name": "META_API_KEY"},
+     snap({"ask.py": 'import os\nkey = os.getenv("meta_api_key")\n'}), "named:meta_api_key"),
 
     ("run_output", {"contains": "hello"}, snap(run=ran("python hello.py", 0, "Hi Asha\n")), "missing_text"),
     ("run_output", {"contains": "hello"},
@@ -198,6 +215,8 @@ def test_every_check_has_three_right_and_three_wrong_ways():
     ("prints", {"path": "hello.py", "name": "name"}, h('greeting = f"Hi {name}"\n')),
     ("uses_text", {"path": "ask.py", "text": "https://api.meta.ai/v1"}, snap({"ask.py": "from openai import OpenAI\n"})),
     ("uses_text", {"path": "ask.py", "text": "https://api.meta.ai/v1"}, snap({"ask.py": ""})),
+    ("reads_setting", {"path": "ask.py", "name": "META_API_KEY"},
+     snap({"ask.py": 'import os\nclient = OpenAI(base_url="https://api.meta.ai/v1")\n'})),
     ("run_ok", {"path": "hello.py"}, snap({"hello.py": ""})),
     ("run_ok", {"path": "hello.py"}, snap({"hello.py": ""}, run=ran("python hello.py", None, "Your name? ", False))),
     ("run_output", {"contains": "hello"}, snap(run=ran("python hello.py", None, "", False))),

@@ -260,6 +260,8 @@ def test_the_lesson_folder_gets_its_editor_settings(opened):
     settings = json.loads((workdir / ".vscode" / "settings.json").read_text(encoding="utf-8"))
     assert settings["editor.stickyScroll.enabled"] is False
     assert settings["editor.wordWrap"] == "off"
+    # The Python add-on's Run button runs the Python it picked, not the first one on PATH; this one has openai.
+    assert settings["python.defaultInterpreterPath"] == sys.executable
     session.read_now().result(timeout=5)
     assert ".vscode/settings.json" not in session.latest().files
 

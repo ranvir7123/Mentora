@@ -56,6 +56,7 @@ SETTINGS = {
     "editor.minimap.enabled": False,
     "window.title": "${dirty}${activeEditorShort}${separator}${rootName}${separator}${appName}",
     "files.exclude": {"**/.vscode": True, "**/__pycache__": True},
+    "python.defaultInterpreterPath": sys.executable,   # the Run button's Python, the one that has openai
 }
 
 _ENDED = ("closed", "stopped")

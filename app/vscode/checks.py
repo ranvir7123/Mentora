@@ -413,6 +413,45 @@ def _uses_text(snap: VsSnapshot, args: Mapping) -> Verdict:
     return Verdict.waiting()
 
 
+def _is_environ(node: ast.AST) -> bool:
+    return (isinstance(node, ast.Attribute) and node.attr == "environ") or \
+        (isinstance(node, ast.Name) and node.id == "environ")
+
+
+def _reads_env(func: ast.AST) -> bool:
+    """True for getenv, os.getenv and os.environ.get."""
+    if isinstance(func, ast.Name):
+        return func.id == "getenv"
+    return isinstance(func, ast.Attribute) and (func.attr == "getenv" or (func.attr == "get" and _is_environ(func.value)))
+
+
+def _reads_setting(snap: VsSnapshot, args: Mapping) -> Verdict:
+    want = args["name"]
+
+    def find(code: _Code) -> Verdict | None:
+        read, quoted = [], False        # the settings the code reads, and the name left as plain words
+        for n in _nodes(code):
+            key = None
+            if isinstance(n, ast.Subscript) and _is_environ(n.value):
+                key = n.slice
+            elif isinstance(n, ast.Call) and n.args and _reads_env(n.func):
+                key = n.args[0]
+            elif isinstance(n, ast.Constant) and n.value == want:
+                quoted = True
+            if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                read.append(key.value)
+        if want in read:
+            return Verdict.right()
+        slip = _slip_for(read, want)
+        if slip:
+            return _not_yet(f"named:{slip}", f"Not yet: you wrote {slip}. The setting is spelled {want} exactly.")
+        if quoted:
+            return _not_yet(f"quoted:{want}", f'Not yet: that is the name in quotes, not the key. '
+                                              f'Read it with os.environ["{want}"]')
+        return None
+    return _code_check(snap, args["path"], find)
+
+
 def _failed(run: Run) -> bool:
     if run.exit_code is None:
         return "Traceback (most recent call last)" in run.output
@@ -444,6 +483,8 @@ def _run_ok(snap: VsSnapshot, args: Mapping) -> Verdict:
             return _not_yet("other_file", text)
     if _failed(run):
         return _error_line(run)
+    if run.exit_code is None:           # VS Code knows no exit code: the run was stopped or its terminal closed
+        return _not_yet("stopped", "Not yet: the program was stopped before it finished. Run it again and let it finish.")
     if args.get("printed") and not run.output.strip():
         return _not_yet("no_output", "Not yet: it ran but printed nothing. Add a print(...) line.")
     return Verdict.right()
@@ -510,7 +551,9 @@ CHECKS: dict[str, CheckKind] = {c.name: c for c in (
               "The file sets that name at its top level (to that value)"),
     CheckKind("uses_text", (_PATH, Param("text", "text")), _uses_text,
               "The text appears in the file's code, not in a comment"),
-    CheckKind("run_ok", (Param("path", "path", required=False), Param("printed", "bool", required=False)),
+    CheckKind("reads_setting", (_PATH, Param("name", "text")), _reads_setting,
+              'The file reads that setting, as os.environ["NAME"], os.environ.get or os.getenv do'),
+    CheckKind("run_ok",(Param("path", "path", required=False), Param("printed", "bool", required=False)),
               _run_ok, "The last run (of that file) finished without an error (and printed something)"),
     CheckKind("run_output", (Param("contains", "text"),), _run_output,
               "The last run printed that text, capitals aside"),

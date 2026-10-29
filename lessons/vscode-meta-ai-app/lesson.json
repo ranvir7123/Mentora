@@ -29,7 +29,7 @@
   "steps": [
     {
       "id": "import",
-      "instruction": "On line 1, type from openai import OpenAI",
+      "instruction": "On line 1, type from openai import OpenAI and save.",
       "why": "Meta's quickstart uses the openai package to talk to its models.",
       "target": {
         "kind": "editor_line",
@@ -82,7 +82,7 @@
     },
     {
       "id": "client",
-      "instruction": "On line 3, make a client that talks to Meta.",
+      "instruction": "On line 3, make a client for Meta, then save.",
       "why": "base_url sends your questions to Meta instead of to OpenAI.",
       "target": {
         "kind": "editor_line",
@@ -124,17 +124,17 @@
     },
     {
       "id": "key",
-      "instruction": "Give the client your key from the META_API_KEY setting.",
+      "instruction": "Give the client your key from META_API_KEY, then save.",
       "why": "Code gets shared; a key read from the setting stays private.",
       "target": {
         "kind": "editor_line",
         "ref": "ask.py:3"
       },
       "check": {
-        "kind": "uses_text",
+        "kind": "reads_setting",
         "args": {
           "path": "ask.py",
-          "text": "META_API_KEY"
+          "name": "META_API_KEY"
         }
       },
       "replay": {
@@ -166,18 +166,18 @@
             "kind": "write_file",
             "args": {
               "path": "ask.py",
-              "text": "import os\nfrom openai import OpenAI\n\nclient = OpenAI(base_url=\"https://api.meta.ai/v1\", api_key=os.environ[\"META_APIKEY\"])\n"
+              "text": "from openai import OpenAI\n\nclient = OpenAI(base_url=\"https://api.meta.ai/v1\", api_key=\"META_API_KEY\")\n"
             }
           },
-          "not_yet": "Not yet: the setting is META_API_KEY, with _ between API and KEY.",
-          "code": "near"
+          "not_yet": "Not yet: \"META_API_KEY\" in quotes is only the name. Use os.environ[\"META_API_KEY\"]",
+          "code": "quoted:META_API_KEY"
         }
       ],
       "clip": null
     },
     {
       "id": "ask",
-      "instruction": "Ask muse-spark-1.3 a question with client.responses.create.",
+      "instruction": "Ask muse-spark-1.3 a question with client.responses.create, then save.",
       "why": "create sends your question to Meta's model and brings back its answer.",
       "target": {
         "kind": "editor_line",
@@ -230,7 +230,7 @@
     },
     {
       "id": "answer",
-      "instruction": "On line 6, show the answer: print(response.output_text)",
+      "instruction": "On line 6, add print(response.output_text) and save.",
       "why": "output_text holds the model's reply as plain text.",
       "target": {
         "kind": "editor_line",

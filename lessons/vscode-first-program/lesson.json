@@ -64,7 +64,7 @@
     },
     {
       "id": "print",
-      "instruction": "On line 1, type print(\"Hello, world!\")",
+      "instruction": "On line 1, type print(\"Hello, world!\") and save.",
       "why": "print shows text in the terminal when the program runs.",
       "target": {
         "kind": "editor_line",
@@ -117,7 +117,7 @@
     },
     {
       "id": "name",
-      "instruction": "On line 2, store a name: name = \"Asha\"",
+      "instruction": "On line 2, type name = \"Asha\" and save.",
       "why": "A variable keeps a value, so later lines can use it.",
       "target": {
         "kind": "editor_line",
@@ -170,7 +170,7 @@
     },
     {
       "id": "greet",
-      "instruction": "On line 3, print a greeting that uses name.",
+      "instruction": "On line 3, print a greeting using name, then save.",
       "why": "An f before the quotes tells Python to fill in {name}.",
       "target": {
         "kind": "editor_line",
@@ -223,7 +223,7 @@
     },
     {
       "id": "ask",
-      "instruction": "Change line 2 so it asks for the name with input.",
+      "instruction": "Make line 2 ask for the name with input, then save.",
       "why": "input waits for someone to type, so everyone gets their own greeting.",
       "target": {
         "kind": "editor_line",
