@@ -16,6 +16,7 @@ _QUOTED = re.compile(r'"(?:[^"]|"")*"')
 _REF = re.compile(r"(?<![A-Za-z0-9_])\$?([A-Za-z]{1,3})\$?(\d+)(?::\$?([A-Za-z]{1,3})\$?(\d+))?")
 _FUNC = re.compile(r"([A-Za-z_][A-Za-z0-9_.]*)\s*\(")
 _ABS = re.compile(r"(?<![A-Za-z0-9_])\$[A-Za-z]{1,3}\$\d+")
+_ROW_LOCKED = re.compile(r"(?<![A-Za-z0-9_$])\$?[A-Za-z]{1,3}\$\d+")
 
 
 def is_formula(text) -> bool:
@@ -53,3 +54,53 @@ def absolute_refs_of(text) -> list[str]:
     if not is_formula(text):
         return []
     return sorted({m.group(0).replace("$", "").upper() for m in _ABS.finditer(_body(text))})
+
+
+def row_locked_refs_of(text) -> list[str]:
+    """The references whose row is fixed ($B$1 or B$1), uppercase, $ removed: filling down keeps them."""
+    if not is_formula(text):
+        return []
+    return sorted({m.group(0).replace("$", "").upper() for m in _ROW_LOCKED.finditer(_body(text))})
+
+
+# Moving and comparing whole formulas. Quoted text is kept as it is; everything else is formula.
+
+_QUOTED_SPLIT = re.compile(r'("(?:[^"]|"")*")')
+_CELL_PART = re.compile(r"(?<![A-Za-z0-9_.])(\$?)([A-Za-z]{1,3})(\$?)(\d+)(?![A-Za-z0-9_(!])")
+
+
+def _col_index(letters: str) -> int:
+    n = 0
+    for ch in letters.upper():
+        n = n * 26 + ord(ch) - 64
+    return n
+
+
+def _col_letters(col: int) -> str:
+    out = ""
+    while col:
+        col, rem = divmod(col - 1, 26)
+        out = chr(65 + rem) + out
+    return out
+
+
+def _outside_quotes(text: str, fn) -> str:
+    parts = _QUOTED_SPLIT.split(text)
+    return "".join(p if i % 2 else fn(p) for i, p in enumerate(parts))
+
+
+def moved(text: str, rows: int, cols: int) -> str:
+    """The formula as Excel writes it when copied `rows` down and `cols` right: $ parts stay put."""
+    def shift(m: re.Match) -> str:
+        col_fixed, letters, row_fixed, digits = m.groups()
+        col = _col_index(letters) + (0 if col_fixed else cols)
+        row = int(digits) + (0 if row_fixed else rows)
+        if col < 1 or row < 1:
+            return "#REF!"
+        return f"{col_fixed}{_col_letters(col)}{row_fixed}{row}"
+    return _outside_quotes(text, lambda part: _CELL_PART.sub(shift, part))
+
+
+def plain(text: str) -> str:
+    """The formula with $ signs, spaces and letter case taken out: the cells it points at, as written."""
+    return _outside_quotes(text, lambda part: re.sub(r"\s+", "", part).replace("$", "").upper())

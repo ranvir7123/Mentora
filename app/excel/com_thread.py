@@ -58,8 +58,9 @@ class ComThread:
         return fut
 
     def stop(self) -> None:
+        """Ask the thread to finish. From the thread itself it finishes after the current work."""
         win32event.SetEvent(self._stop_evt)
-        if self._thread is not None:
+        if self._thread is not None and not self.on_thread():
             self._thread.join(STOP_TIMEOUT_S)
 
     def on_thread(self) -> bool:
