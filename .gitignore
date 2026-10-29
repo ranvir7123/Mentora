@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets: the Meta key lives in an environment variable or a .env file, never in git
+.env
+*.env
+!.env.example
+
+# Raw screen recordings and live-run output are big and may show private windows;
+# only reviewed pictures are copied into docs/evidence/ by hand
+recordings/
+runs/
+*.log

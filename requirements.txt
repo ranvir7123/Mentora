@@ -1,0 +1,6 @@
+# Pinned direct dependencies (Python 3.12, Windows).
+PySide6-Essentials==6.12.0   # the ring overlay and the side panel (Qt)
+pywin32==312                 # Excel through COM, and its change events
+comtypes==1.4.17             # Windows UI Automation, to find ribbon buttons
+openai==3.41.0               # talks to Meta's API, which accepts the OpenAI format
+pytest==9.2.0                # tests
