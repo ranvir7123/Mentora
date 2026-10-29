@@ -1,0 +1,5 @@
+#!/bin/sh
+# Refuse a push while any commit in the history holds an API key (see tools/secret_scan.py).
+PY=".venv/Scripts/python.exe"
+if [ ! -x "$PY" ]; then PY="py -3.12"; fi
+exec $PY tools/secret_scan.py --history
