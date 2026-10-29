@@ -6,6 +6,9 @@ that follows this interface, not a change to the core.
 
 Rules every session keeps:
 - `on_snapshot` and `on_spot` may be called from the plug-in's own thread and must return at once.
+- The first snapshot may arrive before `open` returns (the fake delivers it inside `open`; a real app
+  delivers it later, from its own thread), so set up everything `on_snapshot` needs before calling
+  `open`. `latest()` holds it as well.
 - `watch` re-locates while a target is set and calls `on_spot` only when the spot moved by 1 px or
   more; `watch(None, ...)` stops.
 - `open(resume=True)` opens the program's own saved work copy in `workdir` when there is one (else

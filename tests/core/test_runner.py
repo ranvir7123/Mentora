@@ -79,6 +79,45 @@ def test_finishing_the_last_step_reports_points_time_and_first_tries(fake_lesson
     assert run.on_snapshot({"a": 1, "b": 2}) == []  # done is said once
 
 
+def test_a_check_that_raises_on_a_done_step_changes_nothing(fake_lesson):
+    equals = FakePlugin().checks["equals"]
+
+    def odd(snap, args):
+        if "odd" in snap:
+            raise KeyError("Budget")
+        return equals.run(snap, args)
+    run, _ = start(fake_lesson({}, AB), {"equals": CheckKind("equals", (), odd, "")})
+    run.on_snapshot({"a": 1})
+    assert run.on_snapshot({"a": 1, "odd": True}) == []    # no false "Step 1 changed"
+    assert run.changed == frozenset() and run.errors
+    assert run.on_snapshot({"a": 1}) == []
+
+
+def test_the_lesson_is_not_done_while_a_step_is_changed(fake_lesson):
+    run, now = start(fake_lesson({}, AB))
+    run.on_snapshot({"a": 1})
+    assert run.on_snapshot({"b": 2}) == [StepChanged(0), StepPassed(1, True, 10)]
+    assert not run.done and run.hint() is None and run.hints_shown() == ()
+    now[0] = 40.0
+    assert run.on_snapshot({"a": 1, "b": 2}) == [StepFixed(0), LessonDone(40.0, 20, 2, 2)]
+    assert run.done
+
+
+def test_resume_skips_steps_already_done_without_points_or_records(fake_lesson):
+    run, now = start(fake_lesson({}, AB + [{"key": "c", "value": 3}]))
+    now[0] = 100.0
+    assert run.resume({"a": 1, "b": 2}) == 2
+    assert run.index == 2 and run.records() == [] and run.hints_shown() == ()
+    now[0] = 130.0
+    assert run.on_snapshot({"a": 1, "b": 2, "c": 3}) == [StepPassed(2, True, 10), LessonDone(30.0, 10, 1, 1)]
+    assert run.records() == [StepRecord("s2", 1, 0, 30.0, True)]
+    gap, _ = start(fake_lesson({}, AB + [{"key": "c", "value": 3}]))
+    assert gap.resume({"a": 1, "c": 3}) == 1          # stops at the first step not done
+    finished, _ = start(fake_lesson({}, AB))
+    assert finished.resume({"a": 1, "b": 2}) == 2
+    assert finished.done and finished.on_snapshot({"a": 1, "b": 2}) == []   # nothing was done in this run
+
+
 def test_a_check_that_raises_is_treated_as_waiting_and_recorded(fake_lesson):
     def broken(snap, args):
         raise KeyError("Budget")

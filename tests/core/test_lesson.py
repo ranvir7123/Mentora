@@ -57,6 +57,18 @@ def test_missing_field_is_named():
         lesson_from_dict(d)
 
 
+def test_unreadable_lesson_file_is_named(tmp_path):
+    bad_text = tmp_path / "bad_text"
+    bad_text.mkdir()
+    (bad_text / "lesson.json").write_bytes(b'{"format": 1, "title": "caf\xe9"}')
+    with pytest.raises(LessonError, match="lesson.json"):
+        load_lesson(bad_text)
+    not_a_file = tmp_path / "not_a_file"
+    (not_a_file / "lesson.json").mkdir(parents=True)
+    with pytest.raises(LessonError, match="lesson.json"):
+        load_lesson(not_a_file)
+
+
 def test_validate_names_every_problem():
     steps = [step_dict("long", instruction="Put the number one into the key called a right now please ok."),
              step_dict("easy", hints=["Look at a.", "Just set it.", "Set a to 1."]),

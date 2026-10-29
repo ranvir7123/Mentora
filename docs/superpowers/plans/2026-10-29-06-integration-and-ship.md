@@ -123,7 +123,9 @@ def test_a_course_with_no_ready_lessons_is_coming_soon(tmp_path): ...
 - Wiring:
   - `open_lesson(id)`: if a session is open for it, do nothing; else close the open one (saving), open the
     plug-in with `resume` when a work file exists, `place(app rect)`, attach `LessonRun`; snapshots go to
-    `on_snapshot` → runner events. Events from the first snapshot after a resume are quiet (no banner, no cue).
+    `on_snapshot` → runner events. Build the `LessonRun` before calling `open`: the first snapshot may
+    arrive inside `open` (the fake does this). After a resume, the first snapshot goes to `run.resume(snap)`
+    instead, which moves past finished steps with no events, points or records.
   - Events → state: `StepPassed` → banner right, `cue("right")`, points, `progress.step_passed`, pointer
     ring "right", then the next step's pointer; `NotYet` → banner not_yet, `cue("not_yet")`; `StepChanged`
     / `StepFixed` → `changed` list; `LessonDone` → `complete`, `cue("complete")`, `progress.lesson_done`,

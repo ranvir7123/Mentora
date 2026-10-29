@@ -274,6 +274,8 @@ def load_lesson(folder: Path) -> Lesson:
         raise LessonError(f"{path} is missing") from None
     except json.JSONDecodeError as e:
         raise LessonError(f"{path} is not valid JSON (line {e.lineno}: {e.msg})") from None
+    except (OSError, UnicodeDecodeError) as e:
+        raise LessonError(f"{path} could not be read ({e})") from None
     return lesson_from_dict(data, Path(folder))
 
 

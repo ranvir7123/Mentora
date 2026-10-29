@@ -45,7 +45,7 @@ class LessonDone:
     seconds: float
     points: int
     first_try: int
-    steps: int
+    steps: int                   # steps finished in this run (fewer than the lesson's after a resume)
 
 
 @dataclass(frozen=True)
@@ -90,38 +90,47 @@ class LessonRun:
     def on_snapshot(self, snap: Any) -> list[object]:
         events: list[object] = []
         for i in range(self.index):
-            ok = self._judge(self._steps[i], snap).ok
-            if not ok and i not in self._changed:
+            verdict = self._judge(self._steps[i], snap)
+            if verdict is None:
+                continue                 # a crashed check says nothing about the learner's work
+            if not verdict.ok and i not in self._changed:
                 self._changed.add(i)
                 events.append(StepChanged(i))
-            elif ok and i in self._changed:
+            elif verdict.ok and i in self._changed:
                 self._changed.discard(i)
                 events.append(StepFixed(i))
-        if self.done:
-            return events
 
-        verdict = self._judge(self._steps[self.index], snap)
-        while verdict.ok:
-            events.append(self._pass())
-            if self.index == len(self._steps):
-                self.done = True
-                events.append(LessonDone(self._clock() - self._started, self._points,
-                                         sum(r.first_try for r in self._records), len(self._steps)))
+        while not self._finished():
+            verdict = self._judge(self._steps[self.index], snap) or Verdict.waiting()
+            if not verdict.ok:
+                self._wrong(verdict, events)
                 return events
-            verdict = self._judge(self._steps[self.index], snap)
+            events.append(self._pass())
 
-        progress = self._progress[self.index]
-        if not verdict.attempted:
-            progress.last_wrong = None
-        elif (verdict.code, verdict.text) != progress.last_wrong:
-            progress.last_wrong = (verdict.code, verdict.text)
-            progress.tries += 1
-            progress.said_not_yet = True
-            events.append(NotYet(self.index, self._not_yet_line(verdict), verdict.code))
+        if not self.done and not self._changed:  # no celebration while an earlier step is undone
+            self.done = True
+            events.append(LessonDone(self._clock() - self._started, self._points,
+                                     sum(r.first_try for r in self._records), len(self._records)))
         return events
 
+    def resume(self, snap: Any) -> int:
+        """Use instead of `on_snapshot` for the first snapshot after reopening a saved work copy.
+
+        Moves past the steps already done, with no events, points or records, and starts the clock
+        again; returns the step it resumes at. Points, times and first tries then count only this run.
+        If every step is already done, the run is done and never says LessonDone.
+        """
+        while not self._finished():
+            verdict = self._judge(self._steps[self.index], snap)
+            if verdict is None or not verdict.ok:
+                break
+            self.index += 1
+        self.done = self._finished()
+        self._started = self._step_started = self._clock()
+        return self.index
+
     def hint(self) -> str | None:
-        if self.done:
+        if self._finished():
             return None
         step, progress = self._steps[self.index], self._progress[self.index]
         if progress.hints >= len(step.hints):
@@ -130,20 +139,34 @@ class LessonRun:
         return step.hints[progress.hints - 1]
 
     def hints_shown(self) -> tuple[str, ...]:
-        if self.done:
+        if self._finished():
             return ()
         return self._steps[self.index].hints[:self._progress[self.index].hints]
 
     def records(self) -> list[StepRecord]:
         return list(self._records)
 
-    def _judge(self, step: Step, snap: Any) -> Verdict:
+    def _finished(self) -> bool:
+        return self.index == len(self._steps)
+
+    def _judge(self, step: Step, snap: Any) -> Verdict | None:
+        """The check's verdict, or None when the check crashed (kept in `errors`)."""
         try:
             return self._checks[step.check.kind].run(snap, step.check.args)
         except Exception as exc:
             if len(self.errors) < MAX_ERRORS:
                 self.errors.append(traceback.format_exception_only(exc)[-1].strip())
-            return Verdict.waiting()
+            return None
+
+    def _wrong(self, verdict: Verdict, events: list[object]) -> None:
+        progress = self._progress[self.index]
+        if not verdict.attempted:
+            progress.last_wrong = None
+        elif (verdict.code, verdict.text) != progress.last_wrong:
+            progress.last_wrong = (verdict.code, verdict.text)
+            progress.tries += 1
+            progress.said_not_yet = True
+            events.append(NotYet(self.index, self._not_yet_line(verdict), verdict.code))
 
     def _not_yet_line(self, verdict: Verdict) -> str:
         if verdict.code:
