@@ -11,9 +11,11 @@ Card {
     property string appName: ""
     property bool clipOpen: false
     property bool muted: false
+    property bool canGetVideo: false    // the clip's source video may be opened in the browser
     signal showMe()
     signal hint()
     signal clip()
+    signal getVideo()
 
     readonly property var clipInfo: step && step.clip ? step.clip : ({ "state": "none", "file": "", "start": 0,
                                                                          "end": 0, "videoUrl": "" })
@@ -96,6 +98,8 @@ Card {
         clip: root.clipInfo
         open: visible
         muted: root.muted
+        canGetVideo: root.canGetVideo
+        onGetVideo: root.getVideo()
     }
 
     HintList {

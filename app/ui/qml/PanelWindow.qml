@@ -34,9 +34,9 @@ Window {
     }
 
     width: 360
-    height: Screen.desktopAvailableHeight
-    x: Screen.virtualX + Screen.desktopAvailableWidth - width
-    y: Screen.virtualY
+    height: bridge.workArea.height
+    x: bridge.workArea.x + bridge.workArea.width - width
+    y: bridge.workArea.y
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
     visible: root.lesson.open
     color: Theme.bg
@@ -284,9 +284,11 @@ Window {
                 appName: root.appName
                 clipOpen: root.clipOpen
                 muted: root.bridge.muted
+                canGetVideo: root.bridge.isVideoLink(clipInfo.videoUrl)
                 onShowMe: root.bridge.showMe()
                 onHint: root.bridge.nextHint()
                 onClip: root.toggleClip()
+                onGetVideo: root.bridge.openVideo(clipInfo.videoUrl)
                 readonly property int hintCount: root.lesson.step ? root.lesson.step.hints.length : 0
                 onHintCountChanged: if (hintCount > 0) root.reveal(step)
             }
@@ -362,7 +364,8 @@ Window {
         }
     }
 
-    // Right and Not yet slide up over the bottom. Not yet can be put away to get back to the Ask box.
+    // Right and Not yet slide up over the bottom. Not yet can be put away to get back to the Ask box; it
+    // comes back with the next wrong try, even the same mistake again (that may arrive as the sound alone).
     property var shownBanner: null          // kept while it slides away
     property string putAway: ""
     function bannerKey(b) { return b ? b.kind + "|" + b.stepIndex + "|" + b.text : "" }
@@ -370,7 +373,16 @@ Window {
     onBannerUpChanged: if (bannerUp) shownBanner = lesson.banner
     Connections {
         target: root
-        function onLessonChanged() { if (root.lesson.banner) root.shownBanner = root.lesson.banner }
+        function onLessonChanged() {
+            if (root.lesson.banner)
+                root.shownBanner = root.lesson.banner
+            if (root.bannerKey(root.lesson.banner) !== root.putAway)
+                root.putAway = ""
+        }
+    }
+    Connections {
+        target: root.bridge
+        function onCue(name) { if (name === "not_yet") root.putAway = "" }
     }
 
     MouseArea {                             // the banner is solid: a click on it never reaches the Ask box
@@ -391,6 +403,18 @@ Window {
         enabled: shown
         Component.onCompleted: if (root.lesson.banner) root.shownBanner = root.lesson.banner
         onAction: root.putAway = root.bannerKey(root.shownBanner)
+    }
+
+    // A press anywhere in the panel but the Ask box puts the keyboard back in the app, then goes on to
+    // whatever was pressed. On top of everything, and it never keeps a press.
+    MouseArea {
+        anchors.fill: parent
+        z: 1000
+        onPressed: (mouse) => {
+            if (!askBox.contains(mapToItem(askBox, mouse.x, mouse.y)))
+                askBox.letGo()
+            mouse.accepted = false
+        }
     }
 
     // +10 in gold, floating up from the right banner and fading, all within 400 ms. It rides on the banner

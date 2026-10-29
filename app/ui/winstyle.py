@@ -1,9 +1,9 @@
 """Windows settings for the screens' own windows.
 
 The pointer overlay must let every click through to the app below and never take focus. The lesson panel
-must take clicks without pulling the keyboard away from Excel, except while the learner types a question.
-Only windows that belong to this program are ever changed; asking to change another program's window is
-refused with ValueError.
+must take clicks without pulling the keyboard away from Excel, except while the learner types a question,
+and then hand the keyboard back. Only windows that belong to this program ever have their settings changed;
+asking to change another program's window is refused with ValueError.
 """
 from __future__ import annotations
 
@@ -32,6 +32,10 @@ _user32.IsWindow.argtypes = (wintypes.HWND,)
 _user32.SetWindowPos.restype = wintypes.BOOL
 _user32.SetWindowPos.argtypes = (wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                  ctypes.c_int, wintypes.UINT)
+_user32.GetForegroundWindow.restype = wintypes.HWND
+_user32.GetForegroundWindow.argtypes = ()
+_user32.SetForegroundWindow.restype = wintypes.BOOL
+_user32.SetForegroundWindow.argtypes = (wintypes.HWND,)
 
 
 def ex_style(hwnd: int) -> int:
@@ -66,3 +70,14 @@ def make_click_through(hwnd: int) -> None:
 def make_no_activate(hwnd: int, on: bool) -> None:
     """While on, clicking the window works but never takes focus (or the keyboard) from the app."""
     _change(hwnd, add=WS_EX_NOACTIVATE if on else 0, remove=0 if on else WS_EX_NOACTIVATE)
+
+
+def foreground() -> int:
+    """The window that has the keyboard now, whichever program it belongs to; 0 when none has."""
+    return _user32.GetForegroundWindow() or 0
+
+
+def give_keyboard_to(hwnd: int) -> bool:
+    """Brings `hwnd` (the app's window, such as Excel's) to the front, so the keyboard is back in it. Windows
+    allows this while one of this program's windows has the keyboard. False if that window has closed."""
+    return bool(hwnd and _user32.IsWindow(hwnd) and _user32.SetForegroundWindow(hwnd))

@@ -264,8 +264,13 @@ Window {
         width: Math.ceil(metrics.advanceWidth) + 2 * Theme.space12
         height: Math.ceil(metrics.height) + 2 * Theme.space8
         readonly property rect footprint: Qt.rect(mascot.x, mascot.y - root.headroom, root.size, root.size + root.headroom)
-        readonly property point spot: root.fromScreen(root.bridge.bubbleSpot(root.keepClear(),
-                                                      root.toScreen(footprint), width, height))
+        // Worked out (a call into Python) only while the mascot is landed and standing still. In flight the
+        // words are hidden and keep their last place, so a flight makes no such call on any frame.
+        property point lastSpot: Qt.point(0, 0)
+        readonly property point spot: flight.phase !== "landed" ? lastSpot
+                                      : root.fromScreen(root.bridge.bubbleSpot(root.keepClear(),
+                                                        root.toScreen(footprint), width, height))
+        onSpotChanged: lastSpot = spot
         x: spot.x
         y: spot.y
         opacity: shown ? 1 : 0

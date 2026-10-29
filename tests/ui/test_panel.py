@@ -158,6 +158,20 @@ def test_a_new_hint_below_the_fold_scrolls_into_view(panel, qapp):
     assert scroller.property("contentY") > 0
 
 
+def test_the_mouse_wheel_scrolls_the_panel(panel, qapp):
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QWheelEvent
+    _, _, root = panel("long_text", wait=0.6)
+    scroller = _scroller(root)
+    middle = scroller.mapToScene(QPointF(scroller.width() / 2, scroller.height() / 2))
+    wheel = QWheelEvent(middle, root.mapToGlobal(middle), QPoint(0, 0), QPoint(0, -240),
+                        Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase,
+                        False)
+    QCoreApplication.sendEvent(root, wheel)
+    _settle(qapp, 0.4)
+    assert scroller.property("contentY") > 0
+
+
 def test_everything_scrolls_clear_of_a_tall_not_yet_banner(panel, qapp):
     _, _, root = panel("long_text")
     banner = next(i for i in _items(root.contentItem()) if i.metaObject().className().startswith("Banner"))
@@ -196,6 +210,46 @@ def test_a_missing_clip_offers_the_video_in_the_browser(panel, qapp):
     finally:
         QDesktopServices.unsetUrlHandler("https")
     assert browser.opened == [backend.lesson()["step"]["clip"]["videoUrl"]]
+
+
+_SCHEMES = ("https", "http", "file", "ms-msdt", "javascript")
+
+
+def test_only_a_youtube_link_is_ever_opened(qapp):
+    browser = _Browser()
+    for scheme in _SCHEMES:
+        QDesktopServices.setUrlHandler(scheme, browser, "open")
+    try:
+        bridge = Bridge(DemoBackend("lesson_clip_missing"))
+        for bad in ("file:///C:/Windows/System32/calc.exe", "ms-msdt:/id PCWDiagnostic", "javascript:alert(1)",
+                    "https://youtube.com.example.net/watch?v=demo", "https://example.net/youtube.com/watch",
+                    "https://someone@www.youtube.com/watch?v=demo", "https://www.youtube.com:8080/watch?v=demo",
+                    "", "youtube"):
+            assert not bridge.isVideoLink(bad), bad
+            bridge.openVideo(bad)
+        for good in ("https://www.youtube.com/watch?v=demo&t=12s", "https://youtu.be/demo?t=12",
+                     "https://m.youtube.com/watch?v=demo", "http://youtube.com/watch?v=demo",
+                     "www.youtube.com/watch?v=demo"):
+            assert bridge.isVideoLink(good), good
+            bridge.openVideo(good)
+    finally:
+        for scheme in _SCHEMES:
+            QDesktopServices.unsetUrlHandler(scheme)
+    assert browser.opened == ["https://www.youtube.com/watch?v=demo&t=12s", "https://youtu.be/demo?t=12",
+                              "https://m.youtube.com/watch?v=demo", "https://youtube.com/watch?v=demo",
+                              "https://www.youtube.com/watch?v=demo"]          # always over https
+
+
+def test_a_clip_with_a_strange_link_offers_no_button(panel, qapp):
+    from app.ui.demo_backend import _lesson, _step_view
+    backend, _, root = panel("lesson_clip_missing")
+    step = _step_view(1, clip="missing")
+    step["clip"]["videoUrl"] = "file:///C:/Windows/System32/calc.exe"
+    backend._publish(lesson=_lesson(1, step=step))
+    _settle(qapp, 0.3)
+    assert "This step's video isn't saved\non this computer." in _texts(root)
+    assert "Get the video" not in [b.property("text") for b in _items(root.contentItem())
+                                   if b.metaObject().className().startswith("ChunkyButton") and _shown(b)]
 
 
 def test_the_clip_button_opens_and_hides_the_clip(panel, qapp):
@@ -249,6 +303,22 @@ def test_not_yet_is_gentle_and_can_be_put_away(panel, qapp):
     assert "Not yet" not in _texts(root)
 
 
+def test_the_same_mistake_again_shows_not_yet_again(panel, qapp):
+    from app.ui.demo_backend import _lesson
+    backend, _, root = panel("lesson_not_yet")
+    mistake = backend.lesson()["banner"]
+    _click(qapp, root, _button(root, "Try again"))
+    backend._publish(cue="not_yet")             # the same wrong try: the lesson is unchanged, only the sound
+    _settle(qapp, 0.4)
+    assert "Not yet" in _texts(root)
+    _click(qapp, root, _button(root, "Try again"))
+    backend._publish(lesson=_lesson(1))         # the banner goes while the learner edits the cell
+    _settle(qapp, 0.1)
+    backend._publish(lesson=_lesson(1, banner=mistake))
+    _settle(qapp, 0.4)
+    assert "Not yet" in _texts(root)
+
+
 def test_asking_sends_the_question_and_shows_the_answer(panel, qapp):
     backend, _, root = panel("lesson_step")
     field = next(i for i in _items(root.contentItem()) if i.metaObject().className() == "QQuickTextInput")
@@ -261,6 +331,27 @@ def test_asking_sends_the_question_and_shows_the_answer(panel, qapp):
     assert "Why B8?" in _texts(root)
     _settle(qapp, 1.4)
     assert "Look at the step's check: it reads B8's formula, not the number." in _texts(root)
+
+
+def test_the_ask_box_lets_go_of_the_keyboard_once_you_are_done_typing(panel, qapp):
+    backend, _, root = panel("lesson_step")
+    field = next(i for i in _items(root.contentItem()) if i.metaObject().className() == "QQuickTextInput")
+    _click(qapp, root, field)
+    assert field.hasActiveFocus()
+    for letter in "Why?":
+        QTest.keyClick(root, letter)
+    QTest.keyClick(root, Qt.Key.Key_Return)                 # sent
+    _settle(qapp, 0.05)
+    assert ("ask", ("Why?",)) in backend.actions
+    assert not field.hasActiveFocus()
+    _click(qapp, root, field)
+    QTest.keyClick(root, Qt.Key.Key_Escape)                 # changed your mind
+    _settle(qapp, 0.05)
+    assert not field.hasActiveFocus()
+    _click(qapp, root, field)
+    _click(qapp, root, _button(root, "Show me"))            # pressed something else in the panel
+    assert not field.hasActiveFocus()
+    assert ("show_me", ()) in backend.actions               # and the press still did its job
 
 
 def test_the_finished_lesson_celebrates_and_offers_what_next(panel, qapp):

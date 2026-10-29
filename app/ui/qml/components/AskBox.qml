@@ -4,7 +4,8 @@ import Theme
 
 // Type a question about the step and press Enter (or Ask). The panel never takes the keyboard from the
 // app, except while you are typing here: `typing(true)` asks for it as you press into the box, and
-// `typing(false)` gives it back when you leave.
+// `typing(false)` gives it back once you are done: you sent the question, pressed Escape, or pressed
+// anything else in the panel (`letGo`).
 Item {
     id: root
     property bool busy: false           // a question is being answered
@@ -17,6 +18,14 @@ Item {
             return
         root.ask(question)
         input.text = ""
+        letGo()
+    }
+
+    // Said even when the box never got the keyboard (Windows can refuse to bring the panel forward), so
+    // the panel goes back to never taking focus either way.
+    function letGo() {
+        input.focus = false
+        root.typing(false)
     }
 
     implicitWidth: 328
@@ -49,6 +58,7 @@ Item {
             Accessible.name: "Ask about this step"
             onAccepted: root.send()
             onActiveFocusChanged: root.typing(activeFocus)
+            Keys.onEscapePressed: root.letGo()
         }
 
         Text {

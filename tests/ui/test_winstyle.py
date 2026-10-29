@@ -60,3 +60,29 @@ def test_panel_never_takes_focus_except_the_ask_box(qapp, hwnd):
     assert not winstyle.ex_style(hwnd) & winstyle.WS_EX_NOACTIVATE       # typing a question needs the keyboard
     bridge.askFocused(False)
     assert winstyle.ex_style(hwnd) & winstyle.WS_EX_NOACTIVATE
+
+
+def test_done_asking_the_keyboard_goes_back_to_the_app(qapp, hwnd, monkeypatch):
+    # Which window has the keyboard is played out here: a test can't move the real keyboard between programs.
+    excel = 0x1234
+    front = {"now": excel}
+    given = []
+    monkeypatch.setattr(winstyle, "foreground", lambda: front["now"])
+    monkeypatch.setattr(winstyle, "give_keyboard_to", given.append)
+    bridge = Bridge(DemoBackend("lesson_step"))
+    bridge.set_panel_window(hwnd)
+    bridge.askFocused(True)             # pressed into the Ask box while Excel had the keyboard
+    front["now"] = hwnd                 # the panel came forward for the typing
+    bridge.askFocused(True)
+    bridge.askFocused(False)            # sent, Escape, or a press elsewhere in the panel
+    assert given == [excel]
+    assert winstyle.ex_style(hwnd) & winstyle.WS_EX_NOACTIVATE
+    front["now"] = excel                # this time the learner clicked back into Excel themselves
+    bridge.askFocused(True)
+    bridge.askFocused(False)
+    assert given == [excel], "the keyboard is already back; nothing to hand over"
+
+
+def test_the_keyboard_is_never_handed_to_a_window_that_has_closed():
+    assert winstyle.give_keyboard_to(0) is False
+    assert isinstance(winstyle.foreground(), int)

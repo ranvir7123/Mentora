@@ -45,12 +45,13 @@ Window {
     color: Theme.bg
     title: "Project X"
 
-    // Centred on the screen, and never bigger than what is free of the taskbar.
+    // Centred on the primary screen, and never bigger than what is free of its taskbar.
     Component.onCompleted: {
-        width = Math.min(width, Screen.desktopAvailableWidth - 2 * Theme.space24)
-        height = Math.min(height, Screen.desktopAvailableHeight - 2 * Theme.space24)
-        x = Screen.virtualX + (Screen.desktopAvailableWidth - width) / 2
-        y = Screen.virtualY + (Screen.desktopAvailableHeight - height) / 2
+        const area = bridge.workArea
+        width = Math.min(width, area.width - 2 * Theme.space24)
+        height = Math.min(height, area.height - 2 * Theme.space24)
+        x = area.x + (area.width - width) / 2
+        y = area.y + (area.height - height) / 2
     }
 
     // A lesson that has just been made lands on its course's card with a short highlight.

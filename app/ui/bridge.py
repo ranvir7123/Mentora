@@ -16,8 +16,8 @@ import copy
 import threading
 from typing import Any, Mapping
 
-from PySide6.QtCore import Property, QObject, QPointF, QRectF, Qt, Signal, Slot
-from PySide6.QtGui import QGuiApplication, QWindow
+from PySide6.QtCore import Property, QObject, QPointF, QRectF, Qt, QUrl, Signal, Slot
+from PySide6.QtGui import QDesktopServices, QGuiApplication, QWindow
 
 from app.core.screen import ScreenBackend
 from app.core.types import Rect
@@ -34,6 +34,23 @@ def _cue_name(payload: Any) -> str:
     return str(payload)
 
 
+_VIDEO_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}
+
+
+def _video_link(url: str) -> QUrl | None:
+    """The YouTube link to open for `url`, always over https; None for anything else: another site, a file,
+    another program's kind of link, or a link carrying a name or a port."""
+    text = url.strip()
+    if "://" not in text:
+        text = "https://" + text
+    link = QUrl(text, QUrl.ParsingMode.StrictMode)
+    if (not link.isValid() or link.scheme().lower() not in ("http", "https")
+            or link.host().lower() not in _VIDEO_HOSTS or link.userInfo() or link.port() != -1):
+        return None
+    link.setScheme("https")
+    return link
+
+
 class Bridge(QObject):
     homeChanged = Signal()
     lessonChanged = Signal()
@@ -41,6 +58,7 @@ class Bridge(QObject):
     mutedChanged = Signal()
     mascotHomeChanged = Signal()
     mascotAwayChanged = Signal()
+    workAreaChanged = Signal()
     cue = Signal(str)
     _wake = Signal()
 
@@ -59,8 +77,14 @@ class Bridge(QObject):
         self._scheduled = False
         self._panel: QWindow | None = None
         self._panel_hwnd: int | None = None
+        self._typed_from = 0            # the window that had the keyboard before the Ask box took it
         self._home_spot = QRectF()
         self._away = False
+        self._watched = None
+        app = QGuiApplication.instance()
+        if app is not None:
+            app.primaryScreenChanged.connect(self._watch_screen)
+            self._watch_screen(app.primaryScreen())
         self._wake.connect(self._flush, Qt.ConnectionType.QueuedConnection)
         backend.subscribe(self._receive)
 
@@ -122,6 +146,26 @@ class Bridge(QObject):
         screen = QGuiApplication.primaryScreen()
         g = screen.geometry()
         return (g.x(), g.y()), screen.devicePixelRatio(), QRectF(screen.availableGeometry())
+
+    def _watch_screen(self, screen) -> None:
+        """Keeps `workArea` in step with the primary screen: a new primary screen, or its taskbar moving."""
+        if self._watched is not None:
+            self._watched.availableGeometryChanged.disconnect(self._work_area_moved)
+        self._watched = screen
+        if screen is not None:
+            screen.availableGeometryChanged.connect(self._work_area_moved)
+        self.workAreaChanged.emit()
+
+    def _work_area_moved(self, _area) -> None:
+        self.workAreaChanged.emit()
+
+    def _get_work_area(self) -> QRectF:
+        return self._screen()[2]
+
+    # The primary screen's area free of the taskbar (logical): the panel docks at its right edge and home
+    # opens in its middle, on the screen the pointer's maths uses. Not the whole desktop, which spans every
+    # monitor.
+    workArea = Property(QRectF, _get_work_area, notify=workAreaChanged)
 
     def _panel_area(self) -> QRectF:
         if self._panel is not None:
@@ -212,9 +256,21 @@ class Bridge(QObject):
 
     @Slot(bool)
     def askFocused(self, focused: bool) -> None:
-        """The Ask box has the keyboard (the panel may take focus while it does) or has let it go."""
-        if self._panel_hwnd is not None:
-            winstyle.make_no_activate(self._panel_hwnd, not focused)
+        """The Ask box takes the keyboard (the panel may take focus while it does), or lets it go: then the
+        panel never takes focus again, and if it still has the keyboard, the keyboard goes back to the window
+        that had it before (the app's), so the learner's next keys land in the app, never in the panel."""
+        if self._panel_hwnd is None:
+            return
+        if focused:
+            before = winstyle.foreground()
+            if before and before != self._panel_hwnd:
+                self._typed_from = before
+            winstyle.make_no_activate(self._panel_hwnd, False)
+            return
+        winstyle.make_no_activate(self._panel_hwnd, True)
+        if self._typed_from and winstyle.foreground() == self._panel_hwnd:
+            winstyle.give_keyboard_to(self._typed_from)
+        self._typed_from = 0
 
     # The learner's actions. Each returns at once; results come back through the backend's updates.
 
@@ -237,6 +293,19 @@ class Bridge(QObject):
     @Slot()
     def watchClip(self) -> None:
         self._backend.watch_clip()
+
+    @Slot(str, result=bool)
+    def isVideoLink(self, url: str) -> bool:
+        """Whether `url` is a YouTube link, the only kind Get the video offers."""
+        return _video_link(url) is not None
+
+    @Slot(str)
+    def openVideo(self, url: str) -> None:
+        """The step's source video, in the browser. The link comes with the lesson, which a model wrote and
+        which may have been shared, so anything but a YouTube link is never opened."""
+        link = _video_link(url)
+        if link is not None:
+            QDesktopServices.openUrl(link)
 
     @Slot(str)
     def ask(self, text: str) -> None:

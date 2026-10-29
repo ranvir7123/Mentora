@@ -4,12 +4,15 @@ import Theme
 
 // This step's seconds of the source video, played inside the panel from our local copy: from `start` to
 // `end`, then it stops on the last frame; a tap plays it again. When the copy is missing (or will not
-// play), it says so and offers the video in the browser instead. Nothing loads until it is opened.
+// play), it says so and offers the video in the browser instead, when its link is one that may be opened
+// (`canGetVideo`, decided by the bridge). Nothing loads until it is opened.
 Item {
     id: root
     property var clip: ({ "state": "none", "file": "", "start": 0, "end": 0, "videoUrl": "" })
     property bool open: false
     property bool muted: false
+    property bool canGetVideo: false
+    signal getVideo()
 
     property bool failed: false
     property bool ended: false
@@ -92,11 +95,12 @@ Item {
             }
 
             ChunkyButton {
+                visible: root.canGetVideo
                 anchors.horizontalCenter: parent.horizontalCenter
                 kind: "quiet"
                 compact: true
                 text: "Get the video"
-                onClicked: Qt.openUrlExternally(root.clip.videoUrl)
+                onClicked: root.getVideo()
             }
         }
     }

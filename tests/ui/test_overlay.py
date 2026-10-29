@@ -43,6 +43,37 @@ def _items(item):
         yield from _items(child)
 
 
+def test_the_words_find_their_place_once_the_mascot_lands_not_on_every_frame_of_its_flight(qapp, monkeypatch):
+    """Working out where the words go is a call into Python; made on every frame of a flight it would compete
+    with the backend's threads for Python's lock (only one thread runs Python at a time)."""
+    from PySide6.QtCore import QRectF
+    from app.ui import landing
+    calls = []
+    real = landing.bubble_spot
+    monkeypatch.setattr(landing, "bubble_spot", lambda *a, **k: calls.append(1) or real(*a, **k))
+    backend = DemoBackend("pointer_flying")
+    engine = make_engine(Bridge(backend))
+    root = load_window(engine, "overlay", backend.view.get("overlay"))
+    try:
+        words = next(i for i in _items(root.contentItem())
+                     if i.property("said") is not None and i.property("text") is not None)
+        mascot = next(i for i in _items(root.contentItem()) if i.metaObject().className().startswith("Mascot"))
+        backend.replay()
+        _settle(qapp, 0.25)
+        assert mascot.property("state") == "flying"
+        assert calls == [], f"the words' place was worked out {len(calls)} times while the mascot flew"
+        _settle(qapp, 1.0)
+        assert words.property("shown") and calls, "the mascot landed and spoke"
+        box = QRectF(words.x(), words.y(), words.width(), words.height())
+        body = QRectF(mascot.x(), mascot.y(), mascot.width(), mascot.height())
+        assert not box.intersects(body), f"the words at {box} sit on the mascot at {body}"
+    finally:
+        root.close()
+        root.deleteLater()
+        engine.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 def test_the_mascots_words_start_with_a_capital_letter(qapp):
     for state, words in (("pointer_watching", "This one!"), ("long_text", "Type it in this cell")):
         backend = DemoBackend(state)
