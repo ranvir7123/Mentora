@@ -1,5 +1,8 @@
+import struct
+import zlib
+
 from app.core.types import Rect
-from app.win.windows import outer_rect_for
+from app.win.windows import outer_rect_for, png_bytes
 
 
 def test_the_window_is_grown_by_its_invisible_borders():
@@ -13,3 +16,12 @@ def test_the_window_is_grown_by_its_invisible_borders():
 def test_no_borders_means_the_same_rectangle():
     r = Rect(10, 20, 300, 400)
     assert outer_rect_for(Rect(0, 0, 100, 100), r, r) == Rect(0, 0, 100, 100)
+
+
+def test_a_screenshot_is_a_png_with_its_colours_in_the_right_order():
+    png = png_bytes(2, 1, bytes([255, 0, 0, 255, 0, 0, 255, 255]))      # a blue pixel, then a red one
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    assert struct.unpack(">II", png[16:24]) == (2, 1)
+    start = png.index(b"IDAT") + 4
+    size = struct.unpack(">I", png[start - 8:start - 4])[0]
+    assert zlib.decompress(png[start:start + size]) == bytes([0, 0, 0, 255, 255, 255, 0, 0, 255])

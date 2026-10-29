@@ -14,7 +14,8 @@ def budget():
 class Rig:
     """An ExcelSession on fake Excel, with what it delivered."""
 
-    def __init__(self, lesson, workdir: Path, *, resume: bool = False, app: FakeApp | None = None) -> None:
+    def __init__(self, lesson, workdir: Path, *, resume: bool = False, app: FakeApp | None = None,
+                 visible: bool = False) -> None:
         from app.excel.session import ExcelSession
         self.app = app or FakeApp()
         self.com = FakeCom()
@@ -23,7 +24,7 @@ class Rig:
         self.snapshots: list = []
         self.closed = 0
         self.session = ExcelSession(
-            lesson, workdir, visible=False, resume=resume,
+            lesson, workdir, visible=visible, resume=resume,
             on_snapshot=self.snapshots.append, on_closed=self._closed,
             excel_factory=lambda: self.app, com=self.com, attach_events=self.events.attach,
             reader=self.reader)

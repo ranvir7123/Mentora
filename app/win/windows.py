@@ -6,11 +6,17 @@ Two facts measured on this laptop (1280 px wide at 200%) in the earlier project 
 - A window is wider than what you see: Windows 11 adds invisible borders (11 px a side at 200%) for
   grabbing the edge. window_rect() is the visible frame; place_window() grows the target by the
   borders so the visible frame lands exactly on the rectangle asked for.
+
+location_hook() tells a thread when a window moves; it needs the thread to pump messages, as the
+COM thread does. screenshot_png() takes a picture of part of the screen, for the vision fallback.
 """
 from __future__ import annotations
 
 import ctypes
+import struct
+import zlib
 from ctypes import wintypes
+from typing import Callable
 
 from app.core.types import Rect
 
@@ -24,6 +30,12 @@ SW_RESTORE = 9
 SWP_NOZORDER = 0x0004
 SWP_NOACTIVATE = 0x0010
 BASE_DPI = 96
+EVENT_OBJECT_LOCATIONCHANGE = 0x800B
+WINEVENT_OUTOFCONTEXT = 0x0000
+OBJID_WINDOW = 0
+CHILDID_SELF = 0
+SRCCOPY, CAPTUREBLT = 0x00CC0020, 0x40000000
+DIB_RGB_COLORS = 0
 
 
 class _MonitorInfo(ctypes.Structure):
@@ -47,6 +59,42 @@ _user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, cty
                                  ctypes.c_int, ctypes.c_int, wintypes.UINT]
 _dwmapi.DwmGetWindowAttribute.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p,
                                           wintypes.DWORD]
+_user32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
+_user32.FindWindowExW.restype = wintypes.HWND
+_user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+_user32.IsWindowVisible.argtypes = [wintypes.HWND]
+_WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+_user32.EnumWindows.argtypes = [_WNDENUMPROC, wintypes.LPARAM]
+_WINEVENTPROC = ctypes.WINFUNCTYPE(None, wintypes.HANDLE, wintypes.DWORD, wintypes.HWND, wintypes.LONG,
+                                   wintypes.LONG, wintypes.DWORD, wintypes.DWORD)
+_user32.SetWinEventHook.argtypes = [wintypes.UINT, wintypes.UINT, wintypes.HMODULE, _WINEVENTPROC,
+                                    wintypes.DWORD, wintypes.DWORD, wintypes.UINT]
+_user32.SetWinEventHook.restype = wintypes.HANDLE
+_user32.UnhookWinEvent.argtypes = [wintypes.HANDLE]
+_user32.GetDC.argtypes = [wintypes.HWND]
+_user32.GetDC.restype = wintypes.HDC
+_user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
+_gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+_gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
+_gdi32.CreateCompatibleDC.restype = wintypes.HDC
+_gdi32.CreateCompatibleBitmap.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int]
+_gdi32.CreateCompatibleBitmap.restype = wintypes.HBITMAP
+_gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
+_gdi32.SelectObject.restype = wintypes.HGDIOBJ
+_gdi32.BitBlt.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                          wintypes.HDC, ctypes.c_int, ctypes.c_int, wintypes.DWORD]
+_gdi32.GetDIBits.argtypes = [wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, wintypes.UINT, ctypes.c_void_p,
+                             ctypes.c_void_p, wintypes.UINT]
+_gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+_gdi32.DeleteDC.argtypes = [wintypes.HDC]
+
+
+class _BitmapInfoHeader(ctypes.Structure):
+    _fields_ = [("biSize", wintypes.DWORD), ("biWidth", wintypes.LONG), ("biHeight", wintypes.LONG),
+                ("biPlanes", wintypes.WORD), ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", wintypes.LONG),
+                ("biYPelsPerMeter", wintypes.LONG), ("biClrUsed", wintypes.DWORD),
+                ("biClrImportant", wintypes.DWORD)]
 
 
 def _rect(r: wintypes.RECT) -> Rect:
@@ -116,3 +164,83 @@ def place_window(hwnd: int, rect: Rect) -> None:
     if not _user32.SetWindowPos(hwnd, None, round(outer.x), round(outer.y), round(outer.w),
                                 round(outer.h), SWP_NOZORDER | SWP_NOACTIVATE):
         raise ctypes.WinError(ctypes.get_last_error())
+
+
+def find_child(hwnd: int, *classes: str) -> int:
+    """The child window reached by following window classes down, e.g. ("XLDESK", "EXCEL7"); 0 if none."""
+    for name in classes:
+        hwnd = _user32.FindWindowExW(hwnd, None, name, None) or 0
+        if not hwnd:
+            return 0
+    return hwnd
+
+
+def process_windows(hwnd: int) -> list[int]:
+    """The other visible top-level windows of hwnd's program: its pop-ups and opened drop-downs."""
+    want = wintypes.DWORD()
+    _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(want))
+    found: list[int] = []
+
+    def visit(other, _lparam) -> bool:
+        pid = wintypes.DWORD()
+        _user32.GetWindowThreadProcessId(other, ctypes.byref(pid))
+        if other != hwnd and pid.value == want.value and _user32.IsWindowVisible(other):
+            found.append(other)
+        return True
+    _user32.EnumWindows(_WNDENUMPROC(visit), 0)
+    return found
+
+
+def location_hook(hwnd: int, fn: Callable[[], None]) -> Callable[[], None]:
+    """Call fn on this thread whenever hwnd moves or changes size; returns the function that stops it."""
+    pid = wintypes.DWORD()
+    _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+
+    def on_event(_hook, _event, event_hwnd, id_object, id_child, _thread, _time) -> None:
+        if event_hwnd == hwnd and id_object == OBJID_WINDOW and id_child == CHILDID_SELF:
+            fn()
+    proc = _WINEVENTPROC(on_event)
+    handle = _user32.SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, None, proc,
+                                     pid.value, 0, WINEVENT_OUTOFCONTEXT)
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    def stop(_keep_alive=proc) -> None:       # holding proc here keeps Windows' callback valid
+        _user32.UnhookWinEvent(handle)
+    return stop
+
+
+def png_bytes(width: int, height: int, bgra: bytes) -> bytes:
+    """A PNG of a top-down picture given as blue, green, red, alpha bytes per pixel."""
+    rgba = bytearray(bgra)
+    rgba[0::4], rgba[2::4] = bgra[2::4], bgra[0::4]
+    stride = width * 4
+    raw = b"".join(b"\x00" + bytes(rgba[y * stride:(y + 1) * stride]) for y in range(height))
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(raw, 6))
+            + chunk(b"IEND", b""))
+
+
+def screenshot_png(rect: Rect) -> bytes:
+    """A picture of this part of the screen as PNG bytes, in physical pixels."""
+    x, y, w, h = round(rect.x), round(rect.y), round(rect.w), round(rect.h)
+    screen = _user32.GetDC(None)
+    memory = _gdi32.CreateCompatibleDC(screen)
+    bitmap = _gdi32.CreateCompatibleBitmap(screen, w, h)
+    old = _gdi32.SelectObject(memory, bitmap)
+    try:
+        if not _gdi32.BitBlt(memory, 0, 0, w, h, screen, x, y, SRCCOPY | CAPTUREBLT):
+            raise ctypes.WinError(ctypes.get_last_error())
+        info = _BitmapInfoHeader(ctypes.sizeof(_BitmapInfoHeader), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
+        buf = ctypes.create_string_buffer(w * h * 4)
+        if _gdi32.GetDIBits(memory, bitmap, 0, h, buf, ctypes.byref(info), DIB_RGB_COLORS) != h:
+            raise ctypes.WinError(ctypes.get_last_error())
+        return png_bytes(w, h, buf.raw)
+    finally:
+        _gdi32.SelectObject(memory, old)
+        _gdi32.DeleteObject(bitmap)
+        _gdi32.DeleteDC(memory)
+        _user32.ReleaseDC(None, screen)

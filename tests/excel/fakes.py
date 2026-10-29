@@ -269,3 +269,35 @@ class ComRecorder:
 
 def _shown(value) -> str:
     return value._path if isinstance(value, ComRecorder) else repr(value)
+
+
+class FakeNode:
+    """A pretend UI Automation element: a name, a kind, where it is, and its children."""
+
+    def __init__(self, control_type: str, name: str = "", rect=None, *, offscreen: bool | None = None,
+                 selected: bool | None = None, children=()) -> None:
+        self.control_type = control_type
+        self.name = name
+        self.rect = rect
+        self.offscreen = rect is None if offscreen is None else offscreen
+        self.selected = selected
+        self.gone = False
+        self.children = list(children)
+        self._parent = None
+        for child in self.children:
+            child._parent = self
+
+    def descendants(self, types=None):
+        for child in self.children:
+            if types is None or child.control_type in types:
+                yield child
+            yield from child.descendants(types)
+
+    def parent(self):
+        return self._parent
+
+    def refresh(self) -> bool:
+        return not self.gone
+
+    def __repr__(self) -> str:
+        return f"FakeNode({self.control_type}, {self.name!r}, {self.rect})"

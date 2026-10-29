@@ -14,6 +14,12 @@ calls close() afterwards to let this Excel go.
 perform() carries out one operation from the menu in ops.py; reset() puts the lesson's starter
 back. Both run on the COM thread and ask for a read when they finish.
 
+locate() says where a target is on screen now; watch() keeps saying it while the learner scrolls,
+zooms, opens tabs or moves the window. A watch looks every 100 ms and at once when the window moves,
+and tells on_spot only when the answer changes. When UI Automation cannot find a button, a picture of
+the window can be shown to a model (set_vision_fallback); its answer is used only if UI Automation
+finds a control of the same name at the middle of the rectangle it gave. The finding is in locate.py.
+
 Every Excel call happens on the COM thread. on_snapshot and on_closed run there too and must
 return at once.
 """
@@ -22,12 +28,13 @@ from __future__ import annotations
 import gc
 import traceback
 from concurrent.futures import Future
+from dataclasses import astuple, dataclass
 from pathlib import Path
 from typing import Any, Callable
 
 from app.core.lesson import Lesson
-from app.core.types import Call, Rect
-from app.excel import ops
+from app.core.types import Call, Rect, Spot, Target
+from app.excel import locate, ops
 from app.excel.busy import ExcelBusy, is_busy, next_delay
 from app.excel.com_thread import ComThread
 from app.excel.reads import ReadScheduler
@@ -39,6 +46,7 @@ CLOSED_CHECK_S = 1.0
 CLOSED_CHECK_SOON_S = 0.25         # after BeforeClose: the learner is probably closing
 IDLE_REREAD_S = 1.0                # while a step waits: freezing panes and renaming fire no event
 PERFORM_BUSY_LIMIT_S = 30.0        # an operation Excel refuses for this long has failed
+LOCATE_BUSY_LIMIT_S = 5.0          # a busy Excel for this long means "can't say where it is"
 
 
 def _new_excel():
@@ -96,6 +104,17 @@ class _Handler:
         self._session._on_before_close()
 
 
+@dataclass
+class _Watch:
+    target: Target
+    on_spot: Callable[[Spot | None], None]
+    token: int
+    tracker: Any = None                # made at the first look, and again after a reset
+    told: bool = False
+    last: Spot | None = None
+    failed: bool = False
+
+
 class ExcelSession:
     def __init__(self, lesson: Lesson, workdir: Path, *, visible: bool = True, resume: bool = False,
                  on_snapshot: Callable[[Any], None], on_closed: Callable[[], None],
@@ -125,6 +144,14 @@ class ExcelSession:
         self._waiting = False
         self._waiting_token = 0
         self._read_waiters: list[Future] = []
+        self._watch: _Watch | None = None
+        self._watch_token = 0
+        self._unhook: Callable[[], None] | None = None
+        self._look_queued = False
+        self._vision: Callable[[bytes, str], Rect | None] | None = None
+        self._vision_round = 0             # a new fallback forgets the old one's answers
+        self._vision_known: dict[tuple, Spot | None] = {}
+        self._vision_asking: set[tuple] = set()
 
         if not (resume and self.path.exists()):
             build_starter(lesson.starter, self.path)
@@ -190,6 +217,40 @@ class ExcelSession:
             fut.set_result(None)
         self._com.submit(run)
         return fut
+
+    def locate(self, target: Target) -> Future:
+        """Where the target is on screen now (a Spot), or None when it can't be seen.
+
+        This asks Excel and UI Automation only; the picture fallback is for watch(), where its slow
+        answer can arrive later.
+        """
+        fut: Future = Future()
+        if self._closed or self._stopping:
+            fut.set_exception(RuntimeError("Excel was closed"))
+            return fut
+
+        def start() -> None:
+            try:
+                tracker = locate.tracker_for(target, self._app, self._wb, self._hwnd)
+            except Exception as exc:   # noqa: BLE001 - a target Excel can't point at
+                fut.set_exception(exc)
+                return
+            self._locate_attempt(tracker, fut, 0.0, 0.0)
+        self._com.submit(start)
+        return fut
+
+    def watch(self, target: Target | None, on_spot: Callable[[Spot | None], None]) -> None:
+        """Keep telling on_spot where target is (on the COM thread); None stops watching."""
+        self._com.submit(lambda: self._set_watch(target, on_spot))
+
+    def set_vision_fallback(self, fn: Callable[[bytes, str], Rect | None] | None) -> None:
+        """fn(png, target ref) -> a rectangle on screen; asked off the COM thread, so it may be slow."""
+        def change() -> None:
+            self._vision = fn
+            self._vision_round += 1
+            self._vision_known.clear()
+            self._vision_asking.clear()
+        self._com.submit(change)
 
     def close(self, save: bool = False) -> None:
         """Close the workbook (saving it into the work folder if asked) and quit this Excel."""
@@ -261,7 +322,111 @@ class ExcelSession:
         build_starter(self._lesson.starter, self.path)
         self._wb = self._app.Workbooks.Open(str(self.path))
         self._sink = self._attach(self._wb, _Handler(self))
+        if self._watch is not None:
+            self._watch.tracker = None     # it knew the old workbook
         self._scheduler.read_soon()
+
+    def _locate_attempt(self, tracker, fut: Future, delay_s: float, waited_s: float) -> None:
+        if self._closed or self._stopping:
+            fut.set_exception(RuntimeError("Excel was closed"))
+            return
+        try:
+            spot = tracker.spot()
+        except Exception as exc:   # noqa: BLE001 - busy is waited out; any other refusal shows nothing
+            if is_busy(exc) and waited_s < LOCATE_BUSY_LIMIT_S:
+                pause = next_delay(delay_s)
+                self._com.call_later(pause, lambda: self._locate_attempt(tracker, fut, pause, waited_s + pause))
+                return
+            spot = None
+        fut.set_result(spot)
+
+    def _set_watch(self, target: Target | None, on_spot: Callable[[Spot | None], None]) -> None:
+        self._watch_token += 1             # the old watch's pending look finds a newer token
+        self._stop_hook()
+        self._watch = None
+        if target is None or self._closed or self._stopping:
+            return
+        self._watch = _Watch(target, on_spot, self._watch_token)
+        if self._hwnd:
+            self._unhook = windows.location_hook(self._hwnd, self._look_soon)
+        self._look()
+        self._watch_tick(self._watch_token)
+
+    def _watch_tick(self, token: int) -> None:
+        self._com.call_later(locate.WATCH_S, lambda: self._watch_tock(token))
+
+    def _watch_tock(self, token: int) -> None:
+        if token != self._watch_token or self._closed or self._stopping:
+            return
+        self._watch_tick(token)            # the next look is booked first, so a bad look never ends the watch
+        self._look()
+
+    def _look_soon(self) -> None:
+        """The window moved: look at once, but only once for a burst of moves."""
+        if self._look_queued:
+            return
+        self._look_queued = True
+
+        def run() -> None:
+            self._look_queued = False
+            self._look()
+        self._com.call_later(0, run)
+
+    def _look(self) -> None:
+        w = self._watch
+        if w is None or w.token != self._watch_token or self._closed or self._stopping:
+            return
+        try:
+            if w.tracker is None:
+                w.tracker = locate.tracker_for(w.target, self._app, self._wb, self._hwnd)
+            spot = w.tracker.spot()
+        except Exception as exc:   # noqa: BLE001 - busy: skip this look; anything else: nothing on screen
+            if is_busy(exc):
+                return
+            if not w.failed:           # kept once, not ten times a second
+                w.failed = True
+                self.errors.append(traceback.format_exc())
+            spot = None
+        if spot is None:
+            spot = self._vision_spot(w.target)
+        if not w.told or locate.moved(w.last, spot):
+            w.told, w.last = True, spot
+            w.on_spot(spot)
+
+    def _vision_spot(self, target: Target) -> Spot | None:
+        """The fallback's checked answer for this window place, asking for it the first time."""
+        if self._vision is None or target.kind != "control" or not self._hwnd:
+            return None
+        place = windows.window_rect(self._hwnd)
+        key = (target, astuple(place))
+        if key in self._vision_known:
+            return self._vision_known[key]
+        if key not in self._vision_asking:
+            self._vision_asking.add(key)
+            png = windows.screenshot_png(place)
+            ask, round_ = self._vision, self._vision_round
+
+            def run() -> None:
+                try:
+                    rect = ask(png, target.ref)
+                except Exception:   # noqa: BLE001 - a fallback that fails has found nothing
+                    rect = None
+                self._com.submit(lambda: self._vision_answered(key, round_, target, rect))
+            locate.background(run)
+        return self._vision_known.get(key)       # there already if the answer came back at once
+
+    def _vision_answered(self, key: tuple, round_: int, target: Target, rect: Rect | None) -> None:
+        if round_ != self._vision_round or self._closed or self._stopping:
+            return
+        self._vision_asking.discard(key)
+        trusted = rect is not None and locate.confirm_vision(rect, target)
+        self._vision_known[key] = Spot(rect) if trusted else None
+        self._look_soon()
+
+    def _stop_hook(self) -> None:
+        unhook, self._unhook = self._unhook, None
+        if unhook is not None:
+            unhook()
 
     def _set_waiting(self, waiting: bool) -> None:
         if waiting == self._waiting:
@@ -323,7 +488,8 @@ class ExcelSession:
         """Let go of Excel in the order that leaves no EXCEL.EXE behind; every step runs."""
         self._closed = True
         self._fail_read_waiters()
-        steps = (self._close_sink, self._no_alerts, self._close_workbook, self._quit)
+        self._watch = None
+        steps = (self._stop_hook, self._close_sink, self._no_alerts, self._close_workbook, self._quit)
         for step in steps:
             try:
                 step()
