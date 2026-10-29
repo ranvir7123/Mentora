@@ -79,10 +79,12 @@ def main() -> None:
 
         line = "print('A line the program typed')\n"
         bridge.send_op(Call("write_file", {"path": "hello.py",
-                                           "text": "print('Hello from the probe')\n" + line})).result(15)
-        show("after write_file", next_state(states, lambda s: line in s["files"].get("hello.py", {}).get("text", "")))
+                                           "text": "import sys\nprint('Hello from the probe, run by', sys.executable)\n"
+                                                   + line})).result(15)
+        # VS Code keeps the file's own line endings (\r\n on Windows), so look for the line's words.
+        show("after write_file", next_state(states, lambda s: line.strip() in s["files"].get("hello.py", {}).get("text", "")))
 
-        bridge.send_op(Call("run_file", {"path": "hello.py"})).result(20)
+        bridge.send_op(Call("run_file", {"path": "hello.py"})).result(40)   # the shell may take 20 s to start
         show("after run_file", next_state(states, lambda s: bool(s["run"] and s["run"]["finished"]), timeout=25))
     finally:
         bridge.close_window()

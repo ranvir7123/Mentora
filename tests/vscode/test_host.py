@@ -7,7 +7,8 @@ from pathlib import Path
 
 from app.core.types import Rect
 from app.vscode.launch import ADDON_VERSION, addon_installed, parse_code_cmd
-from app.vscode.uia import Element, pick
+from app.vscode import uia
+from app.vscode.uia import Element, Finder, pick
 from app.vscode.window import is_lesson_title
 
 REPO = Path(__file__).resolve().parents[2]
@@ -57,6 +58,45 @@ def test_hidden_parts_with_no_size_are_skipped():
 def test_nothing_is_found_in_an_empty_list():
     for kind in ("editor", "explorer_item", "terminal", "run_button", "cell"):
         assert pick([], kind, "hello.py") is None
+
+
+FRAME = [Element("pane", "hello.py - lesson - Visual Studio Code", "RootView", Rect(0, 0, 1600, 1200)),
+         Element("button", "Close", "WinCaptionButton", Rect(1500, 0, 90, 60))]
+PAGE = [*FRAME, Element("document", "hello.py - lesson - Visual Studio Code", "", Rect(0, 0, 1600, 1200)),
+        *ELEMENTS]
+
+
+class ScriptedFinder(Finder):
+    """A Finder whose reads of the window come from a list, the last one repeating."""
+
+    def __init__(self, reads: list[list[Element]]) -> None:
+        super().__init__()
+        self._uia = object()
+        self.reads, self.count = reads, 0
+
+    def _elements(self, hwnd: int) -> list[Element]:
+        self.count += 1
+        return self.reads[min(self.count, len(self.reads)) - 1]
+
+
+def test_the_first_ask_waits_for_vs_code_to_describe_its_page():
+    # In real VS Code the first read held only the window's frame (13 parts); Chromium describes the
+    # page only once asked, and 0.28 s later the next read held all 281 parts.
+    finder = ScriptedFinder([FRAME, FRAME, PAGE])
+    assert finder.find(1, "editor", "hello.py") == Rect(320, 160, 1200, 700)
+    assert finder.count == 3
+
+
+def test_a_page_that_never_comes_is_waited_for_once(monkeypatch):
+    # A minimized window shows no page: the first ask waits a little, later asks read only once.
+    monkeypatch.setattr(uia, "PAGE_WAIT_S", 0.3)
+    monkeypatch.setattr(uia, "READ_EVERY_S", -1)    # every ask reads (Windows' clock moves in 15 ms steps)
+    finder = ScriptedFinder([FRAME])
+    assert finder.find(1, "editor", "hello.py") is None
+    waited = finder.count
+    assert waited > 1
+    assert finder.find(1, "editor", "hello.py") is None
+    assert finder.count == waited + 1
 
 
 def test_the_lesson_window_is_known_by_its_folder_in_the_title():

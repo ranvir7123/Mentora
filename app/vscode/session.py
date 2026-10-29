@@ -57,6 +57,11 @@ SETTINGS = {
     "window.title": "${dirty}${activeEditorShort}${separator}${rootName}${separator}${appName}",
     "files.exclude": {"**/.vscode": True, "**/__pycache__": True},
     "python.defaultInterpreterPath": sys.executable,   # the Run button's Python, the one that has openai
+    "terminal.integrated.defaultProfile.windows": "PowerShell",  # runs are seen only in a shell VS Code reports on
+    # The add-on's terminal settings reach only terminals made after it starts: none from last time.
+    "terminal.integrated.enablePersistentSessions": False,
+    "terminal.integrated.hideOnStartup": "always",
+    "code-runner.showRunIconInEditorTitleMenu": False,  # its Run Code runs where input() can't be answered
 }
 
 _ENDED = ("closed", "stopped")
@@ -422,6 +427,7 @@ class VsCodeSession:
                                f"stopped. A program that waits for typing needs the run's input.")
 
     def _read_now(self) -> VsSnapshot:
+        self._ready()                            # VS Code may still be starting: the read's time starts after
         deadline = time.monotonic() + READ_TIMEOUT_S
         while True:
             bridge = self._ready()

@@ -204,6 +204,24 @@ def test_every_check_has_three_right_and_three_wrong_ways():
         assert sum(k == kind for k, *_ in WRONG) >= 3, kind
 
 
+def windows(snapshot: VsSnapshot) -> VsSnapshot:
+    """The same files and run as VS Code on Windows saves and shows them: lines end in \\r\\n."""
+    crlf = lambda text: text.replace("\n", "\r\n")  # noqa: E731
+    run = snapshot.run
+    return VsSnapshot.from_state({
+        "files": {p: {"text": crlf(f.text), "saved": f.saved} for p, f in snapshot.files.items()},
+        "active": None, "problems": [vars(p) for p in snapshot.problems],
+        "run": run and {"command": run.command, "exit_code": run.exit_code, "output": crlf(run.output),
+                        "finished": run.finished},
+    })
+
+
+@pytest.mark.parametrize("kind,args,snapshot", [case[:3] for case in RIGHT + WRONG])
+def test_windows_line_endings_get_the_same_verdict(kind, args, snapshot):
+    # VS Code on Windows saves new files with \r\n, and an edit keeps the file's own line endings.
+    assert judge(kind, args, windows(snapshot)) == judge(kind, args, snapshot)
+
+
 @pytest.mark.parametrize("kind,args,snapshot", [
     ("file_exists", {"path": "hello.py"}, snap({"notes.txt": ""})),
     ("defines_function", {"path": "hello.py", "name": "greet"}, h('print("Hi")\n')),
