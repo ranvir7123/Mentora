@@ -406,6 +406,15 @@ class Link implements vscode.Disposable {
   private async perform(op: Op): Promise<void> {
     const args = op?.args ?? {};
     switch (op?.kind) {
+      case "new_file": {
+        const uri = this.uriOf(args);
+        if (!(await this.exists(uri))) {
+          await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(uri.fsPath)));
+          await vscode.workspace.fs.writeFile(uri, new Uint8Array());
+        }
+        await vscode.window.showTextDocument(uri, { preview: false });
+        return;
+      }
       case "write_file": {
         const uri = this.uriOf(args);
         const text = this.textOf(args);

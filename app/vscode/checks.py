@@ -237,6 +237,8 @@ def _code_check(snap: VsSnapshot, path: str, find: Callable[[_Code], Verdict | N
     if got is None:
         return Verdict.waiting()
     name, state = got
+    if _holds_key(state.text):
+        return Verdict.wrong("key", KEY_LINE)
     code = _parse(state.text)
     verdict = find(code)
     if verdict is not None:
@@ -312,6 +314,31 @@ def _calls(snap: VsSnapshot, args: Mapping) -> Verdict:
     return _code_check(snap, args["path"], find)
 
 
+def _prints(snap: VsSnapshot, args: Mapping) -> Verdict:
+    want = args["name"]
+
+    def find(code: _Code) -> Verdict | None:
+        used, braced = [], False        # names inside print(...), and "{name}" left in plain quotes
+        for n in _nodes(code):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "print":
+                for arg in [*n.args, *(k.value for k in n.keywords)]:
+                    for part in ast.walk(arg):
+                        if isinstance(part, ast.Name):
+                            used.append(part.id)
+                        elif isinstance(part, ast.Constant) and isinstance(part.value, str):
+                            braced = braced or "{" + want + "}" in part.value
+        if want in used:
+            return Verdict.right()
+        if braced:
+            return _not_yet(f"no_f:{want}", f"Not yet: put f before the quotes, so Python fills in {{{want}}}.")
+        slip = _slip_for(used, want)
+        if slip:
+            return _not_yet(f"named:{slip}", f"Not yet: you wrote {slip}. Python reads capitals and "
+                                             f"spelling exactly: write {want}.")
+        return None
+    return _code_check(snap, args["path"], find)
+
+
 def _imports(snap: VsSnapshot, args: Mapping) -> Verdict:
     want = args["module"]
 
@@ -371,6 +398,8 @@ def _uses_text(snap: VsSnapshot, args: Mapping) -> Verdict:
     got = snap.file(args["path"])
     if got is None or not got[1].text.strip():
         return Verdict.waiting()
+    if _holds_key(got[1].text):
+        return Verdict.wrong("key", KEY_LINE)
     want = args["text"]
     code, comments = _split_comments(got[1].text)
     if want in code:
@@ -436,6 +465,8 @@ def _no_problems(snap: VsSnapshot, args: Mapping) -> Verdict:
     if got is None or not got[1].saved:
         return Verdict.waiting()
     name, state = got
+    if _holds_key(state.text):
+        return Verdict.wrong("key", KEY_LINE)
     errors = sorted((p for p in snap.problems
                      if p.severity == "error" and clean_path(p.path).lower() == clean_path(name).lower()),
                     key=lambda p: p.line)
@@ -451,11 +482,16 @@ def _looks_like_key(run: str) -> bool:
     return any(c.isalpha() for c in run) and any(c.isdigit() for c in run)
 
 
+def _holds_key(text: str) -> bool:
+    """A pasted key anywhere in the file fails every check that reads it, not only no_key_in_code."""
+    return any(_looks_like_key(run) for run in _KEY.findall(text))
+
+
 def _no_key_in_code(snap: VsSnapshot, args: Mapping) -> Verdict:
     got = snap.file(args["path"])
     if got is None or not got[1].text.strip():
         return Verdict.waiting()
-    if any(_looks_like_key(run) for run in _KEY.findall(got[1].text)):
+    if _holds_key(got[1].text):
         return Verdict.wrong("key", KEY_LINE)
     return Verdict.right()
 
@@ -467,6 +503,8 @@ CHECKS: dict[str, CheckKind] = {c.name: c for c in (
     CheckKind("defines_function", (_PATH, Param("name", "text"), Param("params", "int", required=False)),
               _defines_function, "The file defines a function with that name (and that many inputs)"),
     CheckKind("calls", (_PATH, Param("name", "text")), _calls, "The file calls that function or method"),
+    CheckKind("prints", (_PATH, Param("name", "text")), _prints,
+              "The file prints something made with that name, such as f\"Hi {name}\""),
     CheckKind("imports", (_PATH, Param("module", "text")), _imports, "The file imports that module"),
     CheckKind("assigns", (_PATH, Param("name", "text"), Param("value", "value", required=False)), _assigns,
               "The file sets that name at its top level (to that value)"),

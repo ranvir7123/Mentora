@@ -524,7 +524,7 @@ def test_the_plugin_menus():
     plugin = VsCodePlugin()
     assert plugin.app_id == "vscode" and plugin.title == "VS Code"
     assert plugin.target_kinds == {"editor_line", "explorer_item", "run_button", "terminal"}
-    assert {"write_file", "append_line", "open_file", "save_file", "run_file", "clear_terminal",
+    assert {"new_file", "write_file", "append_line", "open_file", "save_file", "run_file", "clear_terminal",
             "delete_file"} == set(plugin.ops)
     assert [p.name for p in plugin.ops["run_file"].params] == ["path", "input"]
 

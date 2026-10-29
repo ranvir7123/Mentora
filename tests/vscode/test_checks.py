@@ -64,6 +64,10 @@ RIGHT = [
     ("assigns", {"path": "hello.py", "name": "count", "value": 5}, h("count = 1\ncount: int = 5\n")),
     ("assigns", {"path": "hello.py", "name": "city", "value": "Pune"}, h("city = 'Pune'\n")),
 
+    ("prints", {"path": "hello.py", "name": "name"}, h('name = "Asha"\nprint(f"Nice to meet you, {name}!")\n')),
+    ("prints", {"path": "hello.py", "name": "name"}, h('name = "Asha"\nprint("Hello, " + name + "!")\n')),
+    ("prints", {"path": "hello.py", "name": "name"}, h('name = "Asha"\nprint("Hello,", name.title())\n')),
+
     ("uses_text", {"path": "ask.py", "text": "https://api.meta.ai/v1"},
      snap({"ask.py": 'client = OpenAI(base_url="https://api.meta.ai/v1")\n'})),
     ("uses_text", {"path": "ask.py", "text": "https://api.meta.ai/v1"},
@@ -120,6 +124,10 @@ WRONG = [
     ("assigns", {"path": "hello.py", "name": "count", "value": 5}, h("count = 6\n"), "value:count"),
     ("assigns", {"path": "hello.py", "name": "count", "value": 5}, h("count = '5'\n"), "value:count"),
     ("assigns", {"path": "hello.py", "name": "count", "value": 5}, h("count = 5\ncount = 7\n"), "value:count"),
+
+    ("prints", {"path": "hello.py", "name": "name"}, h('name = "Asha"\nprint("Hello, {name}!")\n'), "no_f:name"),
+    ("prints", {"path": "hello.py", "name": "name"}, h("name = 'Asha'\nprint('Hi ' + '{name}')\n"), "no_f:name"),
+    ("prints", {"path": "hello.py", "name": "name"}, h('name = "Asha"\nprint(f"Hello, {Name}!")\n'), "named:Name"),
 
     ("uses_text", {"path": "ask.py", "text": "https://api.meta.ai/v1"},
      snap({"ask.py": '# base_url="https://api.meta.ai/v1"\nclient = OpenAI()\n'}), "in_comment"),
@@ -186,6 +194,8 @@ def test_every_check_has_three_right_and_three_wrong_ways():
     ("calls", {"path": "hello.py", "name": "print"}, h("x = 1\n")),
     ("imports", {"path": "ask.py", "module": "openai"}, snap({"ask.py": "import os\n"})),
     ("assigns", {"path": "hello.py", "name": "name"}, h('print("Hi")\n')),
+    ("prints", {"path": "hello.py", "name": "name"}, h('print("Hello, world!")\nname = "Asha"\n')),
+    ("prints", {"path": "hello.py", "name": "name"}, h('greeting = f"Hi {name}"\n')),
     ("uses_text", {"path": "ask.py", "text": "https://api.meta.ai/v1"}, snap({"ask.py": "from openai import OpenAI\n"})),
     ("uses_text", {"path": "ask.py", "text": "https://api.meta.ai/v1"}, snap({"ask.py": ""})),
     ("run_ok", {"path": "hello.py"}, snap({"hello.py": ""})),
@@ -238,6 +248,21 @@ def test_a_key_in_the_code_is_refused():
     assert "0123456789abcdef" not in verdict.text       # the Not yet line never repeats the key
 
 
+def test_a_key_in_the_code_fails_every_check_that_reads_the_code():
+    pasted = snap({"ask.py": 'import os\nfrom openai import OpenAI\n'
+                             'client = OpenAI(base_url="https://api.meta.ai/v1",\n'
+                             '                api_key="mk-0123456789abcdefghijklmnopqrstuvwxyzABCDEF")\n'  # made up; secret-scan: ok
+                             'print(client)\n'})
+    for kind, args in [("imports", {"module": "openai"}), ("calls", {"name": "print"}),
+                       ("assigns", {"name": "client"}), ("defines_function", {"name": "ask"}),
+                       ("uses_text", {"text": "https://api.meta.ai/v1"}), ("uses_text", {"text": "META_API_KEY"}),
+                       ("no_problems", {})]:
+        verdict = judge(kind, {"path": "ask.py", **args}, pasted)
+        assert verdict == verdict.wrong("key", KEY_LINE), (kind, args)
+    assert judge("uses_text", {"path": "ask.py", "text": "META_API_KEY"},
+                 snap({"ask.py": 'api_key=os.environ["META_API_KEY"]\n'})).ok
+
+
 def test_a_failed_run_names_python_s_last_line():
     failed = snap({"hello.py": ""}, run=ran("python hello.py", 1,
                                             "Traceback (most recent call last):\n"
@@ -262,8 +287,9 @@ def test_a_malformed_state_gives_an_empty_snapshot():
 
 
 def test_the_operation_menu():
-    assert set(OPS) == {"write_file", "append_line", "open_file", "save_file", "delete_file", "run_file",
+    assert set(OPS) == {"new_file", "write_file", "append_line", "open_file", "save_file", "delete_file", "run_file",
                         "clear_terminal"}
+    assert validate_args(OPS["new_file"], {"path": "hello.py"}) == []
     assert validate_args(OPS["write_file"], {"path": "hello.py", "text": "print(1)\n"}) == []
     assert validate_args(OPS["run_file"], {"path": "../outside.py"}) != []
     assert validate_args(OPS["clear_terminal"], {}) == []

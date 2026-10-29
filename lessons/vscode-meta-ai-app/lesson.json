@@ -1,0 +1,318 @@
+{
+  "format": 1,
+  "id": "vscode-meta-ai-app",
+  "title": "Your first app with Meta's AI",
+  "app": "vscode",
+  "course": "vscode",
+  "source": {
+    "url": "https://dev.meta.ai/docs/quickstart",
+    "title": "Quickstart, Meta Model API docs",
+    "creator": "Meta",
+    "channel_url": "https://dev.meta.ai/docs",
+    "licence": "Meta's own documentation, credited; steps written fresh",
+    "length_s": 0
+  },
+  "goal": {
+    "sentence": "Build a small app that asks Meta's AI a question and prints its answer.",
+    "picture": null
+  },
+  "starter": {
+    "files": {
+      "ask.py": "",
+      "README.txt": "Your first app with Meta's AI\n\nYour Meta key is already in this terminal's settings, under the name META_API_KEY.\nYour code reads it from there with os.environ[\"META_API_KEY\"].\nNever paste the key itself into a file: anyone who sees the file could use it.\n"
+    },
+    "open": "ask.py",
+    "env": [
+      "META_API_KEY"
+    ]
+  },
+  "steps": [
+    {
+      "id": "import",
+      "instruction": "On line 1, type from openai import OpenAI",
+      "why": "Meta's quickstart uses the openai package to talk to its models.",
+      "target": {
+        "kind": "editor_line",
+        "ref": "ask.py:1"
+      },
+      "check": {
+        "kind": "imports",
+        "args": {
+          "path": "ask.py",
+          "module": "openai"
+        }
+      },
+      "replay": {
+        "kind": "write_file",
+        "args": {
+          "path": "ask.py",
+          "text": "from openai import OpenAI\n"
+        }
+      },
+      "hints": [
+        "A package is code someone else wrote that you can use.",
+        "from a package import a name brings that name into your file.",
+        "Type from openai import OpenAI on line 1."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "write_file",
+            "args": {
+              "path": "ask.py",
+              "text": "import OpenAI\n"
+            }
+          },
+          "not_yet": "Not yet: OpenAI lives inside the openai package. Write from openai import OpenAI",
+          "code": "named:OpenAI"
+        },
+        {
+          "replay": {
+            "kind": "write_file",
+            "args": {
+              "path": "ask.py",
+              "text": "from open_ai import OpenAI\n"
+            }
+          },
+          "not_yet": "Not yet: the package is spelled openai, with no underscore.",
+          "code": "named:open_ai"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "client",
+      "instruction": "On line 3, make a client that talks to Meta.",
+      "why": "base_url sends your questions to Meta instead of to OpenAI.",
+      "target": {
+        "kind": "editor_line",
+        "ref": "ask.py:3"
+      },
+      "check": {
+        "kind": "uses_text",
+        "args": {
+          "path": "ask.py",
+          "text": "https://api.meta.ai/v1"
+        }
+      },
+      "replay": {
+        "kind": "write_file",
+        "args": {
+          "path": "ask.py",
+          "text": "from openai import OpenAI\n\nclient = OpenAI(base_url=\"https://api.meta.ai/v1\")\n"
+        }
+      },
+      "hints": [
+        "A client is the object that sends your questions.",
+        "OpenAI( ) makes one; base_url says where it sends them.",
+        "Type client = OpenAI(base_url=\"https://api.meta.ai/v1\") on line 3."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "write_file",
+            "args": {
+              "path": "ask.py",
+              "text": "from openai import OpenAI\n\nclient = OpenAI(base_url=\"http://api.meta.ai/v1\")\n"
+            }
+          },
+          "not_yet": "Not yet: the address starts with https, with an s: https://api.meta.ai/v1",
+          "code": "near"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "key",
+      "instruction": "Give the client your key from the META_API_KEY setting.",
+      "why": "Code gets shared; a key read from the setting stays private.",
+      "target": {
+        "kind": "editor_line",
+        "ref": "ask.py:3"
+      },
+      "check": {
+        "kind": "uses_text",
+        "args": {
+          "path": "ask.py",
+          "text": "META_API_KEY"
+        }
+      },
+      "replay": {
+        "kind": "write_file",
+        "args": {
+          "path": "ask.py",
+          "text": "import os\nfrom openai import OpenAI\n\nclient = OpenAI(base_url=\"https://api.meta.ai/v1\", api_key=os.environ[\"META_API_KEY\"])\n"
+        }
+      },
+      "hints": [
+        "Your key is already stored in a setting named META_API_KEY.",
+        "Add import os on line 1: os.environ reads settings.",
+        "Inside OpenAI( ), add api_key=os.environ[\"META_API_KEY\"]"
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "write_file",
+            "args": {
+              "path": "ask.py",
+              "text": "import os\nfrom openai import OpenAI\n\nclient = OpenAI(base_url=\"https://api.meta.ai/v1\", api_key=\"made-up-key-0123456789abcdefghijklmnopqrstuv\")\n"
+            }
+          },
+          "not_yet": "Not yet: never paste the key. Read it with os.environ[\"META_API_KEY\"]",
+          "code": "key"
+        },
+        {
+          "replay": {
+            "kind": "write_file",
+            "args": {
+              "path": "ask.py",
+              "text": "import os\nfrom openai import OpenAI\n\nclient = OpenAI(base_url=\"https://api.meta.ai/v1\", api_key=os.environ[\"META_APIKEY\"])\n"
+            }
+          },
+          "not_yet": "Not yet: the setting is META_API_KEY, with _ between API and KEY.",
+          "code": "near"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "ask",
+      "instruction": "Ask muse-spark-1.3 a question with client.responses.create.",
+      "why": "create sends your question to Meta's model and brings back its answer.",
+      "target": {
+        "kind": "editor_line",
+        "ref": "ask.py:5"
+      },
+      "check": {
+        "kind": "calls",
+        "args": {
+          "path": "ask.py",
+          "name": "create"
+        }
+      },
+      "replay": {
+        "kind": "append_line",
+        "args": {
+          "path": "ask.py",
+          "text": "response = client.responses.create(model=\"muse-spark-1.3\", input=\"Give me one tip for learning to code.\")"
+        }
+      },
+      "hints": [
+        "client.responses.create( ) sends a question and returns the answer.",
+        "Give it model=\"muse-spark-1.3\", and your question as input=",
+        "Type response = client.responses.create(model=\"muse-spark-1.3\", input=\"Give me one tip for learning to code.\") on line 5."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "append_line",
+            "args": {
+              "path": "ask.py",
+              "text": "response = client.responses.creat(model=\"muse-spark-1.3\", input=\"Give me one tip for learning to code.\")"
+            }
+          },
+          "not_yet": "Not yet: you wrote creat. Spell it create, with an e at the end.",
+          "code": "named:creat"
+        },
+        {
+          "replay": {
+            "kind": "append_line",
+            "args": {
+              "path": "ask.py",
+              "text": "response = client.responses.create"
+            }
+          },
+          "not_yet": "Not yet: create needs brackets to run, with model= and input= inside.",
+          "code": "not_called:create"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "answer",
+      "instruction": "On line 6, show the answer: print(response.output_text)",
+      "why": "output_text holds the model's reply as plain text.",
+      "target": {
+        "kind": "editor_line",
+        "ref": "ask.py:6"
+      },
+      "check": {
+        "kind": "calls",
+        "args": {
+          "path": "ask.py",
+          "name": "print"
+        }
+      },
+      "replay": {
+        "kind": "append_line",
+        "args": {
+          "path": "ask.py",
+          "text": "print(response.output_text)"
+        }
+      },
+      "hints": [
+        "The reply is in response.output_text.",
+        "print( ) shows it in the terminal.",
+        "Type print(response.output_text) on line 6."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "append_line",
+            "args": {
+              "path": "ask.py",
+              "text": "Print(response.output_text)"
+            }
+          },
+          "not_yet": "Not yet: Python reads capitals exactly. Write print with a small p.",
+          "code": "named:Print"
+        },
+        {
+          "replay": {
+            "kind": "append_line",
+            "args": {
+              "path": "ask.py",
+              "text": "print response.output_text"
+            }
+          },
+          "not_yet": "Not yet: print needs brackets: print(response.output_text)",
+          "code": "syntax"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "run",
+      "instruction": "Run ask.py and read Meta's answer in the terminal.",
+      "why": "This is the moment your program talks to a real AI model.",
+      "target": {
+        "kind": "run_button",
+        "ref": ""
+      },
+      "check": {
+        "kind": "run_ok",
+        "args": {
+          "path": "ask.py",
+          "printed": true
+        }
+      },
+      "replay": {
+        "kind": "run_file",
+        "args": {
+          "path": "ask.py"
+        }
+      },
+      "hints": [
+        "Save the file first, then run it.",
+        "Click the Run button at the top right of the editor.",
+        "Or type python ask.py in the terminal and press Enter."
+      ],
+      "mistakes": [],
+      "clip": null
+    }
+  ],
+  "made_by": "hand",
+  "edited_by_hand": false,
+  "proof": null,
+  "test": null
+}
