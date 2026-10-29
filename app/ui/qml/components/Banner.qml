@@ -21,6 +21,10 @@ Item {
     // Lesson lines start "Not yet: …"; the heading already says it, so the line drops it.
     readonly property string bare: kind === "not_yet" ? text.replace(/^\s*not yet\s*[:,.!-]?\s*/i, "") : text
     readonly property string body: bare.charAt(0).toUpperCase() + bare.slice(1)
+    // Where the heading's middle sits, so the panel can float +10 level with it.
+    readonly property real headingCentre: lines.y + headingRow.height / 2
+    // How much of the banner is on screen right now, following the slide, so the panel can make room.
+    readonly property real reach: Math.max(0, height - slide.y)
 
     implicitWidth: 360
     implicitHeight: lines.implicitHeight + 2 * Theme.space16
@@ -37,6 +41,7 @@ Item {
         opacity: root.shown ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.durNormal; easing.type: Easing.OutCubic } }
         transform: Translate {
+            id: slide
             y: root.shown ? 0 : sheet.height
             Behavior on y { NumberAnimation { duration: Theme.durNormal; easing.type: Easing.OutCubic } }
         }
@@ -44,11 +49,12 @@ Item {
         Column {
             id: lines
             x: Theme.space16
-            y: Theme.space16
+            y: Math.max(Theme.space16, Math.round((parent.height - height) / 2))   // centred when the banner is taller
             width: parent.width - 2 * Theme.space16
             spacing: Theme.space8
 
             Row {
+                id: headingRow
                 visible: root.heading !== ""
                 spacing: Theme.space8
                 Glyph {

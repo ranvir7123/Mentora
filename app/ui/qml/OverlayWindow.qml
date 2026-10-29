@@ -32,8 +32,13 @@ Window {
     height: Screen.height
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowTransparentForInput
            | Qt.WindowDoesNotAcceptFocus | Qt.Tool
-    visible: pointer.visible || flight.phase !== "home" || ring.opacity > 0
+    visible: !warm || pointer.visible || flight.phase !== "home" || ring.opacity > 0
     color: Theme.clear
+    // The layer's first appearance is slow (about 60 ms while its surface is made), which would stall the
+    // mascot's first flight and the panel with it. So it is put on screen once at start, while it draws
+    // nothing, and hides after that first frame.
+    property bool warm: false
+    onFrameSwapped: warm = true
     title: "Project X pointer"
 
     function toScreen(r) { return Qt.rect(r.x + root.x, r.y + root.y, r.width, r.height) }

@@ -2,7 +2,8 @@ import QtQuick
 import QtQuick.Shapes
 import Theme
 
-// A small line drawing: tick, cross, lock, sound or muted. Drawn on a 24 unit grid, scaled to `size`.
+// A small line drawing: tick, cross, lock, sound, muted, flag (the goal) or play. Drawn on a 24 unit grid,
+// scaled to `size`.
 Item {
     id: root
     property string name: "tick"
@@ -15,7 +16,9 @@ Item {
         "cross": "M7 7 L17 17 M17 7 L7 17",
         "lock": "M6.5 11 L17.5 11 L17.5 19.5 L6.5 19.5 Z M9 11 L9 8.5 C9 4.5 15 4.5 15 8.5 L15 11",
         "sound": "M4 9.5 L7.5 9.5 L12 5.5 L12 18.5 L7.5 14.5 L4 14.5 Z M15.5 9 C17 10.5 17 13.5 15.5 15 M18 6.5 C21 9.5 21 14.5 18 17.5",
-        "muted": "M4 9.5 L7.5 9.5 L12 5.5 L12 18.5 L7.5 14.5 L4 14.5 Z M16 9.5 L21 14.5 M21 9.5 L16 14.5"
+        "muted": "M4 9.5 L7.5 9.5 L12 5.5 L12 18.5 L7.5 14.5 L4 14.5 Z M16 9.5 L21 14.5 M21 9.5 L16 14.5",
+        "flag": "M6.5 20.5 L6.5 4 M6.5 4.5 L18 4.5 L15.5 8.75 L18 13 L6.5 13",
+        "play": "M8.5 5.5 L18.5 12 L8.5 18.5 Z"
     })
 
     implicitWidth: size

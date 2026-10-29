@@ -131,6 +131,8 @@ def _factory(state: str, stages: list[dict], reason: str = "") -> dict:
 # The lesson panel.
 
 def _clip(state: str = "none") -> dict:
+    if state == "available" and not _CLIP.exists():
+        state = "missing"           # like a real lesson whose video isn't saved on this computer
     if state == "available":
         return {"state": "available", "file": str(_CLIP), "start": 12.0, "end": 19.5, "videoUrl": _VIDEO_URL}
     if state == "missing":

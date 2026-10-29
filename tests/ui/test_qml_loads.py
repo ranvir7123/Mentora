@@ -1,7 +1,7 @@
 import contextlib
 import time
 
-from PySide6.QtCore import QtMsgType, QUrl, qInstallMessageHandler
+from PySide6.QtCore import QCoreApplication, QEvent, QtMsgType, QUrl, qInstallMessageHandler
 
 from app.ui.app import QML_DIR, WINDOWS, load_window, make_engine
 from app.ui.bridge import Bridge
@@ -13,6 +13,14 @@ def _settle(qapp, seconds=0.06):
     while time.monotonic() < end:
         qapp.processEvents()
         time.sleep(0.005)
+
+
+def _dispose(*objects):
+    """Delete windows and engines now. Without a running event loop deleteLater never happens, and the
+    windows would keep animating into later tests."""
+    for thing in objects:
+        thing.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 @contextlib.contextmanager
@@ -50,9 +58,7 @@ def test_every_window_loads_in_every_state_without_qml_warnings(qapp):
                 backend.replay()          # the state's sound and moment, as the screens see them live
                 _settle(qapp)
                 root.close()
-                root.deleteLater()
-                engine.deleteLater()
-                _settle(qapp, 0.01)
+                _dispose(root, engine)
     assert problems == []
 
 
@@ -65,8 +71,7 @@ def test_gallery_shows_every_component_without_qml_warnings(qapp):
         assert engine.rootObjects(), "Gallery.qml did not load"
         _settle(qapp, 0.6)          # let the slide-ins, the ring and the spinner run a little
         engine.rootObjects()[0].close()
-        engine.deleteLater()
-        _settle(qapp, 0.01)
+        _dispose(engine)
     assert problems == []
 
 
@@ -83,4 +88,5 @@ def test_an_opened_panel_keeps_the_mascot_out_of_its_area(qapp):
     panel.setGeometry(QRect(0, 0, 360, 600))           # moved to the left edge
     spot = bridge.landingSpot(QRectF(400, 300, 64, 20), 48, 23)
     assert not QRectF(spot.x(), spot.y() - 23, 48, 71).intersects(QRectF(panel.geometry()))
-    engine.deleteLater()
+    panel.close()
+    _dispose(engine)
