@@ -14,3 +14,8 @@ __pycache__/
 recordings/
 runs/
 *.log
+
+# VS Code extension build output
+node_modules/
+extensions/vscode/out/
+*.vsix

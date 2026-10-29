@@ -27,7 +27,9 @@ here and landed in its own commit whose message starts with `Adapted from Projec
 
 | Piece here | Adapted from (old path) | Commit |
 |---|---|---|
-| (none yet) | | |
+| `app/excel/busy.py`: Excel's busy signals | `sidecar/checks/excel_reader.py` (`is_busy`, `RETRYABLE_HRESULTS`) | 357f98b |
+| `app/excel/formula.py`: formula reading | `sidecar/checks/formula.py` | ea0dc53 |
+| `app/excel/com_thread.py`: the COM thread's sleeping message pump | `sidecar/adapters/excel.py` (`_pump`, `submit`, `_drain_work`) | dde4410 |
 
 ## Which Meta model does which job
 
