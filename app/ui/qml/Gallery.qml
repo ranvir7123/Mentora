@@ -2,13 +2,14 @@ import QtQuick
 import QtQuick.Window
 import Theme
 import "components"
+import "mascot"
 
 // Every building block in every variant, for the screenshot check. Not shown to learners.
 Window {
     id: win
     property var bridge
     width: 1352
-    height: 1040
+    height: 1160
     visible: true
     color: Theme.bg
     title: "Building blocks"
@@ -93,6 +94,29 @@ Window {
             Banner { width: parent.width; kind: "changed"; text: "Step 2 came undone when B8 changed."; actionText: "Fix step 2" }
             Banner { width: parent.width; kind: "app_closed"; text: "Excel was closed. Your progress is saved."; actionText: "Reopen Excel" }
             Banner { width: parent.width; kind: "error"; text: "Meta's AI didn't answer. Check your internet, then ask again."; actionText: "Ask again" }
+
+            Label { text: "Mascot" }
+            Row {
+                spacing: Theme.space24
+                Repeater {
+                    model: ["resting", "watching", "flying", "thinking", "cheering"]
+                    delegate: Column {
+                        required property string modelData
+                        spacing: Theme.space8
+                        Mascot {
+                            state: modelData
+                            heading: 20
+                            lookAt: Qt.point(win.width, win.height)
+                        }
+                        Label { text: modelData }
+                    }
+                }
+            }
+            Row {
+                spacing: Theme.space48
+                Mascot { size: 96; state: "resting" }
+                Mascot { size: 96; state: "cheering" }
+            }
         }
 
         // Rewards, cards, the course path and the lesson maker.

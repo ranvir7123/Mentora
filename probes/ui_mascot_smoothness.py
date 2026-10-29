@@ -55,7 +55,13 @@ _PLACEHOLDER = """
 """
 
 _REAL = """
-    Mascot { id: flyer; state: "flying" }
+    Mascot {
+        id: flyer
+        state: "flying"
+        // The flight's direction: the slope of the curve at this moment.
+        heading: Math.atan2(2 * (1 - win.t) * (win.c.y - win.a.y) + 2 * win.t * (win.b.y - win.c.y),
+                            2 * (1 - win.t) * (win.c.x - win.a.x) + 2 * win.t * (win.b.x - win.c.x)) * 180 / Math.PI
+    }
 """
 
 _WINDOW = """
@@ -120,7 +126,8 @@ def main() -> int:
     app = QGuiApplication(sys.argv)
     engine = QQmlApplicationEngine()
     engine.addImportPath(str(ROOT / "app" / "ui" / "qml"))
-    imports = 'import Theme\nimport "%s"' % (ROOT / "app" / "ui" / "qml" / "mascot").as_posix() if args.real else ""
+    mascot_dir = QUrl.fromLocalFile(str(ROOT / "app" / "ui" / "qml" / "mascot")).toString()
+    imports = 'import Theme\nimport "%s"' % mascot_dir if args.real else ""
     source = _WINDOW % {"imports": imports, "flyer": _REAL if args.real else _PLACEHOLDER, "ms": ARC_MS,
                         "arcs": ARCS}
     engine.loadData(source.encode(), QUrl.fromLocalFile(str(ROOT / "probes" / "smoothness.qml")))
