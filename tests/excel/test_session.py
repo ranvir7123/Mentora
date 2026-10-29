@@ -5,7 +5,8 @@ import pytest
 
 from app.core.types import Rect
 from app.excel.com_thread import ComThread
-from app.excel.session import ExcelSession
+from app.excel.session import TEARDOWN_BUSY_LIMIT_S, ExcelSession
+from app.win import windows
 from tests.excel.fakes import FakeApp, FakeEvents, FakeReader
 
 
@@ -93,6 +94,50 @@ def test_close_tears_down_in_order(rig):
     assert r.closed == 0                         # closing from the program is not the learner closing
     r.session.close()                            # a second close does nothing
     assert r.app.rec.calls.count("Quit") == 1
+
+
+def test_close_waits_out_a_short_busy_spell_and_still_closes_in_order(rig):
+    r = rig()
+    r.com.advance(0)
+    r.app.rec.calls.clear()
+    r.app.refusals = 3                           # Excel says "not now" three times, then answers
+    r.session.close()
+    assert r.app.rec.calls == ["sink.close"] + ["DisplayAlerts=False"] * 4 + ["Close(SaveChanges=False)", "Quit"]
+    assert r.app.books == [] and r.session.errors == [] and len(r.slept) == 3
+
+
+def ending(monkeypatch, others=()) -> list:
+    """Pretend this Excel is a program that can be ended; returns the handles ended."""
+    ended = []
+    monkeypatch.setattr(windows, "process_id", lambda hwnd: 99)
+    monkeypatch.setattr(windows, "open_process", lambda pid, named=None: 77 if (pid, named) == (99, "excel.exe") else 0)
+    monkeypatch.setattr(windows, "end_process", ended.append)
+    monkeypatch.setattr(windows, "close_handle", lambda handle: None)
+    monkeypatch.setattr(windows, "program_windows", lambda pid: [4242, *others])     # 4242: the session's own
+    monkeypatch.setattr(windows, "class_name", lambda hwnd: "XLMAIN")
+    return ended
+
+
+def test_close_ends_this_excel_when_it_stays_busy(rig, monkeypatch):
+    ended = ending(monkeypatch)
+    r = rig()
+    r.com.advance(0)
+    r.app.busy = True                            # the learner is still typing in a cell, and has left
+    r.session.close()
+    assert ended == [77]
+    assert sum(r.slept) <= TEARDOWN_BUSY_LIMIT_S + 0.25
+    assert {"Close(SaveChanges=False)", "Quit"} <= set(r.app.rec.calls)    # every step was still tried
+    assert len(r.session.errors) == 1 and "ended" in r.session.errors[0]
+
+
+def test_close_leaves_a_busy_excel_running_when_it_shows_other_workbooks(rig, monkeypatch):
+    ended = ending(monkeypatch, others=[5151])   # the learner opened a file of their own in it
+    r = rig()
+    r.com.advance(0)
+    r.app.busy = True
+    r.session.close()
+    assert ended == []
+    assert len(r.session.errors) == 1 and "left running" in r.session.errors[0]
 
 
 def test_close_with_save_keeps_the_work_copy_and_resume_opens_it(rig, tmp_path):

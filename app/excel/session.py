@@ -18,7 +18,14 @@ locate() says where a target is on screen now; watch() keeps saying it while the
 zooms, opens tabs or moves the window. A watch looks every 100 ms and at once when the window moves,
 and tells on_spot only when the answer changes. When UI Automation cannot find a button, a picture of
 the window can be shown to a model (set_vision_fallback); its answer is used only if UI Automation
-finds a control of the same name at the middle of the rectangle it gave. The finding is in locate.py.
+finds a control of the same name at the middle of the rectangle it gave. The answer is kept for the
+window's size and moves with the window; a new size is asked about once it stops changing. The
+finding is in locate.py.
+
+close() waits up to TEARDOWN_BUSY_LIMIT_S for a busy Excel (a learner who left a cell half-typed
+keeps it busy for good). If it is still busy, this Excel is ended, unless it also shows workbooks
+of the learner's own; either way it is said in `errors`. Every Future a caller holds fails once
+the session closes, even one that was waiting out a busy Excel.
 
 Every Excel call happens on the COM thread. on_snapshot and on_closed run there too and must
 return at once.
@@ -26,9 +33,11 @@ return at once.
 from __future__ import annotations
 
 import gc
+import threading
+import time
 import traceback
 from concurrent.futures import Future
-from dataclasses import astuple, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -47,6 +56,8 @@ CLOSED_CHECK_SOON_S = 0.25         # after BeforeClose: the learner is probably 
 IDLE_REREAD_S = 1.0                # while a step waits: freezing panes and renaming fire no event
 PERFORM_BUSY_LIMIT_S = 30.0        # an operation Excel refuses for this long has failed
 LOCATE_BUSY_LIMIT_S = 5.0          # a busy Excel for this long means "can't say where it is"
+TEARDOWN_BUSY_LIMIT_S = 5.0        # closing waits this long for a busy Excel, then ends it
+VISION_STILL_S = 0.3               # a picture is taken once the window has stopped changing this long
 
 
 def _new_excel():
@@ -120,7 +131,8 @@ class ExcelSession:
                  on_snapshot: Callable[[Any], None], on_closed: Callable[[], None],
                  excel_factory: Callable[[], Any] | None = None, com=None,
                  attach_events: Callable[[Any, Any], Any] | None = None,
-                 reader: Callable[[Any], Any] = read_snapshot) -> None:
+                 reader: Callable[[Any], Any] = read_snapshot,
+                 sleep: Callable[[float], None] = time.sleep) -> None:
         self._lesson = lesson
         self.path = Path(workdir) / f"{lesson.id}.xlsx"
         self._visible = visible
@@ -130,11 +142,17 @@ class ExcelSession:
         self._com = com or ComThread(f"excel-{lesson.id}")
         self._attach = attach_events or attach_workbook_events
         self._reader = reader
+        self._sleep = sleep
         self.errors: list[str] = []
         self._app = None
         self._wb = None
         self._sink = None
-        self._hwnd = 0
+        self._hwnd = 0                     # the window, when the learner can see it
+        self._excel_hwnd = 0               # the window even when hidden
+        self._pid = 0
+        self._process = 0                  # a handle on this Excel, kept so it can be ended
+        self._pending: set[Future] = set()   # every unfinished Future a caller holds
+        self._pending_lock = threading.Lock()
         self._scheduler: ReadScheduler | None = None
         self._latest: Any = None
         self._closed = False           # the learner closed the workbook (or Excel went away)
@@ -150,8 +168,11 @@ class ExcelSession:
         self._look_queued = False
         self._vision: Callable[[bytes, str], Rect | None] | None = None
         self._vision_round = 0             # a new fallback forgets the old one's answers
-        self._vision_known: dict[tuple, Spot | None] = {}
+        self._vision_known: dict[tuple, Rect | None] = {}   # (target, w, h) -> box from the window's corner
         self._vision_asking: set[tuple] = set()
+        self._vision_place: Rect | None = None
+        self._vision_still = True          # the window has not changed for VISION_STILL_S
+        self._vision_settle = 0
 
         if not (resume and self.path.exists()):
             build_starter(lesson.starter, self.path)
@@ -167,9 +188,8 @@ class ExcelSession:
 
     def read_now(self) -> Future:
         """A Future for the next snapshot delivered after this call."""
-        fut: Future = Future()
-        if self._closed or self._stopping:
-            fut.set_exception(RuntimeError("Excel was closed"))
+        fut = self._promise()
+        if fut.done():
             return fut
 
         def ask() -> None:
@@ -194,18 +214,16 @@ class ExcelSession:
 
     def perform(self, op: Call) -> Future:
         """Carry out one operation; the Future fails if Excel refuses it or stays busy too long."""
-        fut: Future = Future()
-        if self._closed or self._stopping:
-            fut.set_exception(RuntimeError("Excel was closed"))
+        fut = self._promise()
+        if fut.done():
             return fut
         self._com.submit(lambda: self._attempt(op, fut, 0.0, 0.0))
         return fut
 
     def reset(self) -> Future:
         """Throw away the learner's changes: close without saving, rebuild the starter, reopen it."""
-        fut: Future = Future()
-        if self._closed or self._stopping:
-            fut.set_exception(RuntimeError("Excel was closed"))
+        fut = self._promise()
+        if fut.done():
             return fut
 
         def run() -> None:
@@ -224,9 +242,8 @@ class ExcelSession:
         This asks Excel and UI Automation only; the picture fallback is for watch(), where its slow
         answer can arrive later.
         """
-        fut: Future = Future()
-        if self._closed or self._stopping:
-            fut.set_exception(RuntimeError("Excel was closed"))
+        fut = self._promise()
+        if fut.done():
             return fut
 
         def start() -> None:
@@ -253,12 +270,38 @@ class ExcelSession:
         self._com.submit(change)
 
     def close(self, save: bool = False) -> None:
-        """Close the workbook (saving it into the work folder if asked) and quit this Excel."""
+        """Close the workbook (saving it into the work folder if asked) and quit this Excel.
+
+        Takes a moment, or up to about TEARDOWN_BUSY_LIMIT_S when Excel is busy (see the top).
+        """
         if self._stopping:
             return
         self._stopping = True
         self._save = save
         self._com.stop()
+
+    def _promise(self) -> Future:
+        """A Future for a caller: failed now if the session is closed, and by close() if left unfinished."""
+        fut: Future = Future()
+        with self._pending_lock:
+            if self._closed or self._stopping:
+                fut.set_exception(RuntimeError("Excel was closed"))
+                return fut
+            self._pending.add(fut)
+        fut.add_done_callback(self._forget)
+        return fut
+
+    def _forget(self, fut: Future) -> None:
+        with self._pending_lock:
+            self._pending.discard(fut)
+
+    def _fail_pending(self) -> None:
+        # A retry booked for later never runs once the COM thread stops, so its Future is failed here.
+        with self._pending_lock:
+            pending, self._pending = self._pending, set()
+        for fut in pending:
+            if not fut.done():
+                fut.set_exception(RuntimeError("Excel was closed"))
 
     # ------------------------------------------------------------ on the COM thread
 
@@ -266,9 +309,13 @@ class ExcelSession:
         windows.dpi_aware_thread()
         self._app = self._factory()
         self._app.Visible = self._visible
+        # Held before anything can go wrong, so a closing that finds Excel stuck can still end it.
+        self._pid = windows.process_id(int(self._app.Hwnd))
+        self._process = windows.open_process(self._pid, named="excel.exe")
         self._wb = self._app.Workbooks.Open(str(self.path))
         self._sink = self._attach(self._wb, _Handler(self))
-        self._hwnd = int(self._app.Hwnd) if self._visible else 0
+        self._excel_hwnd = int(self._app.Hwnd)     # read again: each workbook has its own window
+        self._hwnd = self._excel_hwnd if self._visible else 0
         self._scheduler = ReadScheduler(self._com.call_later, self._read, self._deliver)
         self._scheduler.read_soon()
         self._schedule_check(CLOSED_CHECK_S)
@@ -348,7 +395,10 @@ class ExcelSession:
             return
         self._watch = _Watch(target, on_spot, self._watch_token)
         if self._hwnd:
-            self._unhook = windows.location_hook(self._hwnd, self._look_soon)
+            try:
+                self._unhook = windows.location_hook(self._hwnd, self._look_soon)
+            except Exception:   # noqa: BLE001 - the hook only makes looks quicker; the 100 ms looks go on
+                self.errors.append(traceback.format_exc())
         self._look()
         self._watch_tick(self._watch_token)
 
@@ -394,33 +444,62 @@ class ExcelSession:
             w.on_spot(spot)
 
     def _vision_spot(self, target: Target) -> Spot | None:
-        """The fallback's checked answer for this window place, asking for it the first time."""
+        """The fallback's checked answer for this window size, moved to where the window is now.
+
+        A drag only moves the answer. A new size may fold the ribbon differently, so it is asked
+        about afresh, but only once the window has stopped changing: not once per pixel of a drag.
+        """
         if self._vision is None or target.kind != "control" or not self._hwnd:
             return None
         place = windows.window_rect(self._hwnd)
-        key = (target, astuple(place))
-        if key in self._vision_known:
-            return self._vision_known[key]
-        if key not in self._vision_asking:
-            self._vision_asking.add(key)
-            png = windows.screenshot_png(place)
-            ask, round_ = self._vision, self._vision_round
+        if self._vision_place is not None and place != self._vision_place:
+            self._vision_still = False
+            self._vision_settle += 1
+            token = self._vision_settle
+            self._com.call_later(VISION_STILL_S, lambda: self._vision_settled(token))
+        self._vision_place = place
+        key = (target, place.w, place.h)
+        if self._vision_still and key not in self._vision_known and key not in self._vision_asking:
+            self._ask_vision(key, target, place)
+        box = self._vision_known.get(key)        # there already if the answer came back at once
+        return None if box is None else Spot(Rect(place.x + box.x, place.y + box.y, box.w, box.h))
 
-            def run() -> None:
-                try:
-                    rect = ask(png, target.ref)
-                except Exception:   # noqa: BLE001 - a fallback that fails has found nothing
-                    rect = None
-                self._com.submit(lambda: self._vision_answered(key, round_, target, rect))
-            locate.background(run)
-        return self._vision_known.get(key)       # there already if the answer came back at once
+    def _vision_settled(self, token: int) -> None:
+        if token != self._vision_settle or self._closed or self._stopping:
+            return
+        self._vision_still = True
+        self._look_soon()
 
-    def _vision_answered(self, key: tuple, round_: int, target: Target, rect: Rect | None) -> None:
+    def _ask_vision(self, key: tuple, target: Target, place: Rect) -> None:
+        self._vision_asking.add(key)
+        ask, round_ = self._vision, self._vision_round
+
+        def run() -> None:                       # the picture is taken here too, off the COM thread
+            try:
+                windows.dpi_aware_thread()       # or the picture is of half the window
+                rect = ask(windows.screenshot_png(place), target.ref)
+            except Exception:   # noqa: BLE001 - a fallback that fails has found nothing
+                rect = None
+            self._com.submit(lambda: self._vision_answered(key, round_, target, place, rect))
+        locate.background(run)
+
+    def _vision_answered(self, key: tuple, round_: int, target: Target, asked_at: Rect,
+                         rect: Rect | None) -> None:
         if round_ != self._vision_round or self._closed or self._stopping:
             return
         self._vision_asking.discard(key)
-        trusted = rect is not None and locate.confirm_vision(rect, target)
-        self._vision_known[key] = Spot(rect) if trusted else None
+        place = windows.window_rect(self._hwnd)
+        if (place.w, place.h) != (asked_at.w, asked_at.h):
+            self._look_soon()                    # resized while the model thought: ask about the new size
+            return
+        box = None
+        if rect is not None:
+            box = Rect(rect.x - asked_at.x, rect.y - asked_at.y, rect.w, rect.h)
+            if not locate.confirm_vision(Rect(place.x + box.x, place.y + box.y, box.w, box.h), target):
+                box = None
+        # Answers for other sizes are dropped: a window is rarely put back to an old size.
+        self._vision_known = {k: v for k, v in self._vision_known.items() if k[1:] == key[1:]}
+        self._vision_known[key] = box
         self._look_soon()
 
     def _stop_hook(self) -> None:
@@ -485,40 +564,84 @@ class ExcelSession:
         return "open"
 
     def _teardown(self) -> None:
-        """Let go of Excel in the order that leaves no EXCEL.EXE behind; every step runs."""
+        """Let go of Excel in the order that leaves no EXCEL.EXE behind; every step runs.
+
+        A busy Excel is waited out, TEARDOWN_BUSY_LIMIT_S in all. Past that, each step is tried
+        once more and this Excel is ended (see _let_go_of_process).
+        """
         self._closed = True
         self._fail_read_waiters()
+        self._fail_pending()
         self._watch = None
-        steps = (self._stop_hook, self._close_sink, self._no_alerts, self._close_workbook, self._quit)
-        for step in steps:
+        waited_s, stuck = 0.0, False
+        for step in (self._stop_hook, self._close_sink, self._no_alerts, self._close_workbook):
+            waited_s, busy = self._patiently(step, waited_s)
+            stuck = stuck or busy
+        self._sink = None
+        self._wb = None
+        gc.collect()
+        waited_s, busy = self._patiently(self._quit, waited_s)
+        stuck = stuck or busy
+        self._app = None
+        gc.collect()
+        self._let_go_of_process(stuck)
+
+    def _patiently(self, step: Callable[[], None], waited_s: float) -> tuple[float, bool]:
+        """Run one closing step, waiting out "busy"; gives the time waited so far and whether it gave up."""
+        delay_s = 0.0
+        while True:
             try:
                 step()
-            except Exception:   # noqa: BLE001 - a failed step must not leave Excel running
-                self.errors.append(traceback.format_exc())
+                return waited_s, False
+            except Exception as exc:   # noqa: BLE001 - a failed step must not stop the ones after it
+                if not is_busy(exc):
+                    self.errors.append(traceback.format_exc())
+                    return waited_s, False
+                if waited_s >= TEARDOWN_BUSY_LIMIT_S:
+                    return waited_s, True
+            delay_s = next_delay(delay_s)
+            self._sleep(delay_s)                 # on the COM thread, which has nothing else left to do
+            waited_s += delay_s
+
+    def _let_go_of_process(self, stuck: bool) -> None:
+        """Close the handle on this Excel; first end it if it stayed busy and shows nothing of the learner's."""
+        handle, self._process = self._process, 0
+        try:
+            if not stuck:
+                return
+            unsaved = " Its workbook was not saved." if self._save else ""
+            if not handle:
+                self.errors.append(f"Excel stayed busy while closing and could not be ended; it may still be "
+                                   f"running.{unsaved}")
+                return
+            others = [w for w in windows.program_windows(self._pid)
+                      if w != self._excel_hwnd and windows.class_name(w) == "XLMAIN"]
+            if others:
+                self.errors.append("Excel stayed busy while closing. It was left running because it also shows "
+                                   f"workbooks of the learner's own.{unsaved}")
+                return
+            windows.end_process(handle)
+            self.errors.append(f"Excel stayed busy for {TEARDOWN_BUSY_LIMIT_S:.0f} s while closing, so it was "
+                               f"ended.{unsaved}")
+        except Exception:   # noqa: BLE001 - kept; there is nothing left to try
+            self.errors.append(traceback.format_exc())
+        finally:
+            if handle:
+                windows.close_handle(handle)
 
     def _close_sink(self) -> None:
-        sink, self._sink = self._sink, None
-        if sink is not None:
-            sink.close()
+        if self._sink is not None:
+            self._sink.close()
+            self._sink = None
 
     def _no_alerts(self) -> None:
         if self._app is not None:
             self._app.DisplayAlerts = False
 
     def _close_workbook(self) -> None:
-        wb, self._wb = self._wb, None
-        try:
-            if wb is not None:
-                wb.Close(SaveChanges=self._save)
-        finally:
-            del wb
-            gc.collect()
+        if self._wb is not None:
+            self._wb.Close(SaveChanges=self._save)
 
     def _quit(self) -> None:
-        app, self._app = self._app, None
-        try:
-            if app is not None:
-                app.Quit()
-        finally:
-            del app
-            gc.collect()
+        if self._app is not None:
+            self._app.Quit()

@@ -109,6 +109,7 @@ class FakeWorkbook:
 
     def Close(self, SaveChanges=False) -> None:
         self._app.rec.touch(f"Close(SaveChanges={SaveChanges})", record=True)
+        self._app.refuse_if_busy()
         if SaveChanges:
             self.path.write_text("saved by the fake", encoding="utf-8")
         self.open = False
@@ -149,6 +150,7 @@ class FakeApp:
         self.opened: list[Path] = []
         self.dead = False
         self.busy = False
+        self.refusals = 0                  # refuse this many more calls as busy, then answer
         self.fail_open = False
         self._visible = False
         self._alerts = True
@@ -156,6 +158,13 @@ class FakeApp:
     def check_alive(self) -> None:
         if self.dead:
             raise com_error(GONE)
+
+    def refuse_if_busy(self) -> None:
+        if self.busy:
+            raise com_error(BUSY)
+        if self.refusals > 0:
+            self.refusals -= 1
+            raise com_error(BUSY)
 
     @property
     def Workbooks(self) -> FakeWorkbooks:
@@ -183,11 +192,13 @@ class FakeApp:
     @DisplayAlerts.setter
     def DisplayAlerts(self, v: bool) -> None:
         self.rec.touch(f"DisplayAlerts={v}", record=True)
+        self.refuse_if_busy()
         self._alerts = v
 
     def Quit(self) -> None:
         self.rec.touch("Quit", record=True)
         self.check_alive()
+        self.refuse_if_busy()
 
 
 class FakeEvents:

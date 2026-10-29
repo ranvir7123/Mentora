@@ -16,6 +16,7 @@ _QUOTED = re.compile(r'"(?:[^"]|"")*"')
 _REF = re.compile(r"(?<![A-Za-z0-9_])\$?([A-Za-z]{1,3})\$?(\d+)(?::\$?([A-Za-z]{1,3})\$?(\d+))?")
 _FUNC = re.compile(r"([A-Za-z_][A-Za-z0-9_.]*)\s*\(")
 _ABS = re.compile(r"(?<![A-Za-z0-9_])\$[A-Za-z]{1,3}\$\d+")
+_ROW_LOCKED = re.compile(r"(?<![A-Za-z0-9_$])\$?[A-Za-z]{1,3}\$\d+")
 
 
 def is_formula(text) -> bool:
@@ -53,6 +54,13 @@ def absolute_refs_of(text) -> list[str]:
     if not is_formula(text):
         return []
     return sorted({m.group(0).replace("$", "").upper() for m in _ABS.finditer(_body(text))})
+
+
+def row_locked_refs_of(text) -> list[str]:
+    """The references whose row is fixed ($B$1 or B$1), uppercase, $ removed: filling down keeps them."""
+    if not is_formula(text):
+        return []
+    return sorted({m.group(0).replace("$", "").upper() for m in _ROW_LOCKED.finditer(_body(text))})
 
 
 # Moving and comparing whole formulas. Quoted text is kept as it is; everything else is formula.

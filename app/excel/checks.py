@@ -19,7 +19,7 @@ from typing import Any, Callable, Mapping
 
 from app.core.types import CheckKind, Param, Verdict
 from app.excel.address import Area, cell_name, col_index, parse_area
-from app.excel.formula import absolute_refs_of, functions_of, is_formula, moved, plain, refs_of
+from app.excel.formula import functions_of, is_formula, moved, plain, refs_of, row_locked_refs_of
 from app.excel.snapshot import GENERAL, Cell, Chart, Sheet, Snapshot, col_letters
 
 NUMBER_FORMAT_KINDS = ("currency", "percent", "date", "decimal2", "whole")
@@ -163,7 +163,7 @@ def _formula(snap: Snapshot, args: Mapping) -> Verdict:
         if extra:
             return Verdict.wrong(f"refers_extra:{extra}", f"Not yet: your formula also uses {extra}. Leave it out.")
 
-    locked = set(absolute_refs_of(formula))
+    locked = set(row_locked_refs_of(formula))      # B$8 is as good as $B$8 for filling down
     for a in fixed:
         if a not in locked:
             lock = f"${a.rstrip('0123456789')}${parse_area(a).top}"
@@ -504,7 +504,8 @@ CHECKS: dict[str, CheckKind] = dict([
                       Param("covers", "range", required=False), Param("uses", "function", required=False),
                       Param("absolute", "cells", required=False)), _formula,
           "The cell holds a formula that refers to every cell of `covers` and nothing else, calls `uses`, "
-          "locks each `absolute` cell as $C$R, and gives `value`. Any spelling of it counts."),
+          "locks the row of each `absolute` cell ($C$R or C$R: what filling down needs), and gives `value`. "
+          "Any spelling of it counts."),
     _kind("filled_formula", (Param("range", "range"), Param("first", "text")), _filled_formula,
           "The formula `first` (written for the range's first cell) is filled through the whole range."),
     _kind("number_format", (Param("range", "range"), Param("kind", "enum", choices=NUMBER_FORMAT_KINDS)),

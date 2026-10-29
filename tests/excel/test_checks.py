@@ -4,7 +4,7 @@ learner has done anything."""
 import pytest
 
 from app.excel.checks import CHECKS, format_kind
-from app.excel.formula import moved, plain
+from app.excel.formula import moved, plain, row_locked_refs_of
 from app.excel.snapshot import Cell, Chart, Filter, Sheet, Snapshot
 
 STARTER = {"A1": "Item", "B1": "Amount", "C1": "Share", "A2": "Rent", "B2": 12000.0, "A3": "Food",
@@ -128,13 +128,15 @@ SHARE_ARGS = {"cell": "Budget!C2", "value": 0.52173913, "covers": "Budget!B2", "
 SHARE = 12000 / 23000
 
 
-@pytest.mark.parametrize("formula", ["=B2/$B$8", "=$B2/$B$8", "=b2 / $b$8"])
+# B$8 locks the row, which is all that filling down needs, so it counts as locked (as filled_formula
+# already accepts). $B8 locks only the column: filled down it becomes $B9, $B10...
+@pytest.mark.parametrize("formula", ["=B2/$B$8", "=B2/B$8", "=$B2/$B$8", "=b2 / $b$8"])
 def test_share_right(formula):
     assert_right("formula", SHARE_ARGS, snap({"B8": f("=SUM(B2:B6)", TOTAL), "C2": f(formula, SHARE)}))
 
 
 @pytest.mark.parametrize("formula, value, code", [
-    ("=B2/B$8", SHARE, "not_absolute:B8"),
+    ("=B2/$B8", SHARE, "not_absolute:B8"),
     ("=B2/B8", SHARE, "not_absolute:B8"),
     ("=B2/$B$9", "#DIV/0!", "covers_missing:B8"),
 ])
@@ -179,6 +181,11 @@ def test_filling_across_says_across():
     args = {"range": "B9:E9", "first": "=B2*2"}
     v = run("filled_formula", args, snap({"B9": f("=B2*2", 1), "C9": f("=C2*2", 1)}))
     assert v.code == "gap:E9" and "across to E9" in v.text
+
+
+def test_row_locked_refs_are_the_ones_filling_down_keeps():
+    assert row_locked_refs_of("=B2/B$8+$C$9+$D10+Budget!E$2:$E$4") == ["B8", "C9", "E2", "E4"]
+    assert row_locked_refs_of('="$A$1"&B1') == [] and row_locked_refs_of("12") == []
 
 
 def test_moved_and_plain():

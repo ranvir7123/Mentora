@@ -89,6 +89,8 @@ def test_chart_sort_filter_rename_and_select():
     assert log_of("filter", {"range": "A1:C6"}, {"wb.ActiveSheet.AutoFilterMode": False}) == \
         ["wb.ActiveSheet.Range('A1:C6').AutoFilter()"]
     assert log_of("filter", {"range": "A1:C6"}, {"wb.ActiveSheet.AutoFilterMode": True}) == []
+    # a column with no criteria shows every row: "*" would hide the numbers, as it matches text only
+    assert log_of("filter", {"range": "A1:C6", "column": "B"}) == ["wb.ActiveSheet.Range('A1:C6').AutoFilter(2)"]
     assert log_of("rename_sheet", SAMPLES["rename_sheet"]) == ["wb.Worksheets('Budget').Name = 'My budget'"]
     assert log_of("select", SAMPLES["select"]) == [f"{SHEET}.Activate()", f"{SHEET}.Range('B2:B6').Select()"]
 
@@ -134,6 +136,18 @@ def test_perform_gives_up_on_an_excel_busy_for_too_long(rig, monkeypatch):
     fut = r.session.perform(Call("clear", {"range": "A1"}))
     r.com.advance(60)
     with pytest.raises(ops.ExcelBusy, match="busy"):
+        fut.result(0)
+
+
+def test_a_perform_waiting_out_a_busy_excel_fails_when_the_session_closes(rig, monkeypatch):
+    def always_busy(app, wb, op):
+        raise com_error(BUSY)
+    monkeypatch.setattr(ops, "do", always_busy)
+    r = rig()
+    fut = r.session.perform(Call("clear", {"range": "A1"}))
+    r.com.advance(0.1)
+    r.session.close()                            # its next try was booked, and now never comes
+    with pytest.raises(RuntimeError, match="Excel was closed"):
         fut.result(0)
 
 

@@ -97,7 +97,11 @@ def _freeze(app, wb, a: Mapping) -> None:
 def _filter(app, wb, a: Mapping) -> None:
     sheet, target, area = _at(wb, a["range"])
     if a.get("column"):
-        target.AutoFilter(col_index(a["column"]) - area.left + 1, a.get("criteria") or "*")
+        field = col_index(a["column"]) - area.left + 1
+        if a.get("criteria"):
+            target.AutoFilter(field, a["criteria"])
+        else:
+            target.AutoFilter(field)                  # no criteria shows every row; "*" would hide numbers
     elif not sheet.AutoFilterMode:                   # AutoFilter() with nothing else switches it off
         target.AutoFilter()
 

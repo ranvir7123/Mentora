@@ -14,10 +14,14 @@ cell. Every 8th cell stays half-typed for 3 s, which keeps Excel in edit mode an
 whole numbers, numbers with a decimal point, and words like note0042 (all different, so Excel's
 AutoComplete never finishes one for us).
 
-At the end every typed cell is compared with what Excel holds. Last line:
+At the end every typed cell is compared with what Excel holds. Then one more cell is left
+half-typed, as a learner who walks away would leave it, and the session is closed:
+    close while editing: <s> s, ended=<True if this Excel had to be ended>
+    (want about 5 s, ended=True, and no EXCEL.EXE left behind)
+Last line:
     typed=<cells> lost=<cells that differ> max_lag_ms=<Enter to the first read showing it>
     busy_retries=<reads Excel refused while busy> errors=<n>
-Want lost=0 and errors=0.
+Want lost=0 and errors=0. The "it was ended" note from the close is expected and is not counted.
 """
 from __future__ import annotations
 
@@ -225,18 +229,31 @@ def main() -> int:
         busy, read_errors = scheduler.busy_retries, scheduler.error_count
         s.watch(None, on_spot)
         s.set_waiting(False)
+        if not stopped:
+            try:
+                for char in "123":                 # no Enter: Excel stays in edit mode, refusing every call
+                    press(hwnd, char)
+                    time.sleep(0.2)
+            except KeyboardLost as exc:
+                stopped = str(exc)
+                print(f"STOPPED TYPING: {exc}", flush=True)
     finally:
+        closing = time.perf_counter()
         s.close()
+        close_s = time.perf_counter() - closing
+    ended = [e for e in s.errors if "so it was ended" in e]
+    session_errors = [e for e in s.errors if e not in ended]
+    print(f"close while editing: {close_s:.1f} s, ended={bool(ended)}", flush=True)
     time.sleep(3)
     left = excel_pids() - before
     with lock:
         max_lag_ms = round(max(lags) * 1000) if lags else 0
         never_seen = len(entered)
-    errors = len(s.errors) + read_errors + bool(left) + bool(stopped)
+    errors = len(session_errors) + read_errors + bool(left) + bool(stopped) + (not ended)
     print(f"time {time.perf_counter() - t0:.0f} s; pointer updates {spots[0]}; typed cells no read ever "
-          f"showed: {never_seen}; read errors {read_errors}; session errors {len(s.errors)}; "
+          f"showed: {never_seen}; read errors {read_errors}; session errors {len(session_errors)}; "
           f"EXCEL.EXE left behind {len(left)}", flush=True)
-    for e in s.errors:
+    for e in session_errors:
         print(e)
     print(f"typed={len(typed)} lost={len(lost)} max_lag_ms={max_lag_ms} busy_retries={busy} errors={errors}",
           flush=True)

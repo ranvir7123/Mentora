@@ -9,6 +9,7 @@ Two facts measured on this laptop (1280 px wide at 200%) in the earlier project 
 
 location_hook() tells a thread when a window moves; it needs the thread to pump messages, as the
 COM thread does. screenshot_png() takes a picture of part of the screen, for the vision fallback.
+open_process() and end_process() let a session end its own Excel when that Excel will not quit.
 """
 from __future__ import annotations
 
@@ -36,6 +37,8 @@ OBJID_WINDOW = 0
 CHILDID_SELF = 0
 SRCCOPY, CAPTUREBLT = 0x00CC0020, 0x40000000
 DIB_RGB_COLORS = 0
+PROCESS_TERMINATE = 0x0001
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
 
 class _MonitorInfo(ctypes.Structure):
@@ -87,6 +90,14 @@ _gdi32.GetDIBits.argtypes = [wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, wint
                              ctypes.c_void_p, wintypes.UINT]
 _gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
 _gdi32.DeleteDC.argtypes = [wintypes.HDC]
+_user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+_kernel32.OpenProcess.restype = wintypes.HANDLE
+_kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+                                                 ctypes.POINTER(wintypes.DWORD)]
+_kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+_kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 
 
 class _BitmapInfoHeader(ctypes.Structure):
@@ -177,18 +188,70 @@ def find_child(hwnd: int, *classes: str) -> int:
 
 def process_windows(hwnd: int) -> list[int]:
     """The other visible top-level windows of hwnd's program: its pop-ups and opened drop-downs."""
-    want = wintypes.DWORD()
-    _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(want))
+    pid = process_id(hwnd)
+    return [w for w in program_windows(pid) if w != hwnd] if pid else []
+
+
+def program_windows(pid: int) -> list[int]:
+    """Every visible top-level window of program `pid`."""
     found: list[int] = []
 
     def visit(other, _lparam) -> bool:
-        pid = wintypes.DWORD()
-        _user32.GetWindowThreadProcessId(other, ctypes.byref(pid))
-        if other != hwnd and pid.value == want.value and _user32.IsWindowVisible(other):
+        owner = wintypes.DWORD()
+        _user32.GetWindowThreadProcessId(other, ctypes.byref(owner))
+        if owner.value == pid and _user32.IsWindowVisible(other):
             found.append(other)
         return True
     _user32.EnumWindows(_WNDENUMPROC(visit), 0)
     return found
+
+
+def class_name(hwnd: int) -> str:
+    """The kind of window, as Windows names it; each Excel workbook window is an XLMAIN."""
+    buf = ctypes.create_unicode_buffer(256)
+    _user32.GetClassNameW(hwnd, buf, len(buf))
+    return buf.value
+
+
+def process_id(hwnd: int) -> int:
+    """The number of the program that owns hwnd; 0 when there is no such window."""
+    pid = wintypes.DWORD()
+    if hwnd:
+        _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return pid.value
+
+
+def open_process(pid: int, named: str | None = None) -> int:
+    """A handle that lets that program be ended later; 0 if there is none or it is not called `named`.
+
+    While the handle is held it names that one program, even after the program has gone and its
+    number has been given to another.
+    """
+    if not pid:
+        return 0
+    handle = _kernel32.OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION, False, pid) or 0
+    if handle and named is not None and _program_file(handle).lower() != named.lower():
+        _kernel32.CloseHandle(handle)
+        return 0
+    return handle
+
+
+def _program_file(handle: int) -> str:
+    size = wintypes.DWORD(1024)
+    buf = ctypes.create_unicode_buffer(size.value)
+    if not _kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+        return ""
+    return buf.value.rsplit("\\", 1)[-1]
+
+
+def end_process(handle: int) -> None:
+    """End the program at once, as Task Manager's End task does."""
+    if not _kernel32.TerminateProcess(handle, 1):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
+def close_handle(handle: int) -> None:
+    _kernel32.CloseHandle(handle)
 
 
 def location_hook(hwnd: int, fn: Callable[[], None]) -> Callable[[], None]:

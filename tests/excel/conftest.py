@@ -3,7 +3,14 @@ from pathlib import Path
 import pytest
 
 from app.core.lesson import load_lesson
+from app.win import windows
 from tests.excel.fakes import FakeApp, FakeCom, FakeEvents, FakeReader
+
+
+@pytest.fixture(autouse=True)
+def no_real_program(monkeypatch):
+    """A fake Excel's window number could belong to a real program: no test may hold or end one."""
+    monkeypatch.setattr(windows, "open_process", lambda pid, named=None: 0)
 
 
 @pytest.fixture
@@ -23,11 +30,12 @@ class Rig:
         self.reader = FakeReader(self.app, self.com)
         self.snapshots: list = []
         self.closed = 0
+        self.slept: list[float] = []             # the pauses closing took (no real time passes)
         self.session = ExcelSession(
             lesson, workdir, visible=visible, resume=resume,
             on_snapshot=self.snapshots.append, on_closed=self._closed,
             excel_factory=lambda: self.app, com=self.com, attach_events=self.events.attach,
-            reader=self.reader)
+            reader=self.reader, sleep=self.slept.append)
 
     def _closed(self) -> None:
         self.closed += 1

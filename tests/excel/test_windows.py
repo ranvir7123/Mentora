@@ -1,8 +1,41 @@
+import ctypes
+import os
 import struct
+import subprocess
+import sys
 import zlib
 
 from app.core.types import Rect
-from app.win.windows import outer_rect_for, png_bytes
+from app.win.windows import (class_name, close_handle, end_process, open_process, outer_rect_for, png_bytes,
+                             process_id, program_windows)
+
+
+def test_a_program_can_be_ended_through_the_handle_kept_on_it():
+    # The real python.exe, not the venv's stand-in, which would start a second program and end only itself.
+    child = subprocess.Popen([os.path.join(sys.base_exec_prefix, "python.exe"), "-c", "import time; time.sleep(30)"],
+                             creationflags=subprocess.CREATE_NO_WINDOW)
+    try:
+        assert open_process(child.pid, named="excel.exe") == 0     # a program of another name is never held
+        handle = open_process(child.pid, named="PYTHON.EXE")
+        assert handle
+        end_process(handle)
+        assert child.wait(5) == 1
+        close_handle(handle)
+    finally:
+        child.kill()                             # only matters if something above failed
+
+
+def test_no_window_means_no_program():
+    assert process_id(0) == 0 and open_process(0) == 0
+
+
+def test_a_window_is_listed_under_its_program():
+    desktop_shell = ctypes.windll.user32.GetShellWindow()      # the desktop, always there while Windows runs
+    assert desktop_shell in program_windows(process_id(desktop_shell))
+
+
+def test_a_window_kind_is_read():
+    assert class_name(ctypes.windll.user32.GetDesktopWindow()) == "#32769"
 
 
 def test_the_window_is_grown_by_its_invisible_borders():

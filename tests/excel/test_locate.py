@@ -6,6 +6,7 @@ from app.core.types import Rect, Spot, Target
 from app.excel import locate
 from app.excel.address import parse_area
 from app.excel.locate import PaneInfo, cell_rect, clip_to, find_target, pane_for, split_area, spot_rect
+from app.excel.session import VISION_STILL_S
 from app.win import windows
 from tests.excel.fakes import BUSY, FakeNode, com_error
 
@@ -299,23 +300,71 @@ def test_vision_is_asked_only_when_ui_automation_finds_nothing_and_only_trusted_
     assert got[-1] is None                                           # UI Automation disagreed
 
 
-def test_vision_is_asked_again_after_the_window_moves(rig, monkeypatch):
-    asked = []
-    where = [Rect(0, 0, 1840, 1500)]
+def vision_rig(rig, monkeypatch, where: list, asked: list):
+    """A shown Excel whose window is at where[0]; the fallback finds Pie 10 px in from its corner."""
     monkeypatch.setattr(locate, "background", lambda fn: fn())
     monkeypatch.setattr(windows, "screenshot_png", lambda rect: b"png")
     monkeypatch.setattr(windows, "window_rect", lambda hwnd: where[0])
     monkeypatch.setattr(locate, "confirm_vision", lambda rect, target: True)
-    shown(monkeypatch)
+    hooks = shown(monkeypatch)
     scripted(monkeypatch, Script(None))
     r = rig(visible=True)
-    r.session.set_vision_fallback(lambda png, ref: asked.append(ref) or Rect(10 + where[0].x, 10, 20, 20))
+    r.session.set_vision_fallback(lambda png, ref: asked.append(where[0]) or Rect(where[0].x + 10, 10, 20, 20))
+    return r, hooks
+
+
+def test_vision_follows_a_dragged_window_without_asking_again(rig, monkeypatch):
+    asked, where = [], [Rect(0, 0, 1840, 1500)]
+    r, hooks = vision_rig(rig, monkeypatch, where, asked)
     got = []
     r.session.watch(PIE, got.append)
     r.com.advance(0.25)
-    where[0] = Rect(-11, 0, 1840, 1500)
+    for x in range(1, 61):                       # dragged 60 px, one move every 10 ms
+        where[0] = Rect(x, 0, 1840, 1500)
+        hooks[0]()
+        r.com.advance(0.01)
+    r.com.advance(1)
+    assert asked == [Rect(0, 0, 1840, 1500)] and got[-1] == Spot(Rect(70, 10, 20, 20))
+
+
+def test_vision_asks_again_once_a_resized_window_has_stopped_changing(rig, monkeypatch):
+    asked, where = [], [Rect(0, 0, 1840, 1500)]
+    r, hooks = vision_rig(rig, monkeypatch, where, asked)
+    got = []
+    r.session.watch(PIE, got.append)
     r.com.advance(0.25)
-    assert asked == ["Insert > Pie", "Insert > Pie"] and got == [Spot(Rect(10, 10, 20, 20)), Spot(Rect(-1, 10, 20, 20))]
+    for w in range(1839, 1809, -1):              # its edge dragged 30 px, one change every 10 ms
+        where[0] = Rect(0, 0, w, 1500)
+        hooks[0]()
+        r.com.advance(0.01)
+    assert len(asked) == 1 and got[-1] is None   # the ribbon may fold differently: the old answer is not used
+    r.com.advance(VISION_STILL_S + 0.1)
+    assert asked == [Rect(0, 0, 1840, 1500), Rect(0, 0, 1810, 1500)] and got[-1] == Spot(Rect(10, 10, 20, 20))
+
+
+def test_a_window_hook_that_fails_leaves_the_watch_looking(rig, monkeypatch):
+    def refused(hwnd, fn):
+        raise OSError("SetWinEventHook said no")
+    monkeypatch.setattr(windows, "is_window", lambda hwnd: True)
+    monkeypatch.setattr(windows, "location_hook", refused)
+    script = Script(at(100), at(140))
+    scripted(monkeypatch, script)
+    r = rig(visible=True)
+    got = []
+    r.session.watch(B8, got.append)
+    r.com.advance(0.25)
+    assert got == [at(100), at(140)] and script.looks == 3
+    assert len(r.session.errors) == 1 and "SetWinEventHook said no" in r.session.errors[0]
+
+
+def test_a_locate_waiting_out_a_busy_excel_fails_when_the_session_closes(rig, monkeypatch):
+    scripted(monkeypatch, Script(com_error(BUSY)))
+    r = rig()
+    fut = r.session.locate(B8)
+    r.com.advance(0.1)
+    r.session.close()                            # its next try was booked, and now never comes
+    with pytest.raises(RuntimeError, match="Excel was closed"):
+        fut.result(0)
 
 
 def test_a_cell_watch_never_asks_vision(rig, monkeypatch):

@@ -9,6 +9,8 @@ For each step, in order, it checks the workbook, replays the step, and checks ag
 Then for each known mistake it resets to the starter, replays the steps before it, replays the
 mistake, and checks:
     <step id> mistake <n>: ok=<ok> code=<code>  (want ok=False, and a code that names the mistake)
+Then a filter on column B with no criteria, as a lesson replay would set it:
+    filter: range=<range> on=<filtered columns> hidden rows=<n>   (want range=A1:C6 on={} hidden rows=0)
 Last, the number of EXCEL.EXE processes left behind (want 0 new).
 """
 from __future__ import annotations
@@ -23,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app.core.lesson import load_lesson               # noqa: E402
+from app.core.types import Call                       # noqa: E402
 from app.excel.checks import CHECKS                   # noqa: E402
 from app.excel.session import ExcelSession            # noqa: E402
 
@@ -65,6 +68,15 @@ def main() -> int:
                 v = judge(s, step)
                 print(f"{step.id} mistake {n}: ok={v.ok} code={v.code}  text={v.text!r}", flush=True)
                 bad += v.ok or not v.attempted
+
+        s.reset().result(WAIT_S)
+        s.perform(Call("filter", {"range": "Budget!A1:C6", "column": "B"})).result(WAIT_S)
+        sheet = s.read_now().result(WAIT_S).sheet("Budget")
+        rows = s._com.submit(lambda: sum(bool(s._wb.Worksheets("Budget").Rows(r).Hidden)
+                                         for r in range(1, 7))).result(WAIT_S)
+        f = sheet.filter
+        print(f"filter: range={f and f.range} on={f and f.on} hidden rows={rows}", flush=True)
+        bad += f is None or f.range != "A1:C6" or bool(f.on) or rows != 0
         print(f"took {time.perf_counter() - t0:.1f}s; errors in the session: {len(s.errors)}")
         for err in s.errors[:3] + s._com.errors[:3]:
             print("error:", err)
