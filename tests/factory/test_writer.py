@@ -116,37 +116,75 @@ def test_an_off_menu_check_is_retried_once_then_not_ready(prepared, saved, spy, 
     assert "step s1: check contains is not on the Fake app menu" in _sent_text(spy.responds[1]["input"])
 
 
-@pytest.mark.parametrize("where, text, answer", [
-    ("the starter", '=HYPERLINK("https://example.com","x")',
-     lambda t: {**_lesson(), "starter": {"k0": t}}),
-    ("step s1", "=WEBSERVICE(A1)",
-     lambda t: _lesson([_step(1, replay={"kind": "set", "args": {"key": "k1", "value": t}}), _step(2)])),
-    ("step s2", "=cmd|' /c calc'!A0",
-     lambda t: _lesson([_step(1), _step(2, mistakes=[{"replay": {"kind": "set", "args": {"key": "k2", "value": t}},
-                                                      "not_yet": "k2 should be 2."}])])),
-    ("the starter", "\\\\server\\share\\prices.xlsx",
-     lambda t: {**_lesson(), "starter": {"k0": t}}),
-    ("the starter", "=[Budget.xlsx]Sheet1!A1",
-     lambda t: {**_lesson(), "starter": {"k0": t}}),
-    ("step s1", "See www.example.com for the numbers.",
-     lambda t: _lesson([_step(1, hints=["Find k1.", t, "Set k1 to 1."]), _step(2)])),
-])
-def test_a_lesson_that_reaches_outside_the_app_is_sent_back_then_not_ready(prepared, saved, spy, lessons,
-                                                                          where, text, answer):
+def _in_starter(t):
+    return {**_lesson(), "starter": {"k0": t}}
+
+
+def _in_replay(t):
+    return _lesson([_step(1, replay={"kind": "set", "args": {"key": "k1", "value": t}}), _step(2)])
+
+
+def _in_mistake(t):
+    return _lesson([_step(1), _step(2, mistakes=[{"replay": {"kind": "set", "args": {"key": "k2", "value": t}},
+                                                  "not_yet": "k2 should be 2."}])])
+
+
+def _in_hint(t):
+    return _lesson([_step(1, hints=["Find k1.", t, "Set k1 to 1."]), _step(2)])
+
+
+def _in_instruction(t):
+    return _lesson([_step(1, instruction=t), _step(2)])
+
+
+def _sent_back_then_not_ready(prepared, saved, spy, lessons, answer, problem):
     saved.file("writer_vid1_upload")
-    saved.answer("writer_vid1", answer(text))
-    saved.answer("writer_vid1_retry", answer(text))
+    saved.answer("writer_vid1", answer)
+    saved.answer("writer_vid1_retry", answer)
 
     got = write_lesson(prepared, INFO, FakePlugin(), spy, lessons_dir=lessons)
 
-    problem = f"{where}: {text} reaches outside Fake app; a lesson must stay inside it"
     assert got == NotReady(f"Muse Spark's lesson broke the rules: {problem}.")
     retry = spy.responds[1]["input"][-1]["content"]
     assert retry == f"That lesson broke these rules:\n- {problem}\nWrite the whole lesson again, fixing every one."
 
 
+@pytest.mark.parametrize("where, text, put", [
+    ("the starter", '=HYPERLINK("https://example.com","x")', _in_starter),
+    ("step s2", "=cmd|' /c calc'!A0", _in_mistake),
+    ("the starter", "\\\\server\\share\\prices.xlsx", _in_starter),
+    ("the starter", "=[Budget.xlsx]Sheet1!A1", _in_starter),
+    ("step s1", "See www.example.com for the numbers.", _in_hint),
+    ("step s1", "Write to mailto:help@example.com.", _in_hint),
+])
+def test_a_lesson_that_reaches_outside_the_app_is_sent_back_then_not_ready(prepared, saved, spy, lessons,
+                                                                          where, text, put):
+    _sent_back_then_not_ready(prepared, saved, spy, lessons, put(text),
+                              f"{where}: {text} reaches outside Fake app; a lesson must stay inside it")
+
+
+@pytest.mark.parametrize("where, text, put, name", [
+    ("step s1", "=WEBSERVICE(A1)", _in_replay, "WEBSERVICE"),
+    ("the starter", "=IMPORTCSV(A1)", _in_starter, "IMPORTCSV"),          # a new function that reads files
+    ("the starter", "=_xlfn.COPILOT(A1)", _in_starter, "COPILOT"),        # as saved in a file, with its prefix
+    ("the starter", "=MAP(A1,WEBSERVICE)", _in_starter, "MAP"),           # calls a function it names
+    ("the starter", "=LET(f,A1,f+1)", _in_starter, "LET"),
+    ("the starter", "=MyMacro(A1)", _in_starter, "MYMACRO"),              # a function written in a macro
+    ("step s1", "k1\t=WEBSERVICE(A1)", _in_replay, "WEBSERVICE"),        # Tab moves to the next cell when typed
+    ("step s1", "Type =WEBSERVICE(A1) in k1.", _in_instruction, "WEBSERVICE"),   # the agent types what it reads
+    ("step s1", "Type =SUM(A1) + WEBSERVICE(B1) in k1.", _in_hint, "WEBSERVICE"),
+])
+def test_a_formula_using_a_function_lessons_may_not_use_is_sent_back_then_not_ready(prepared, saved, spy, lessons,
+                                                                                   where, text, put, name):
+    _sent_back_then_not_ready(prepared, saved, spy, lessons, put(text),
+                              f"{where}: {text} uses {name}, which a lesson may not use")
+
+
 def test_formulas_that_stay_in_the_workbook_are_fine(prepared, saved, spy, lessons):
-    inside = ["=SUM(Table1[Sales])", "=B2+B3", "Save the file: it keeps your work.", "-5", "Call it Total."]
+    inside = ["=SUM(Table1[Sales])", "=B2+B3", "Save the file: it keeps your work.", "-5", "Call it Total.",
+              '=TEXTJOIN("|",TRUE,A1:A3)', "=IFERROR(VLOOKUP(A2,B:C,2,FALSE),0)", "=_xlfn.XLOOKUP(A1,B:B,C:C)",
+              "=@INDEX(B2:B9,3)", "Type =B2*12 in B3 (the yearly total).", "Make k1 = 5 (five).",
+              "Step 2 - insert an image (PNG) later.", "=sum(b2:b5)"]
     saved.file("writer_vid1_upload")
     saved.answer("writer_vid1", {**_lesson(), "starter": {f"k{i}": t for i, t in enumerate(inside)}})
 

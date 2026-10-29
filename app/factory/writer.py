@@ -6,8 +6,8 @@ answer is read and checked with the same rules every lesson keeps; a broken answ
 its problems listed, and a second broken answer becomes a plain "not ready" reason.
 
 A written lesson must stay inside the app. Proving and testing it types its steps into the real app, and
-the steps come from a stranger's video, so no text in it may hold a link, a network path, another
-workbook, or a formula that fetches, calls or runs something outside the workbook.
+the steps come from a stranger's video, so no text in it may hold a link, a network path or another
+workbook, and its formulas may use only everyday functions that work on the workbook's own values.
 """
 from __future__ import annotations
 
@@ -28,13 +28,41 @@ WRITER_MODEL = "muse-spark-1.3"
 SHOWN_PROBLEMS = 3
 SHORT_TEXT = 60
 
-# Text that reaches outside the app anywhere in a lesson: a web or file link, or a network path.
-LINK = re.compile(r"https?://|ftp://|file:/|www\.|\\\\[^\\\s]+\\", re.IGNORECASE)
-# What reaches outside in a formula: functions that fetch, call or run something, the "|" of a DDE link
-# to another program, and a reference to another file or drive.
-REACHING = re.compile(r"\b(?:HYPERLINK|WEBSERVICE|IMAGE|RTD|CALL|REGISTER(?:\.ID)?|EXEC|PY)\s*\(|\|"
-                      r"|\.(?:xl[a-z]*|csv|ods)\b|\b[a-z]:\\", re.IGNORECASE)
+# Text that reaches outside the app anywhere in a lesson: a link of any kind, or a network path.
+LINK = re.compile(r"\w+://|file:/|www\.|mailto:|search-ms:|ms-[a-z-]+:|\\\\[^\\\s]+\\", re.IGNORECASE)
+
+# The only functions a lesson's formulas may use: everyday ones that work out values from the workbook
+# itself. Any other is refused, so a function that fetches, reads files, calls a program or runs a macro
+# cannot slip in, nor can one added to Excel later; nor can one that calls a function it is handed (LET,
+# LAMBDA, MAP and the like), which could hand it one of those.
+ALLOWED_FUNCTIONS = frozenset("""
+    ABS ADDRESS AGGREGATE AND ARABIC AVERAGE AVERAGEA AVERAGEIF AVERAGEIFS CEILING CEILING.MATH CHAR CHOOSE
+    CHOOSECOLS CHOOSEROWS CLEAN CODE COLUMN COLUMNS COMBIN CONCAT CONCATENATE CONVERT CORREL COS COUNT COUNTA
+    COUNTBLANK COUNTIF COUNTIFS DATE DATEDIF DATEVALUE DAY DAYS DB DDB DEGREES DOLLAR DROP EDATE EOMONTH
+    ERROR.TYPE EVEN EXACT EXP EXPAND FACT FALSE FILTER FIND FIXED FLOOR FLOOR.MATH FORECAST FORECAST.LINEAR
+    FORMULATEXT FREQUENCY FV GCD GEOMEAN HARMEAN HLOOKUP HOUR HSTACK IF IFERROR IFNA IFS INDEX INT IPMT IRR
+    ISBLANK ISERR ISERROR ISEVEN ISFORMULA ISLOGICAL ISNA ISNONTEXT ISNUMBER ISODD ISOWEEKNUM ISREF ISTEXT
+    LARGE LCM LEFT LEN LN LOG LOG10 LOOKUP LOWER MATCH MAX MAXA MAXIFS MEDIAN MID MIN MINA MINIFS MINUTE
+    MMULT MOD MODE MODE.SNGL MONTH MROUND N NA NETWORKDAYS NETWORKDAYS.INTL NOT NOW NPER NPV NUMBERVALUE ODD
+    OFFSET OR PERCENTILE PERCENTILE.EXC PERCENTILE.INC PERCENTRANK PI PMT POWER PPMT PRODUCT PROPER PV
+    QUARTILE QUARTILE.EXC QUARTILE.INC QUOTIENT RADIANS RAND RANDARRAY RANDBETWEEN RANK RANK.AVG RANK.EQ RATE
+    REGEXEXTRACT REGEXREPLACE REGEXTEST REPLACE REPT RIGHT ROMAN ROUND ROUNDDOWN ROUNDUP ROW ROWS SEARCH
+    SECOND SEQUENCE SIGN SIN SLN SMALL SORT SORTBY SQRT STDEV STDEV.P STDEV.S STDEVA SUBSTITUTE SUBTOTAL SUM
+    SUMIF SUMIFS SUMPRODUCT SUMSQ SWITCH T TAKE TAN TEXT TEXTAFTER TEXTBEFORE TEXTJOIN TEXTSPLIT TIME
+    TIMEVALUE TOCOL TODAY TOROW TRANSPOSE TREND TRIM TRIMMEAN TRUE TRUNC TYPE UNICHAR UNICODE UNIQUE UPPER
+    VALUE VAR VAR.P VAR.S VLOOKUP VSTACK WEEKDAY WEEKNUM WORKDAY WORKDAY.INTL WRAPCOLS WRAPROWS XIRR XLOOKUP
+    XMATCH XNPV XOR YEAR YEARFRAC
+""".split())
 FORMULA_START = ("=", "+", "-", "@")         # how a spreadsheet knows a cell holds a formula
+FILE_PREFIXES = ("_XLFN.", "_XLWS.")         # how a saved file marks newer functions
+NEXT_CELL = re.compile(r"[\r\n\t]")         # Enter and Tab move to the next cell when a value is typed
+# In running text a formula can start at any "=", or at a "+", "-" or "@" that begins a word.
+FORMULA_IN_TEXT = re.compile(r"=|(?:^|(?<=[\s\"'(]))[+\-@](?=[A-Za-z_(])")
+CALLED = re.compile(r"([A-Za-z_][A-Za-z0-9_.]*)\s*\(")
+CALLED_IN_TEXT = re.compile(r"([A-Za-z_][A-Za-z0-9_.]*)\(")   # in a sentence, "total (net)" is not a call
+QUOTED = re.compile(r'"[^"]*"')
+# What reaches outside in a formula: the "|" of a DDE link to another program, another file, or a drive.
+REACHING = re.compile(r"\||\.(?:xl[a-z]{1,2}|csv|ods|txt)\b|\b[a-z]:\\", re.IGNORECASE)
 
 # What each app's `starter` holds. A plug-in may say it itself with a `starter_help` attribute.
 STARTER_HELP = {
@@ -201,10 +229,41 @@ def _outside(data: dict, plugin: AppPlugin) -> list[str]:
     problems = []
     for where, part in parts:
         for text in _texts(part):
-            if LINK.search(text) or (text.lstrip().startswith(FORMULA_START) and REACHING.search(text)):
+            what = _reaches(text, plugin)
+            if what:
                 short = text if len(text) <= SHORT_TEXT else text[:SHORT_TEXT - 1] + "\u2026"
-                problems.append(f"{where}: {short} reaches outside {plugin.title}; a lesson must stay inside it")
+                problems.append(f"{where}: {short} {what}")
     return problems
+
+
+def _reaches(text: str, plugin: AppPlugin) -> str:
+    """How this text leaves the app, in words, or "" when it stays inside."""
+    outside = f"reaches outside {plugin.title}; a lesson must stay inside it"
+    if LINK.search(text):
+        return outside
+    for formula, called in _formulas(text):
+        bare = QUOTED.sub('""', formula)             # quoted text in a formula is only text
+        for name in called.findall(bare):
+            name = name.upper()
+            for prefix in FILE_PREFIXES:
+                name = name.removeprefix(prefix)
+            if name not in ALLOWED_FUNCTIONS:
+                return f"uses {name}, which a lesson may not use"
+        if REACHING.search(bare):
+            return outside
+    return ""
+
+
+def _formulas(text: str) -> list[tuple[str, re.Pattern]]:
+    """The formulas a piece of text could put in a cell, each with the pattern that finds the functions it
+    calls. A line starting with a formula sign is one, as a cell holds it or as typing puts it in the next
+    cell. In a sentence, everything from the first sign on could be typed as one, by the learner or by
+    Meta's agent, who types what the step says."""
+    found = [(line, CALLED) for line in NEXT_CELL.split(text) if line.lstrip().startswith(FORMULA_START)]
+    sign = FORMULA_IN_TEXT.search(text)
+    if sign:
+        found.append((text[sign.start():], CALLED_IN_TEXT))
+    return found
 
 
 def _texts(value) -> list[str]:
