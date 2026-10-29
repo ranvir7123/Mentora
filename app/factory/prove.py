@@ -4,7 +4,8 @@ For each step in order: its check must be false before the step; each predicted 
 from that state, must be noticed and rejected by the check (its verdict code is kept, so the learner
 sees that mistake's own "Not yet" line); then the step's replay must make the check true. A step that
 fails goes back to Muse Spark once with the reason; if it fails again it is dropped and the whole lesson
-is proven again from the start without it, so a later step that needed it is dropped too.
+is proven again from the start without it, so a later step that needed it is dropped too. A dropped step
+stays out: Muse Spark is told to leave it out of any later rewrite, and it is taken out if it comes back.
 """
 from __future__ import annotations
 
@@ -52,6 +53,7 @@ class _StepFailed(Exception):
 
 def prove(lesson: Lesson, plugin: AppPlugin, workdir: Path, *, fix: Fix | None = None) -> Proved:
     current, dropped, notes, why = lesson, [], [], {}
+    said: dict[str, str] = {}                    # each dropped step's instruction, for the writer
     sent_back: set[str] = set()
     fixes_left = len(lesson.steps)               # a fix may rename steps; this keeps the retries finite
     changed = False
@@ -64,14 +66,16 @@ def prove(lesson: Lesson, plugin: AppPlugin, workdir: Path, *, fix: Fix | None =
         if fix is not None and failed.step_id not in sent_back and fixes_left > 0:
             sent_back.add(failed.step_id)
             fixes_left -= 1
-            fixed = fix(current, f"{at}: {failed.reason}")
+            left_out = "".join(f'; leave out step {d} ("{said[d]}"), which was dropped' for d in dropped)
+            fixed = fix(current, f"{at}: {failed.reason}{left_out}")
             if isinstance(fixed, Lesson):
                 notes.append(f"{at} went back to Muse Spark: {failed.reason}")
-                current = fixed
+                current = replace(fixed, steps=tuple(s for s in fixed.steps if s.id not in dropped))
                 continue
             notes.append(f"{at} went back to Muse Spark, which could not fix it: {fixed.reason}")
         if failed.step_id not in dropped:
             dropped.append(failed.step_id)
+            said[failed.step_id] = next(s.instruction for s in current.steps if s.id == failed.step_id)
         why[failed.step_id] = failed.reason
         notes.append(f"{at} was dropped: {failed.reason}")
         current = replace(current, steps=tuple(s for s in current.steps if s.id != failed.step_id))

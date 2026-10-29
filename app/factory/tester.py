@@ -2,15 +2,18 @@
 
 One run opens the app, puts its window where a lesson puts it (the screen beside the 360 px strip) and
 gives the agent one step at a time, each step in a fresh conversation. The agent sees screenshots of the
-app's window only, taken only while the app is in front and no other program's window is over it, so
-nothing else on the screen reaches Meta. Every action it asks for is checked first: the pointer stays
-inside the app, keys that Windows itself acts on (leaving or closing the app) are refused, and in keyboard
-mode the mouse is not used at all. Only the lesson's own checks decide when a step is done, as for a learner.
+app's window only, taken only while the app is in front, still where it was put, and no other program's
+window is over it, so nothing else on the screen reaches Meta. Every action it asks for is checked first:
+it must be well formed, the pointer stays inside the app and over the app's own windows, keys that Windows
+itself acts on (leaving or closing the app) and keys that open the app's macros are refused, and in keyboard
+mode the mouse is not used at all. Once the run has looked at the app, another window coming to the front
+means a person took over, and the test stops. Only the lesson's own checks decide when a step is done.
 A test passes when at least 4 runs in 5 reach the end; it stops early once that can no longer happen.
 """
 from __future__ import annotations
 
 import base64
+import math
 import threading
 import time
 from concurrent.futures import Future
@@ -22,7 +25,7 @@ from app.core.lesson import Lesson, Step, TestResult
 from app.core.plugin import AppPlugin
 from app.core.runner import LessonRun, NotYet, StepChanged
 from app.core.types import Rect
-from app.factory.input import POINTER_ACTIONS, WindowsHands, vk_for
+from app.factory.input import POINTER_ACTIONS, UserTookOver, WindowsHands, vk_for
 from app.factory.prove import ProveError
 from app.meta.client import MetaError, NoKey, SpendLimitReached
 
@@ -33,12 +36,19 @@ MAX_SHOT = (1280, 800)
 TIMEOUT_S = 30.0
 PASS_OF = (4, 5)                 # at least 4 runs in 5
 COVER_WAIT_S, COVER_TRIES = 1.0, 10   # a notification over the app is gone within about 5 s
+PLACE_PX = 2                     # how far the window may be from where it was put
 
 OUTSIDE_NOTE = "That is outside the app. Use the app's window."
 KEYBOARD_NOTE = "This test uses the keyboard only. Use keys, not the mouse."
 LEAVES_NOTE = "That key would leave the app. Stay in the app's window."
 BUTTON_NOTE = "Use the left, right or middle mouse button."
 KEYS_NOTE = 'Send keys as a list, like ["ctrl", "c"].'
+SHAPE_NOTE = "Send each action as an object with a type, such as click or type."
+POINT_NOTE = "Give x and y as numbers in the screenshot."
+PATH_NOTE = "Give a drag's path as a list of points, each with x and y as numbers."
+SCROLL_NOTE = "Give scroll_x and scroll_y as numbers."
+TEXT_NOTE = "Give the text to type."
+MACROS_NOTE = "That key opens the app's macros, which a lesson never needs."
 
 Mode = Literal["mouse", "keyboard"]
 _BUTTONS = {"left", "right", "wheel", "middle"}
@@ -48,6 +58,8 @@ _BUTTONS = {"left", "right", "wheel", "middle"}
 _LEAVING = [{vk_for(k) for k in keys} for keys in
             (["win"], ["alt", "tab"], ["alt", "esc"], ["ctrl", "esc"], ["alt", "f4"], ["ctrl", "f4"], ["ctrl", "w"],
              ["alt", "space"], ["ctrl", "alt", "delete"])]
+# Keys that open an app's macros, where code runs. A lesson never needs them.
+APP_REFUSED = {"excel": [{vk_for(k) for k in keys} for keys in (["alt", "f11"], ["alt", "f8"])]}
 
 
 # Where things go on the screen.
@@ -79,12 +91,50 @@ def to_screen(action: dict, app: Rect, shot: tuple[int, int]) -> dict:
     return moved
 
 
-def allowed(action: dict, app: Rect, mode: Mode) -> tuple[bool, str]:
-    """Whether to do this action (in screen pixels); when not, the note the agent is told."""
+def holds(frame: Rect, app: Rect) -> bool:
+    """True when the window's frame still fills the app's place, give or take a pixel or two."""
+    return (frame.x <= app.x + PLACE_PX and frame.y <= app.y + PLACE_PX
+            and frame.x + frame.w >= app.x + app.w - PLACE_PX and frame.y + frame.h >= app.y + app.h - PLACE_PX)
+
+
+def well_formed(action: Any) -> str:
+    """Nothing when the action has every part it needs, each of the right kind; else the note the agent is told."""
+    if not isinstance(action, dict) or not isinstance(action.get("type"), str):
+        return SHAPE_NOTE
+    kind = action["type"]
+    if kind in POINTER_ACTIONS - {"drag"} and not _point(action):
+        return POINT_NOTE
+    if kind == "drag":
+        path = action.get("path")
+        if not isinstance(path, list) or not path or not all(_point(p) for p in path):
+            return PATH_NOTE
+    if kind == "scroll" and not all(_number(action.get(k, 0)) for k in ("scroll_x", "scroll_y")):
+        return SCROLL_NOTE
+    if kind == "keypress" and not (isinstance(action.get("keys"), list) and action["keys"]):
+        return KEYS_NOTE
+    if kind == "type" and not isinstance(action.get("text"), str):
+        return TEXT_NOTE
+    return ""
+
+
+def _point(p: Any) -> bool:
+    return isinstance(p, dict) and _number(p.get("x")) and _number(p.get("y"))
+
+
+def _number(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def allowed(action: dict, app: Rect, mode: Mode, refused=()) -> tuple[bool, str]:
+    """Whether to do this well-formed action (in screen pixels); when not, the note the agent is told.
+    `refused` lists the app's own key combinations to refuse (APP_REFUSED)."""
     kind = action.get("type")
     ok, note = _keys_allowed(action.get("keys") or [])       # any action may carry keys; all are checked
     if not ok:
         return ok, note
+    codes = {vk_for(str(k)) for k in action.get("keys") or []}
+    if any(combo <= codes for combo in refused):
+        return False, MACROS_NOTE
     if kind in POINTER_ACTIONS:
         if mode == "keyboard":
             return False, KEYBOARD_NOTE
@@ -160,6 +210,8 @@ class _Run:
         self.model, self.mode, self.number, self.budget = model, mode, number, budget
         self.closed = threading.Event()
         self.runner = LessonRun(lesson, plugin.checks)
+        self.looked = False                          # once the agent has seen the app, it is never taken back
+        self.refused = APP_REFUSED.get(plugin.app_id, ())
 
     def go(self) -> str | None:
         """None when the run reached the end of the lesson, else why it failed."""
@@ -248,15 +300,28 @@ class _Run:
                 if used >= self.budget:
                     return used
                 used += 1
-                action = to_screen(action, self.app, self.shot)
-                ok, note = allowed(action, self.app, self.mode)
-                if not ok:
+                note = well_formed(action)
+                if not note:
+                    action = to_screen(action, self.app, self.shot)
+                    ok, note = allowed(action, self.app, self.mode, self.refused)
+                if not note:
+                    self._ready()
+                    if not self._over_app(action):
+                        note = OUTSIDE_NOTE
+                if note:
                     self.say(f"refused {_said_action(action)}: {note}")
                     notes.append(note)
                     return used                          # the rest of the batch waits for a new look
-                self._ready()
                 self.hands.do(action)
         return used
+
+    def _over_app(self, action: dict) -> bool:
+        """True when every point of a pointer action is over the app's own windows, not one showing through."""
+        if action["type"] not in POINTER_ACTIONS:
+            return True
+        hwnd = self.session.hwnd()
+        points = action["path"] if action["type"] == "drag" else [action]
+        return all(self.hands.app_at(hwnd, p["x"], p["y"]) for p in points)
 
     def _brief(self, step: Step) -> str:
         app = self.plugin.title
@@ -270,16 +335,22 @@ class _Run:
         return f"tester_{self.lesson.id}_{self.mode}_run{self.number}_{step.id}_{turn}"
 
     def _ready(self) -> None:
-        """Before looking or acting: the app is still open, its window is in front and no other program's
-        window is over it, so a screenshot shows the app alone and a click lands in it."""
+        """Before looking or acting: the app is still open, its window is in front and still where it was
+        put, and no other program's window is over it, so a screenshot shows the app alone and a click
+        lands in it. The app is brought to the front only before the run's first look: after that, another
+        window in front means a person switched to it, and their typing must not land in the app."""
         title = self.plugin.title
         if self.closed.is_set():
             raise _RunFailed(f"{title} was closed")
         hwnd = self.session.hwnd()
         if not self.hands.in_front(hwnd):
+            if self.looked:
+                raise UserTookOver("Another window came to the front, so the test stopped.")
             self.hands.to_front(hwnd)
             if not self.hands.in_front(hwnd):
                 raise _RunFailed(f"{title}'s window would not come to the front, so nothing more was done")
+        if not holds(self.hands.bounds(hwnd), self.app):
+            raise _RunFailed(f"{title}'s window moved or changed size, so nothing more was done")
         waits = COVER_TRIES
         while self.hands.covered(hwnd, self.app):
             if waits == 0:
@@ -288,6 +359,7 @@ class _Run:
             time.sleep(COVER_WAIT_S)
 
     def _look(self) -> str:
+        self.looked = True
         png = self.hands.grab(self.app, *self.shot)
         return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
 
@@ -325,13 +397,16 @@ def _said(exc: BaseException) -> str:
     return str(exc) or type(exc).__name__
 
 
-def _said_action(action: dict) -> str:
+def _said_action(action: Any) -> str:
+    if not isinstance(action, dict):
+        return "an action that could not be read"
     kind = action.get("type")
-    if kind == "drag" and action.get("path"):
-        a, b = action["path"][0], action["path"][-1]
+    path = action.get("path")
+    if kind == "drag" and isinstance(path, list) and path and all(isinstance(p, dict) for p in path):
+        a, b = path[0], path[-1]
         return f"drag from {a.get('x')}, {a.get('y')} to {b.get('x')}, {b.get('y')}"
     if "x" in action and "y" in action:
         return f"{kind} at {action['x']}, {action['y']}"
-    if kind == "keypress":
-        return "keypress " + "+".join(str(k) for k in action.get("keys") or [])
+    if kind == "keypress" and isinstance(action.get("keys"), list) and action["keys"]:
+        return "keypress " + "+".join(str(k) for k in action["keys"])
     return str(kind)

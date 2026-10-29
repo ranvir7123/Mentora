@@ -116,6 +116,45 @@ def test_an_off_menu_check_is_retried_once_then_not_ready(prepared, saved, spy, 
     assert "step s1: check contains is not on the Fake app menu" in _sent_text(spy.responds[1]["input"])
 
 
+@pytest.mark.parametrize("where, text, answer", [
+    ("the starter", '=HYPERLINK("https://example.com","x")',
+     lambda t: {**_lesson(), "starter": {"k0": t}}),
+    ("step s1", "=WEBSERVICE(A1)",
+     lambda t: _lesson([_step(1, replay={"kind": "set", "args": {"key": "k1", "value": t}}), _step(2)])),
+    ("step s2", "=cmd|' /c calc'!A0",
+     lambda t: _lesson([_step(1), _step(2, mistakes=[{"replay": {"kind": "set", "args": {"key": "k2", "value": t}},
+                                                      "not_yet": "k2 should be 2."}])])),
+    ("the starter", "\\\\server\\share\\prices.xlsx",
+     lambda t: {**_lesson(), "starter": {"k0": t}}),
+    ("the starter", "=[Budget.xlsx]Sheet1!A1",
+     lambda t: {**_lesson(), "starter": {"k0": t}}),
+    ("step s1", "See www.example.com for the numbers.",
+     lambda t: _lesson([_step(1, hints=["Find k1.", t, "Set k1 to 1."]), _step(2)])),
+])
+def test_a_lesson_that_reaches_outside_the_app_is_sent_back_then_not_ready(prepared, saved, spy, lessons,
+                                                                          where, text, answer):
+    saved.file("writer_vid1_upload")
+    saved.answer("writer_vid1", answer(text))
+    saved.answer("writer_vid1_retry", answer(text))
+
+    got = write_lesson(prepared, INFO, FakePlugin(), spy, lessons_dir=lessons)
+
+    problem = f"{where}: {text} reaches outside Fake app; a lesson must stay inside it"
+    assert got == NotReady(f"Muse Spark's lesson broke the rules: {problem}.")
+    retry = spy.responds[1]["input"][-1]["content"]
+    assert retry == f"That lesson broke these rules:\n- {problem}\nWrite the whole lesson again, fixing every one."
+
+
+def test_formulas_that_stay_in_the_workbook_are_fine(prepared, saved, spy, lessons):
+    inside = ["=SUM(Table1[Sales])", "=B2+B3", "Save the file: it keeps your work.", "-5", "Call it Total."]
+    saved.file("writer_vid1_upload")
+    saved.answer("writer_vid1", {**_lesson(), "starter": {f"k{i}": t for i, t in enumerate(inside)}})
+
+    got = write_lesson(prepared, INFO, FakePlugin(), spy, lessons_dir=lessons)
+
+    assert isinstance(got, Lesson) and len(spy.responds) == 1
+
+
 def test_broken_json_is_not_ready_with_a_plain_reason(prepared, saved, spy, lessons):
     saved.file("writer_vid1_upload")
     saved.answer("writer_vid1", '{"title": "Fill in')

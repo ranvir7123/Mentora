@@ -188,3 +188,18 @@ def test_an_app_that_cannot_be_read_stops_the_proof(tmp_path):
 
     with pytest.raises(ProveError, match="Fake app could not be read: the workbook is busy"):
         prove(_lesson(), Unreadable(), tmp_path)
+
+
+def test_a_rewrite_never_brings_back_a_step_already_dropped(tmp_path):
+    # s1 and s2 are true before their steps. s1 comes back from Muse Spark still broken and is dropped; when
+    # s2 goes back, the whole lesson is written again with s1 fixed, and s1 stays out, as it was dropped.
+    bad = _lesson(4, starter={"k1": 2, "k2": 3})
+    fixer = Fixer(bad, _lesson(4))
+
+    proved = prove(bad, FakePlugin(), tmp_path, fix=fixer)
+
+    assert [s.id for s in proved.lesson.steps] == ["s0", "s2", "s3"]
+    assert proved.dropped == ["s1"] and proved.lesson.proof.passed is True
+    assert fixer.reasons == ["step s1: its check was already true before the step",
+                             'step s2: its check was already true before the step; leave out step s1 '
+                             '("Set k1 to 2."), which was dropped']

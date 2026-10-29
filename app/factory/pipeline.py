@@ -8,8 +8,12 @@ gets the same story as a log, one line at a time, for the command line and for R
 
 The test falls back as the design says: when the mouse test fails, a keyboard-only test runs; when that
 fails too, the lesson goes on the shelf on its proof alone, with the "proven" badge. A test that cannot
-finish (a person moved the mouse, the app stopped answering, Meta's spending limit) does the same, and says
-how to test the lesson later.
+finish (a person moved the mouse, the app stopped answering, Meta's spending limit, anything unexpected)
+does the same, and says how to test the lesson later.
+
+Lessons are made from videos only for apps checked for it. An app whose steps write and run code (VS Code)
+is not one of them: proving and testing a lesson runs its steps on this computer, and those steps would
+come from a stranger's video. Its lessons are written by hand and proven with `python -m app.factory prove`.
 """
 from __future__ import annotations
 
@@ -37,6 +41,8 @@ from app.meta.client import MetaClient, MetaError
 STAGES = ("download", "read", "write", "prove", "test", "publish")
 HANDS_OFF_S = 5
 TESTS = {"mouse": "Mouse test", "keyboard": "Keyboard-only test"}
+VIDEO_APPS = {"excel", "fake"}       # apps whose lessons may be made from a video
+NOT_FROM_VIDEOS = {"vscode": "its steps write and run code, and code taken from a video must not run on this computer"}
 
 Say = Callable[[str], None]
 
@@ -60,7 +66,10 @@ class Tested:
 def run_test(lesson: Lesson, plugin: AppPlugin, workdir: Path, client: MetaClient, *, say: Say, runs: int = 5,
              hands=None, play=None) -> Tested:
     """The mouse test, then the keyboard-only test if that fails. `say` hears each run and each switch.
-    A test that cannot finish raises, as `test_lesson` does: UserTookOver, ProveError or a MetaError."""
+    A test that cannot finish raises, as `test_lesson` does: UserTookOver, ProveError or a MetaError.
+    Both tests use the same hands, so a person who moves the mouse between them is noticed."""
+    if hands is None and play is None:
+        hands = tester.WindowsHands()
     play = play or tester.test_lesson
     results = {}
     for mode in ("mouse", "keyboard"):
@@ -104,6 +113,13 @@ class LessonFactory:
         self._on_stage = on_stage
         for name in STAGES:
             on_stage(name, "waiting", "")
+        if plugin.app_id not in VIDEO_APPS:
+            why = NOT_FROM_VIDEOS.get(plugin.app_id, "nobody has checked yet that its lessons are safe to make from "
+                                                     "a video")
+            reason = (f"Lessons for {plugin.title} are not made from videos: {why}. Write one by hand and prove "
+                      "it with: python -m app.factory prove <lesson folder>")
+            self._tell("download", "failed", reason)
+            return MakeResult(None, reason)
         try:
             return MakeResult(self._make(url, plugin), "")
         except _Stopped as stop:
@@ -194,6 +210,9 @@ class LessonFactory:
             said = str(exc)
         except (ProveError, MetaError, OSError) as exc:
             said = f"The test could not run: {str(exc).rstrip('.')}."
+        except Exception as exc:                     # the proof stands; a broken test must not throw it away
+            self.on_line(traceback.format_exc().rstrip())
+            said = f"The test could not run: something unexpected went wrong ({str(exc).rstrip('.')})."
         else:
             self._done("test", tested.detail)
             return tested.result

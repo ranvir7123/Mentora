@@ -24,11 +24,13 @@ class Recording(FakePlugin):
 
 class FakeHands:
     """A 2560 x 1600 screen at 200%, taskbar below 1540. Typing "k0=1" makes the fake app hold k0 = 1, as a
-    learner would; typing "close" closes the app."""
+    learner would; typing "close" closes the app, "move" drags its window aside and "away" puts another
+    window in front. Points inside `foreign` are over another window, such as the desktop."""
 
-    def __init__(self, plugin, took_over_at=None, in_front=True, covered_for=0):
+    def __init__(self, plugin, took_over_at=None, in_front=True, covered_for=0, foreign=None):
         self.plugin, self.done, self.grabs, self.took_over_at = plugin, [], [], took_over_at
         self.front_ok, self.fronted, self.covered_for, self.seen = in_front, 0, covered_for, []
+        self.frame, self.foreign = APP, foreign
 
     def work_area(self):
         return Rect(0, 0, 2560, 1540)
@@ -55,12 +57,23 @@ class FakeHands:
     def to_front(self, hwnd):
         self.fronted += 1
 
+    def bounds(self, hwnd):
+        return self.frame
+
+    def app_at(self, hwnd, x, y):
+        f = self.foreign
+        return f is None or not (f.x <= x < f.x + f.w and f.y <= y < f.y + f.h)
+
     def do(self, action):
         if self.took_over_at is not None and len(self.done) == self.took_over_at:
             raise UserTookOver("You moved the mouse, so the test stopped.")
         self.done.append(action)
         if action["type"] == "type" and action["text"] == "close":
             self.plugin.session.closed_by_learner()
+        elif action["type"] == "type" and action["text"] == "move":
+            self.frame = Rect(300, 200, 1840, 1540)
+        elif action["type"] == "type" and action["text"] == "away":
+            self.front_ok = False
         elif action["type"] == "type":
             key, value = action["text"].split("=")
             self.plugin.session.learner_sets(key, int(value))
@@ -335,3 +348,85 @@ def test_running_out_of_budget_stops_the_whole_test(tmp_path):
         run(Script(SpendLimitReached("The call log has reached the 100 dollar limit.")), plugin=plugin,
             workdir=tmp_path, runs=5)
     assert plugin.opened == 1 and plugin.session.closed is True
+
+
+def test_a_window_that_moved_or_changed_size_fails_the_run_with_nothing_more_done(tmp_path):
+    script = Script(act({"type": "type", "text": "move"}, typed("k0", 1)))     # the agent dragged the title bar
+
+    result, hands, lines = run(script, workdir=tmp_path)
+
+    assert result.passed is False
+    assert [a["text"] for a in hands.done] == ["move"] and len(hands.grabs) == 1
+    assert "run 1 failed: Fake app's window moved or changed size, so nothing more was done" in lines
+    assert tester.holds(Rect(1, 2, 1838, 1537), APP)                          # a pixel or two off is the same place
+    assert not tester.holds(Rect(0, 0, 1840, 1200), APP)
+
+
+def test_a_click_over_another_window_is_refused_even_inside_the_apps_area(tmp_path):
+    plugin = Recording()
+    hands = FakeHands(plugin, foreign=Rect(1000, 1000, 400, 300))             # the desktop shows through here
+    script = Script(act(click(600, 600), typed("k0", 1)), act(typed("k0", 1)), act(typed("k1", 2)),
+                    act(typed("k2", 3)))
+
+    result, _, lines = run(script, plugin=plugin, hands=hands, workdir=tmp_path)
+
+    assert result.passed
+    assert [a["type"] for a in hands.done] == ["type", "type", "type"]
+    assert "refused click at 1200, 1200: That is outside the app. Use the app's window." in lines
+    assert tester.OUTSIDE_NOTE in _texts(script.calls[1]["input"])
+
+
+def test_another_window_coming_to_the_front_stops_the_test_and_the_app_is_not_taken_back(tmp_path):
+    plugin = Recording()
+    hands = FakeHands(plugin)
+    script = Script(act({"type": "type", "text": "away"}, typed("k0", 1)))     # a person pressed Alt+Tab
+
+    with pytest.raises(UserTookOver, match="^Another window came to the front, so the test stopped.$"):
+        run(script, plugin=plugin, hands=hands, workdir=tmp_path, runs=5)
+
+    assert hands.fronted == 0 and [a["text"] for a in hands.done] == ["away"]
+    assert plugin.opened == 1 and plugin.session.closed is True
+
+
+@pytest.mark.parametrize("action, note", [
+    ({"type": "click", "x": "10", "y": 5}, tester.POINT_NOTE),
+    ({"type": "click", "x": True, "y": 5}, tester.POINT_NOTE),
+    ({"type": "double_click", "y": 5}, tester.POINT_NOTE),
+    ({"type": "move", "x": float("nan"), "y": 5}, tester.POINT_NOTE),
+    ({"type": "drag", "path": [1, 2]}, tester.PATH_NOTE),
+    ({"type": "drag", "path": "10,10 20,20"}, tester.PATH_NOTE),
+    ({"type": "drag", "path": [{"x": 1, "y": None}]}, tester.PATH_NOTE),
+    ({"type": "scroll", "x": 5, "y": 5, "scroll_y": "down"}, tester.SCROLL_NOTE),
+    ({"type": "keypress"}, tester.KEYS_NOTE),
+    ({"type": "keypress", "keys": []}, tester.KEYS_NOTE),
+    ({"type": "type"}, tester.TEXT_NOTE),
+    ({"type": "type", "text": 5}, tester.TEXT_NOTE),
+    ({"x": 5, "y": 5}, tester.SHAPE_NOTE),
+    ("click at 5, 5", tester.SHAPE_NOTE),
+])
+def test_a_malformed_action_is_refused_and_the_run_goes_on(tmp_path, action, note):
+    script = Script(act(action), act(typed("k0", 1)), act(typed("k1", 2)), act(typed("k2", 3)))
+
+    result, hands, lines = run(script, workdir=tmp_path)
+
+    assert result.passed
+    assert [a["type"] for a in hands.done] == ["type", "type", "type"]
+    told = [part["text"] for m in script.calls[1]["input"] if m.get("role") == "user" for part in m["content"]]
+    assert told == [note]
+    assert any(line.startswith("refused ") and line.endswith(note) for line in lines)
+
+
+class Excel(Recording):
+    app_id, title = "excel", "Excel"
+
+
+def test_excels_macro_keys_are_refused_in_excel(tmp_path):
+    script = Script(act({"type": "keypress", "keys": ["alt", "f11"]}), act({"type": "keypress", "keys": ["alt", "f8"]}),
+                    act(typed("k0", 1)), act(typed("k1", 2)), act(typed("k2", 3)))
+
+    result, hands, lines = run(script, plugin=Excel(), workdir=tmp_path)
+
+    assert result.passed and [a["type"] for a in hands.done] == ["type", "type", "type"]
+    assert "refused keypress alt+f11: That key opens the app's macros, which a lesson never needs." in lines
+    assert "refused keypress alt+f8: That key opens the app's macros, which a lesson never needs." in lines
+    assert tester.allowed({"type": "keypress", "keys": ["alt", "f11"]}, APP, "mouse") == (True, "")   # elsewhere

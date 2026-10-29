@@ -1,12 +1,15 @@
 """The parts of real input that never move the mouse or press a key."""
 import struct
 import sys
+import types
 import zlib
 
 import pytest
 
 from app.core.types import Rect
-from app.factory.input import Shown, covers, encode_png, held_keys, vk_for, wheel_clicks
+from app.factory import input as hands_module
+from app.factory.input import (Shown, UserTookOver, WindowsHands, covers, encode_png, held_keys, owned_by, vk_for,
+                               wheel_clicks)
 
 
 def _chunks(png):
@@ -76,7 +79,6 @@ def test_scroll_pixels_become_wheel_clicks():
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows screenshots")
 def test_a_real_screenshot_has_the_size_asked_for():
-    from app.factory.input import WindowsHands
     png = WindowsHands().grab(Rect(0, 0, 128, 80), 64, 40)     # read-only: nothing is clicked or saved
     assert struct.unpack(">II", _chunks(png)[b"IHDR"][:8]) == (64, 40)
 
@@ -84,6 +86,116 @@ def test_a_real_screenshot_has_the_size_asked_for():
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows windows")
 def test_the_real_windows_above_one_can_be_read():
     import ctypes
-    from app.factory.input import WindowsHands
     front = ctypes.WinDLL("user32").GetForegroundWindow()
-    assert WindowsHands().covered(front, Rect(-100_000, -100_000, 10, 10)) is False   # nothing is that far off
+    hands = WindowsHands()                                      # read-only: nothing is clicked or moved
+    assert hands.covered(front, Rect(-100_000, -100_000, 10, 10)) is False   # nothing is that far off
+    assert hands.in_front(front) is True
+    assert hands.bounds(front).w > 0
+    assert hands.app_at(front, -100_000, -100_000) is False                 # no window is there
+
+
+def test_a_window_counts_as_the_apps_only_when_the_app_owns_it():
+    app, dialog, picker, editor, other = 1, 2, 3, 4, 5
+    owner = {dialog: app, picker: dialog, editor: 0, other: 0, 8: 9, 9: 8}.get
+    assert owned_by(app, app, owner) and owned_by(dialog, app, owner)
+    assert owned_by(picker, app, owner)                     # a box opened from a dialog box
+    assert not owned_by(editor, app, owner)                 # the same program's own separate window, such as Excel's macro editor
+    assert not owned_by(other, app, owner) and not owned_by(0, app, owner) and not owned_by(8, app, owner)
+
+
+class FakeWindows:
+    """Stands in for Windows under real hands: where the pointer is, and every input sent."""
+
+    def __init__(self):
+        self.at, self.sent, self.fail_at, self.failing_sends, self.on_send = (100, 100), [], None, 0, None
+
+    def hands(self):
+        hands = object.__new__(WindowsHands)             # no real Windows calls are made
+        hands._user32, hands._cursor, hands._send, hands._last = self, lambda: self.at, self.send, self.at
+        return hands
+
+    def SetCursorPos(self, x, y):                        # as Windows' own function is called
+        if (x, y) == self.fail_at:
+            raise OSError("Windows would not move the pointer")
+        self.at = (x, y)
+        return True
+
+    def send(self, inputs):
+        if self.failing_sends:
+            self.failing_sends -= 1
+            self.sent.append(self._said(inputs[0]))      # Windows took only the first
+            raise OSError("Windows blocked the test's input")
+        self.sent += [self._said(i) for i in inputs]
+        if self.on_send:
+            self.on_send()
+
+    @staticmethod
+    def _said(i):
+        if i.type == 0:
+            return {0x0002: "left down", 0x0004: "left up"}.get(i.u.mi.dwFlags, i.u.mi.dwFlags)
+        key = chr(i.u.ki.wScan) if i.u.ki.dwFlags & 0x0004 else i.u.ki.wVk
+        return key, "up" if i.u.ki.dwFlags & 0x0002 else "down"
+
+    def mouse(self):
+        return [s for s in self.sent if isinstance(s, str)]
+
+
+@pytest.fixture
+def no_pauses(monkeypatch):
+    pause = types.SimpleNamespace(sleep=lambda s: None)
+    monkeypatch.setattr(hands_module, "time", pause)
+    return pause
+
+
+DRAG = {"type": "drag", "path": [{"x": 10, "y": 10}, {"x": 50, "y": 10}, {"x": 90, "y": 10}]}
+
+
+def test_a_person_moving_the_mouse_while_an_action_finishes_stops_the_next_one(no_pauses):
+    win = FakeWindows()
+    hands = win.hands()
+    no_pauses.sleep = lambda s: setattr(win, "at", (500, 500))   # during the pause after the click
+    hands.do({"type": "click", "x": 200, "y": 200})
+
+    with pytest.raises(UserTookOver, match="You moved the mouse"):
+        hands.do({"type": "type", "text": "a"})
+    assert ("a", "down") not in win.sent
+
+
+def test_typing_stops_when_the_mouse_moves_between_letters(no_pauses):
+    win = FakeWindows()
+    hands = win.hands()
+    win.on_send = lambda: setattr(win, "at", (500, 500))         # a person moves it as the first letter goes in
+
+    with pytest.raises(UserTookOver):
+        hands.do({"type": "type", "text": "abc"})
+    assert [key for key, state in win.sent if state == "down"] == ["a"]
+
+
+def test_a_drag_lets_go_of_the_button_when_a_person_takes_the_mouse(no_pauses):
+    win = FakeWindows()
+    hands = win.hands()
+    win.on_send = lambda: setattr(win, "at", (900, 900))         # grabbed once the button is down
+
+    with pytest.raises(UserTookOver):
+        hands.do(DRAG)
+    assert win.mouse() == ["left down", "left up"]
+
+
+def test_a_drag_lets_go_of_the_button_when_windows_stops_it(no_pauses):
+    win = FakeWindows()
+    hands = win.hands()
+    win.fail_at = (50, 10)
+
+    with pytest.raises(OSError, match="would not move the pointer"):
+        hands.do(DRAG)
+    assert win.mouse() == ["left down", "left up"]
+
+
+def test_keys_are_let_go_when_pressing_them_fails(no_pauses):
+    win = FakeWindows()
+    hands = win.hands()
+    win.failing_sends = 1                                         # only Ctrl went down
+
+    with pytest.raises(OSError, match="blocked"):
+        hands.do({"type": "keypress", "keys": ["ctrl", "c"]})
+    assert win.sent == [(0x11, "down"), (0x43, "up"), (0x11, "up")]

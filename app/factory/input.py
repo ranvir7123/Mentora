@@ -1,8 +1,10 @@
 """Real mouse, keyboard and screenshots on Windows, for Meta's agent when it tests a lesson.
 
 Everything here is in physical screen pixels. The tester decides what is allowed; these hands only do it.
-They stop the test the moment the mouse moves by itself, because that means a person is using the computer,
-and they tell the tester when another program's window is over the app, so no screenshot can show it.
+They stop the test the moment the mouse moves by itself, because that means a person is using the computer:
+before every action, between the points of a drag and between typed letters. They tell the tester when
+another program's window is over the app, so no screenshot can show it, and whether the window under a
+point is the app's own. A key or button pressed down is always let go, even when an action stops partway.
 """
 from __future__ import annotations
 
@@ -13,7 +15,7 @@ import time
 import zlib
 from ctypes import wintypes
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Callable, Iterable
 
 from app.core.types import Rect
 
@@ -94,6 +96,18 @@ def covers(above: Iterable[Shown], process: int, rect: Rect) -> bool:
                for w in above)
 
 
+def owned_by(window: int, app: int, owner_of: Callable[[int], int]) -> bool:
+    """True when `window` is the app's window or one the app owns (a dialog box, a menu), however deep.
+    Another window of the same program that the app does not own, such as Excel's macro editor, is not."""
+    seen = set()
+    while window and window not in seen and len(seen) < _MAX_OWNERS:
+        if window == app:
+            return True
+        seen.add(window)
+        window = owner_of(window)
+    return False
+
+
 def wheel_clicks(pixels: float) -> int:
     """Wheel clicks for a scroll of this many screenshot pixels; any scroll is at least one click."""
     if not pixels:
@@ -143,9 +157,10 @@ _BUTTONS = {"left": (0x0002, 0x0004), "right": (0x0008, 0x0010), "wheel": (0x002
             "middle": (0x0020, 0x0040)}
 _SRCCOPY, _CAPTUREBLT, _HALFTONE = 0x00CC0020, 0x40000000, 4
 _SPI_GETWORKAREA = 0x0030
-_GA_ROOT, _GW_HWNDPREV = 2, 3
+_GA_ROOT, _GW_HWNDPREV, _GW_OWNER = 2, 3, 4
 _DWMWA_EXTENDED_FRAME_BOUNDS, _DWMWA_CLOAKED = 9, 14
 _MAX_ABOVE = 2000                # windows looked at above the app; the z-order can change while it is read
+_MAX_OWNERS = 50                 # owners followed up from a window
 
 
 def _api():
@@ -160,6 +175,7 @@ def _api():
         (user32.SetCursorPos, wintypes.BOOL, [ctypes.c_int, ctypes.c_int]),
         (user32.SendInput, wintypes.UINT, [wintypes.UINT, ctypes.POINTER(_INPUT), ctypes.c_int]),
         (user32.GetForegroundWindow, wintypes.HWND, []),
+        (user32.WindowFromPoint, wintypes.HWND, [wintypes.POINT]),
         (user32.SetForegroundWindow, wintypes.BOOL, [wintypes.HWND]),
         (user32.BringWindowToTop, wintypes.BOOL, [wintypes.HWND]),
         (user32.ShowWindow, wintypes.BOOL, [wintypes.HWND, ctypes.c_int]),
@@ -253,9 +269,23 @@ class WindowsHands:
         return encode_png(pixels.raw, width, height)
 
     def in_front(self, hwnd: int) -> bool:
-        """True when the window in front is this one or one of its program's own (a dialog box)."""
+        """True when the window in front is the app's or one the app owns (a dialog box, a menu)."""
         front = self._user32.GetForegroundWindow()
-        return bool(hwnd and front) and self._process(front) == self._process(hwnd)
+        return bool(hwnd and front) and self._owned(front, hwnd)
+
+    def bounds(self, hwnd: int) -> Rect:
+        """Where the app's window shows on the screen now, without its invisible edges."""
+        return self._shown(self._user32.GetAncestor(hwnd, _GA_ROOT)).bounds
+
+    def app_at(self, hwnd: int, x: float, y: float) -> bool:
+        """True when the window under this point is the app's or one it owns, so a click there lands in the app."""
+        under = self._user32.WindowFromPoint(wintypes.POINT(round(x), round(y)))
+        return bool(hwnd and under) and self._owned(under, hwnd)
+
+    def _owned(self, window: int, app: int) -> bool:
+        u = self._user32
+        return owned_by(u.GetAncestor(window, _GA_ROOT), u.GetAncestor(app, _GA_ROOT),
+                        lambda h: u.GetWindow(h, _GW_OWNER))
 
     def covered(self, hwnd: int, rect: Rect) -> bool:
         """True when a window of another program (a notification, an always-on-top window) shows over `rect`.
@@ -297,14 +327,12 @@ class WindowsHands:
                 u.AttachThreadInput(mine, theirs, False)
 
     def do(self, action: dict) -> None:
-        """One action, in screen pixels. Raises UserTookOver if the pointer moved since the last one."""
-        x, y = self._cursor()
-        if abs(x - self._last[0]) >= MOVED_PX or abs(y - self._last[1]) >= MOVED_PX:
-            raise UserTookOver("You moved the mouse, so the test stopped.")
+        """One action, in screen pixels. Raises UserTookOver if the pointer moved since the hands last put it."""
+        self._check()
         kind = action["type"]
         held = held_keys(action)
-        self._keys(held, up=False)
         try:
+            self._keys(held, up=False)
             if kind in ("click", "double_click"):
                 self._point(action["x"], action["y"])
                 down, up = _BUTTONS[action.get("button", "left")]
@@ -313,11 +341,14 @@ class WindowsHands:
             elif kind == "drag":
                 path = action["path"]
                 self._point(path[0]["x"], path[0]["y"])
-                self._send([self._mouse(_BUTTONS["left"][0])])
-                for p in path[1:]:
-                    time.sleep(0.05)
-                    self._point(p["x"], p["y"])
-                self._send([self._mouse(_BUTTONS["left"][1])])
+                try:
+                    self._send([self._mouse(_BUTTONS["left"][0])])
+                    for p in path[1:]:
+                        time.sleep(0.05)
+                        self._check()
+                        self._point(p["x"], p["y"])
+                finally:
+                    self._let_go([self._mouse(_BUTTONS["left"][1])])
             elif kind == "move":
                 self._point(action["x"], action["y"])
             elif kind == "scroll":
@@ -329,8 +360,10 @@ class WindowsHands:
                     self._send([self._mouse(_HWHEEL, 120 * right)])
             elif kind == "keypress":
                 keys = [vk_for(k) for k in action["keys"]]
-                self._keys(keys, up=False)
-                self._keys(list(reversed(keys)), up=True)
+                try:
+                    self._keys(keys, up=False)
+                finally:
+                    self._let_go(self._key_inputs(list(reversed(keys)), up=True))
             elif kind == "type":
                 self._type(action["text"])
             elif kind == "wait":
@@ -338,9 +371,13 @@ class WindowsHands:
             elif kind != "screenshot":
                 raise ValueError(f"{kind} is not an action the hands know")
         finally:
-            self._keys(list(reversed(held)), up=True)
+            self._let_go(self._key_inputs(list(reversed(held)), up=True))
         time.sleep(PAUSE_S)
-        self._last = self._cursor()
+
+    def _check(self) -> None:
+        x, y = self._cursor()
+        if abs(x - self._last[0]) >= MOVED_PX or abs(y - self._last[1]) >= MOVED_PX:
+            raise UserTookOver("You moved the mouse, so the test stopped.")
 
     def _process(self, hwnd: int) -> int:
         pid = wintypes.DWORD()
@@ -356,6 +393,7 @@ class WindowsHands:
     def _point(self, x: float, y: float) -> None:
         if not self._user32.SetCursorPos(round(x), round(y)):
             raise ctypes.WinError(ctypes.get_last_error())
+        self._last = self._cursor()                  # where the hands put it; from here it must not move
 
     @staticmethod
     def _mouse(flags: int, data: int = 0) -> _INPUT:
@@ -365,13 +403,24 @@ class WindowsHands:
     def _key(vk: int = 0, scan: int = 0, flags: int = 0) -> _INPUT:
         return _INPUT(type=_INPUT_KEYBOARD, u=_INPUTUNION(ki=_KEYBDINPUT(wVk=vk, wScan=scan, dwFlags=flags)))
 
+    def _key_inputs(self, vks: list[int], *, up: bool) -> list[_INPUT]:
+        return [self._key(vk, flags=(_KEYUP if up else 0) | (_EXTENDEDKEY if vk in _EXTENDED else 0)) for vk in vks]
+
     def _keys(self, vks: list[int], *, up: bool) -> None:
         if vks:
-            self._send([self._key(vk, flags=(_KEYUP if up else 0) | (_EXTENDEDKEY if vk in _EXTENDED else 0))
-                        for vk in vks])
+            self._send(self._key_inputs(vks, up=up))
+
+    def _let_go(self, inputs: list[_INPUT]) -> None:
+        """Key-up and button-up events, sent even after an error; a failure here must not hide the first one."""
+        if inputs:
+            try:
+                self._send(inputs)
+            except OSError:
+                pass
 
     def _type(self, text: str) -> None:
         for ch in text:
+            self._check()
             if ch in "\r\n\t":
                 vk = 0x09 if ch == "\t" else 0x0D
                 self._send([self._key(vk), self._key(vk, flags=_KEYUP)])

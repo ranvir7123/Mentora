@@ -89,15 +89,16 @@ def test_a_test_that_reaches_a_verdict_is_saved(tmp_path, monkeypatch, capsys):
     calls = []
 
     def passes(lesson, plugin, workdir, client, *, runs, mode, hands, on_line):
-        calls.append((runs, mode))
+        calls.append((runs, mode, hands))
         on_line("run 1 passed")
         return TestResult(True, AT, mode, runs, runs)
 
     monkeypatch.setattr(tester, "test_lesson", passes)
+    monkeypatch.setattr(tester, "WindowsHands", lambda: "the hands")      # never the real mouse in a test
 
     assert main(["test", str(folder), "--runs", "3"]) == 0
 
-    assert calls == [(3, "mouse")]
+    assert calls == [(3, "mouse", "the hands")]
     assert load_lesson(folder).test == TestResult(True, AT, "mouse", 3, 3)
     out = capsys.readouterr().out
     assert "Hands off the mouse and keyboard" in out
@@ -112,6 +113,7 @@ def test_a_test_stopped_by_a_person_saves_nothing(tmp_path, monkeypatch, capsys)
         raise UserTookOver("You moved the mouse, so the test stopped.")
 
     monkeypatch.setattr(tester, "test_lesson", stopped)
+    monkeypatch.setattr(tester, "WindowsHands", lambda: "the hands")
 
     assert main(["test", str(folder)]) == 1
 

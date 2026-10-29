@@ -4,6 +4,10 @@ It is sent the small MP4 (or, when Meta refuses the video, the still frames), th
 times, the plug-in's menus and the lesson rules, and asked for JSON matching `lesson_json_schema`. The
 answer is read and checked with the same rules every lesson keeps; a broken answer goes back once with
 its problems listed, and a second broken answer becomes a plain "not ready" reason.
+
+A written lesson must stay inside the app. Proving and testing it types its steps into the real app, and
+the steps come from a stranger's video, so no text in it may hold a link, a network path, another
+workbook, or a formula that fetches, calls or runs something outside the workbook.
 """
 from __future__ import annotations
 
@@ -22,6 +26,15 @@ from app.meta.client import Answer, MetaClient, MetaRefused
 
 WRITER_MODEL = "muse-spark-1.3"
 SHOWN_PROBLEMS = 3
+SHORT_TEXT = 60
+
+# Text that reaches outside the app anywhere in a lesson: a web or file link, or a network path.
+LINK = re.compile(r"https?://|ftp://|file:/|www\.|\\\\[^\\\s]+\\", re.IGNORECASE)
+# What reaches outside in a formula: functions that fetch, call or run something, the "|" of a DDE link
+# to another program, and a reference to another file or drive.
+REACHING = re.compile(r"\b(?:HYPERLINK|WEBSERVICE|IMAGE|RTD|CALL|REGISTER(?:\.ID)?|EXEC|PY)\s*\(|\|"
+                      r"|\.(?:xl[a-z]*|csv|ods)\b|\b[a-z]:\\", re.IGNORECASE)
+FORMULA_START = ("=", "+", "-", "@")         # how a spreadsheet knows a cell holds a formula
 
 # What each app's `starter` holds. A plug-in may say it itself with a `starter_help` attribute.
 STARTER_HELP = {
@@ -165,7 +178,7 @@ def _read(answer: Answer, info: VideoInfo, plugin: AppPlugin, lessons_dir: Path)
         }, lessons_dir / lesson_id)
     except LessonError as exc:
         return None, [str(exc)]
-    return lesson, validate(lesson, plugin) + _writer_problems(lesson, info)
+    return lesson, validate(lesson, plugin) + _writer_problems(lesson, info) + _outside(data, plugin)
 
 
 def _writer_problems(lesson: Lesson, info: VideoInfo) -> list[str]:
@@ -179,6 +192,30 @@ def _writer_problems(lesson: Lesson, info: VideoInfo) -> list[str]:
             n = len(step.mistakes)
             problems.append(f"{at}: it has {'no' if n == 0 else n} predicted mistakes; give 1 or 2")
     return problems
+
+
+def _outside(data: dict, plugin: AppPlugin) -> list[str]:
+    """Each piece of the lesson's text that reaches outside the app, named by where it is."""
+    parts = [("the title", data.get("title")), ("the goal", data.get("goal")), ("the starter", data.get("starter"))]
+    parts += [(f"step {step.get('id')}", step) for step in data.get("steps") or [] if isinstance(step, Mapping)]
+    problems = []
+    for where, part in parts:
+        for text in _texts(part):
+            if LINK.search(text) or (text.lstrip().startswith(FORMULA_START) and REACHING.search(text)):
+                short = text if len(text) <= SHORT_TEXT else text[:SHORT_TEXT - 1] + "\u2026"
+                problems.append(f"{where}: {short} reaches outside {plugin.title}; a lesson must stay inside it")
+    return problems
+
+
+def _texts(value) -> list[str]:
+    """Every string in a piece of JSON, its keys included (a key can be a cell or a sheet name)."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, Mapping):
+        return [t for k, v in value.items() for t in _texts(k) + _texts(v)]
+    if isinstance(value, list):
+        return [t for v in value for t in _texts(v)]
+    return []
 
 
 def unique_id(title: str, lessons_dir: Path) -> str:

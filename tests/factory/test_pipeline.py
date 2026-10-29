@@ -5,11 +5,13 @@ import pytest
 
 from app.core.fake_plugin import FakePlugin
 from app.core.lesson import TestResult, load_lesson, shelf_badge
+from app.factory import tester as tester_module
 from app.factory.input import UserTookOver
-from app.factory.pipeline import STAGES, LessonFactory
+from app.factory.pipeline import STAGES, LessonFactory, run_test
 from app.factory.prove import ProveError
 from app.factory.video import Fetched, VideoInfo, VideoRefused
 from app.meta.client import SpendLimitReached
+from tests.core.conftest import build_fake_lesson
 
 URL = "https://youtu.be/vid1"
 INFO = VideoInfo("vid1", URL, "Fill in the keys", "Key Teacher", "https://youtube.com/@keys",
@@ -97,13 +99,13 @@ class Stages:
 @pytest.fixture
 def make(tmp_path, saved, clip):
     """Runs the factory on the fake app; returns the result, what the screen was told, and the log."""
-    def go(*, tester=None, fetch=None, **kwargs):
+    def go(*, tester=None, fetch=None, plugin=None, **kwargs):
         lines, stages = [], Stages()
         tester = tester or FakeTester(outcome(5))
         factory = LessonFactory(saved.client, tmp_path / "lessons", tmp_path / "recordings",
                                 fetch=fetch or FakeFetch(clip), tester=tester, hands="the hands", hands_off_s=0,
                                 on_line=lines.append, **kwargs)
-        result = factory.make(URL, FakePlugin(), stages)
+        result = factory.make(URL, plugin or FakePlugin(), stages)
         return result, stages, lines, tester
     return go
 
@@ -262,16 +264,72 @@ def test_a_lesson_muse_spark_will_not_write_stops_at_the_write_stage(saved, make
     assert stages.last()["write"] == ("failed", result.reason)
 
 
-def test_something_unexpected_fails_its_stage_plainly_and_is_logged(tmp_path, saved, make):
+def test_something_unexpected_fails_its_stage_plainly_and_is_logged(tmp_path, clip, make):
+    result, stages, lines, _ = make(fetch=FakeFetch(clip, error=RuntimeError("the download fell over")))
+
+    assert result.lesson is None
+    assert result.reason == "Something went wrong in the download stage: the download fell over"
+    assert stages.last()["download"] == ("failed", result.reason)
+    assert any("Traceback" in line and "the download fell over" in line for line in lines)
+    assert not (tmp_path / "lessons").exists()
+
+
+def test_something_unexpected_in_the_test_keeps_the_proven_lesson_and_is_logged(tmp_path, saved, make):
     _written(saved)
 
     result, stages, lines, _ = make(tester=FakeTester(RuntimeError("the tester fell over")))
 
-    assert result.lesson is None
-    assert result.reason == "Something went wrong in the test stage: the tester fell over"
-    assert stages.last()["test"] == ("failed", result.reason)
+    assert shelf_badge(result.lesson) == "proven"
+    folder = (tmp_path / "lessons" / "fill-in-the-keys").as_posix()
+    assert stages.last()["test"] == ("done", "The test could not run: something unexpected went wrong (the tester "
+                                             "fell over). The lesson goes on the shelf with the proven badge; test it "
+                                             f"later with: python -m app.factory test {folder}")
     assert any("Traceback" in line and "the tester fell over" in line for line in lines)
-    assert not (tmp_path / "lessons").exists()
+
+
+def test_one_pair_of_hands_plays_both_tests(tmp_path, monkeypatch):
+    made, played = [], []
+
+    class Hands:
+        def __init__(self):
+            made.append(self)
+
+    def play(lesson, plugin, workdir, client, *, runs, mode, hands, on_line):
+        played.append(hands)
+        return outcome(0, mode=mode)
+
+    monkeypatch.setattr(tester_module, "WindowsHands", Hands)
+    monkeypatch.setattr(tester_module, "test_lesson", play)
+
+    run_test(build_fake_lesson({}, [{}, {}, {}]), FakePlugin(), tmp_path, None, say=lambda line: None)
+
+    assert len(made) == 1 and played == [made[0], made[0]]    # so a person moving the mouse in between is seen
+
+
+class CodeApp(FakePlugin):
+    app_id, title = "vscode", "VS Code"
+
+
+class NewApp(FakePlugin):
+    app_id, title = "paint", "Paint"
+
+
+@pytest.mark.parametrize("plugin, why", [
+    (CodeApp(), "its steps write and run code, and code taken from a video must not run on this computer"),
+    (NewApp(), "nobody has checked yet that its lessons are safe to make from a video"),
+])
+def test_lessons_are_made_from_videos_only_for_apps_checked_for_it(tmp_path, clip, make, plugin, why):
+    fetch = FakeFetch(clip)
+
+    result, stages, _, tester = make(fetch=fetch, plugin=plugin)
+
+    assert result.lesson is None
+    assert result.reason == (f"Lessons for {plugin.title} are not made from videos: {why}. Write one by hand and "
+                             "prove it with: python -m app.factory prove <lesson folder>")
+    assert stages.last()["download"] == ("failed", result.reason)
+    assert stages.last()["read"] == ("waiting", "")
+    assert fetch.calls == [] and tester.calls == []
+    assert not (tmp_path / "recordings").exists()
 
 
 def test_a_name_taken_while_the_lesson_was_made_gets_a_new_folder(tmp_path, saved, make):
