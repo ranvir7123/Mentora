@@ -1,7 +1,8 @@
 """Real mouse, keyboard and screenshots on Windows, for Meta's agent when it tests a lesson.
 
 Everything here is in physical screen pixels. The tester decides what is allowed; these hands only do it.
-They stop the test the moment the mouse moves by itself, because that means a person is using the computer.
+They stop the test the moment the mouse moves by itself, because that means a person is using the computer,
+and they tell the tester when another program's window is over the app, so no screenshot can show it.
 """
 from __future__ import annotations
 
@@ -11,6 +12,8 @@ import sys
 import time
 import zlib
 from ctypes import wintypes
+from dataclasses import dataclass
+from typing import Iterable
 
 from app.core.types import Rect
 
@@ -18,6 +21,7 @@ PAUSE_S = 0.25                   # after each action, so the app has handled it 
 WAIT_S = 1.0                     # what the agent's "wait" means
 MOVED_PX = 3                     # the pointer moving this far by itself means a person took over
 WHEEL_PX = 100                   # screenshot pixels per wheel click
+POINTER_ACTIONS = frozenset({"click", "double_click", "drag", "move", "scroll"})
 
 
 class UserTookOver(Exception):
@@ -65,6 +69,29 @@ def vk_for(name: str) -> int:
     if key in _KEYS:
         return _KEYS[key]
     raise ValueError(f"there is no key called {name}")
+
+
+def held_keys(action: dict) -> list[int]:
+    """The keys held down around a mouse action (ctrl-click, shift-drag). No other action holds keys."""
+    if action.get("type") not in POINTER_ACTIONS:
+        return []
+    return [vk_for(k) for k in action.get("keys") or []]
+
+
+@dataclass(frozen=True)
+class Shown:
+    """A window above the app's, as Windows reports it."""
+    process: int
+    bounds: Rect                     # where it shows on the screen, without its invisible edges
+    visible: bool = True
+    cloaked: bool = False            # Windows keeps it hidden (on another desktop, a closed Start menu)
+    minimised: bool = False
+
+
+def covers(above: Iterable[Shown], process: int, rect: Rect) -> bool:
+    """True when a window of another program shows anywhere over `rect`."""
+    return any(w.visible and not w.cloaked and not w.minimised and w.process != process and w.bounds.intersects(rect)
+               for w in above)
 
 
 def wheel_clicks(pixels: float) -> int:
@@ -116,12 +143,16 @@ _BUTTONS = {"left": (0x0002, 0x0004), "right": (0x0008, 0x0010), "wheel": (0x002
             "middle": (0x0020, 0x0040)}
 _SRCCOPY, _CAPTUREBLT, _HALFTONE = 0x00CC0020, 0x40000000, 4
 _SPI_GETWORKAREA = 0x0030
+_GA_ROOT, _GW_HWNDPREV = 2, 3
+_DWMWA_EXTENDED_FRAME_BOUNDS, _DWMWA_CLOAKED = 9, 14
+_MAX_ABOVE = 2000                # windows looked at above the app; the z-order can change while it is read
 
 
 def _api():
     """The Windows functions used here, with their argument types set so 64-bit handles survive."""
     user32, gdi32, kernel32 = ctypes.WinDLL("user32", use_last_error=True), ctypes.WinDLL("gdi32"), \
         ctypes.WinDLL("kernel32")
+    dwmapi = ctypes.WinDLL("dwmapi")
     for fn, res, args in [
         (user32.GetDC, wintypes.HDC, [wintypes.HWND]),
         (user32.ReleaseDC, ctypes.c_int, [wintypes.HWND, wintypes.HDC]),
@@ -138,6 +169,12 @@ def _api():
         (user32.SystemParametersInfoW, wintypes.BOOL, [wintypes.UINT, wintypes.UINT, ctypes.c_void_p,
                                                         wintypes.UINT]),
         (user32.GetDpiForSystem, wintypes.UINT, []),
+        (user32.GetAncestor, wintypes.HWND, [wintypes.HWND, wintypes.UINT]),
+        (user32.GetWindow, wintypes.HWND, [wintypes.HWND, wintypes.UINT]),
+        (user32.IsWindowVisible, wintypes.BOOL, [wintypes.HWND]),
+        (user32.GetWindowRect, wintypes.BOOL, [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]),
+        (dwmapi.DwmGetWindowAttribute, ctypes.c_long, [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p,
+                                                        wintypes.DWORD]),
         (kernel32.GetCurrentThreadId, wintypes.DWORD, []),
         (gdi32.CreateCompatibleDC, wintypes.HDC, [wintypes.HDC]),
         (gdi32.CreateCompatibleBitmap, wintypes.HBITMAP, [wintypes.HDC, ctypes.c_int, ctypes.c_int]),
@@ -153,7 +190,7 @@ def _api():
         (gdi32.DeleteDC, wintypes.BOOL, [wintypes.HDC]),
     ]:
         fn.restype, fn.argtypes = res, args
-    return user32, gdi32, kernel32
+    return user32, gdi32, kernel32, dwmapi
 
 
 def make_dpi_aware() -> None:
@@ -177,7 +214,7 @@ class WindowsHands:
         if sys.platform != "win32":
             raise OSError("the tester's hands work only on Windows")
         make_dpi_aware()
-        self._user32, self._gdi32, self._kernel32 = _api()
+        self._user32, self._gdi32, self._kernel32, self._dwmapi = _api()
         self._last = self._cursor()                  # where the pointer was left; it must stay there
 
     def work_area(self) -> Rect:
@@ -220,6 +257,29 @@ class WindowsHands:
         front = self._user32.GetForegroundWindow()
         return bool(hwnd and front) and self._process(front) == self._process(hwnd)
 
+    def covered(self, hwnd: int, rect: Rect) -> bool:
+        """True when a window of another program (a notification, an always-on-top window) shows over `rect`.
+        With no window to go by, it counts as covered: nothing can be said about what is on top."""
+        if not hwnd:
+            return True
+        u, mine = self._user32, self._process(hwnd)
+        above, h = [], u.GetWindow(u.GetAncestor(hwnd, _GA_ROOT), _GW_HWNDPREV)
+        while h and len(above) < _MAX_ABOVE:
+            above.append(self._shown(h))
+            h = u.GetWindow(h, _GW_HWNDPREV)
+        return covers(above, mine, rect)
+
+    def _shown(self, hwnd: int) -> Shown:
+        u, d = self._user32, self._dwmapi
+        r, cloaked = wintypes.RECT(), wintypes.DWORD()
+        if d.DwmGetWindowAttribute(hwnd, _DWMWA_EXTENDED_FRAME_BOUNDS, ctypes.byref(r), ctypes.sizeof(r)) != 0:
+            u.GetWindowRect(hwnd, ctypes.byref(r))
+        if d.DwmGetWindowAttribute(hwnd, _DWMWA_CLOAKED, ctypes.byref(cloaked), ctypes.sizeof(cloaked)) != 0:
+            cloaked.value = 0
+        return Shown(self._process(hwnd), Rect(r.left, r.top, r.right - r.left, r.bottom - r.top),
+                     visible=bool(u.IsWindowVisible(hwnd)), cloaked=bool(cloaked.value),
+                     minimised=bool(u.IsIconic(hwnd)))
+
     def to_front(self, hwnd: int) -> None:
         if not hwnd:
             return
@@ -242,7 +302,7 @@ class WindowsHands:
         if abs(x - self._last[0]) >= MOVED_PX or abs(y - self._last[1]) >= MOVED_PX:
             raise UserTookOver("You moved the mouse, so the test stopped.")
         kind = action["type"]
-        held = [vk_for(k) for k in action.get("keys") or []] if kind != "keypress" else []
+        held = held_keys(action)
         self._keys(held, up=False)
         try:
             if kind in ("click", "double_click"):

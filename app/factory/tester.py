@@ -2,15 +2,17 @@
 
 One run opens the app, puts its window where a lesson puts it (the screen beside the 360 px strip) and
 gives the agent one step at a time, each step in a fresh conversation. The agent sees screenshots of the
-app's window only, so nothing else on the screen reaches Meta. Every action it asks for is checked first:
-the pointer stays inside the app, keys that would leave the app are refused, and in keyboard mode the
-mouse is not used at all. Only the lesson's own checks decide when a step is done, as for a learner.
+app's window only, taken only while the app is in front and no other program's window is over it, so
+nothing else on the screen reaches Meta. Every action it asks for is checked first: the pointer stays
+inside the app, keys that Windows itself acts on (leaving or closing the app) are refused, and in keyboard
+mode the mouse is not used at all. Only the lesson's own checks decide when a step is done, as for a learner.
 A test passes when at least 4 runs in 5 reach the end; it stops early once that can no longer happen.
 """
 from __future__ import annotations
 
 import base64
 import threading
+import time
 from concurrent.futures import Future
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +22,7 @@ from app.core.lesson import Lesson, Step, TestResult
 from app.core.plugin import AppPlugin
 from app.core.runner import LessonRun, NotYet, StepChanged
 from app.core.types import Rect
-from app.factory.input import WindowsHands, vk_for
+from app.factory.input import POINTER_ACTIONS, WindowsHands, vk_for
 from app.factory.prove import ProveError
 from app.meta.client import MetaError, NoKey, SpendLimitReached
 
@@ -30,17 +32,22 @@ STRIP_PX = 360                   # the lesson panel, in logical pixels, at the s
 MAX_SHOT = (1280, 800)
 TIMEOUT_S = 30.0
 PASS_OF = (4, 5)                 # at least 4 runs in 5
+COVER_WAIT_S, COVER_TRIES = 1.0, 10   # a notification over the app is gone within about 5 s
 
 OUTSIDE_NOTE = "That is outside the app. Use the app's window."
 KEYBOARD_NOTE = "This test uses the keyboard only. Use keys, not the mouse."
 LEAVES_NOTE = "That key would leave the app. Stay in the app's window."
 BUTTON_NOTE = "Use the left, right or middle mouse button."
+KEYS_NOTE = 'Send keys as a list, like ["ctrl", "c"].'
 
 Mode = Literal["mouse", "keyboard"]
-_POINTER = {"click", "double_click", "drag", "move", "scroll"}
 _BUTTONS = {"left", "right", "wheel", "middle"}
+# Combinations Windows itself acts on: they switch, close or cover the app, or open the security screen.
+# Only keys input.py knows can be sent at all, so Print Screen, media and browser keys never are.
+# Keys that act inside the app stay allowed (alt+enter is a new line in an Excel cell, shift+f10 its menu).
 _LEAVING = [{vk_for(k) for k in keys} for keys in
-            (["win"], ["alt", "tab"], ["alt", "esc"], ["ctrl", "esc"], ["alt", "f4"], ["ctrl", "f4"], ["ctrl", "w"])]
+            (["win"], ["alt", "tab"], ["alt", "esc"], ["ctrl", "esc"], ["alt", "f4"], ["ctrl", "f4"], ["ctrl", "w"],
+             ["alt", "space"], ["ctrl", "alt", "delete"])]
 
 
 # Where things go on the screen.
@@ -75,7 +82,10 @@ def to_screen(action: dict, app: Rect, shot: tuple[int, int]) -> dict:
 def allowed(action: dict, app: Rect, mode: Mode) -> tuple[bool, str]:
     """Whether to do this action (in screen pixels); when not, the note the agent is told."""
     kind = action.get("type")
-    if kind in _POINTER:
+    ok, note = _keys_allowed(action.get("keys") or [])       # any action may carry keys; all are checked
+    if not ok:
+        return ok, note
+    if kind in POINTER_ACTIONS:
         if mode == "keyboard":
             return False, KEYBOARD_NOTE
         if action.get("button", "left") not in _BUTTONS:
@@ -83,10 +93,8 @@ def allowed(action: dict, app: Rect, mode: Mode) -> tuple[bool, str]:
         points = action.get("path") if kind == "drag" else [action]
         if not points or not all(_inside(p, app) for p in points):
             return False, OUTSIDE_NOTE
-        return _keys_allowed(action.get("keys") or [])
-    if kind == "keypress":
-        return _keys_allowed(action.get("keys") or [])
-    if kind in ("type", "wait", "screenshot"):
+        return True, ""
+    if kind in ("keypress", "type", "wait", "screenshot"):
         return True, ""
     return False, f"{kind} is not something this test can do."
 
@@ -98,7 +106,9 @@ def _inside(p: Any, app: Rect) -> bool:
         return False
 
 
-def _keys_allowed(keys: list) -> tuple[bool, str]:
+def _keys_allowed(keys: Any) -> tuple[bool, str]:
+    if not isinstance(keys, (list, tuple)):
+        return False, KEYS_NOTE
     codes = set()
     for key in keys:
         try:
@@ -260,14 +270,22 @@ class _Run:
         return f"tester_{self.lesson.id}_{self.mode}_run{self.number}_{step.id}_{turn}"
 
     def _ready(self) -> None:
-        """Before looking or acting: the app is still open and its window is in front."""
+        """Before looking or acting: the app is still open, its window is in front and no other program's
+        window is over it, so a screenshot shows the app alone and a click lands in it."""
+        title = self.plugin.title
         if self.closed.is_set():
-            raise _RunFailed(f"{self.plugin.title} was closed")
+            raise _RunFailed(f"{title} was closed")
         hwnd = self.session.hwnd()
         if not self.hands.in_front(hwnd):
             self.hands.to_front(hwnd)
             if not self.hands.in_front(hwnd):
-                raise _RunFailed(f"{self.plugin.title}'s window would not come to the front, so nothing more was done")
+                raise _RunFailed(f"{title}'s window would not come to the front, so nothing more was done")
+        waits = COVER_TRIES
+        while self.hands.covered(hwnd, self.app):
+            if waits == 0:
+                raise _RunFailed(f"another program's window stayed over {title}, so nothing more was done")
+            waits -= 1
+            time.sleep(COVER_WAIT_S)
 
     def _look(self) -> str:
         png = self.hands.grab(self.app, *self.shot)

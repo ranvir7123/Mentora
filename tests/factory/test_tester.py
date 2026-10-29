@@ -26,9 +26,9 @@ class FakeHands:
     """A 2560 x 1600 screen at 200%, taskbar below 1540. Typing "k0=1" makes the fake app hold k0 = 1, as a
     learner would; typing "close" closes the app."""
 
-    def __init__(self, plugin, took_over_at=None, in_front=True):
+    def __init__(self, plugin, took_over_at=None, in_front=True, covered_for=0):
         self.plugin, self.done, self.grabs, self.took_over_at = plugin, [], [], took_over_at
-        self.front_ok, self.fronted = in_front, 0
+        self.front_ok, self.fronted, self.covered_for, self.seen = in_front, 0, covered_for, []
 
     def work_area(self):
         return Rect(0, 0, 2560, 1540)
@@ -38,7 +38,16 @@ class FakeHands:
 
     def grab(self, rect, width, height):
         self.grabs.append((rect, width, height))
+        self.seen.append("grab")
         return b"\x89PNG fake"
+
+    def covered(self, hwnd, rect):
+        """Another program's window is over the app for the first `covered_for` checks."""
+        if self.covered_for > 0:
+            self.covered_for -= 1
+            self.seen.append("covered")
+            return True
+        return False
 
     def in_front(self, hwnd):
         return self.front_ok
@@ -167,6 +176,20 @@ def test_keys_that_leave_the_app_are_refused():
     assert tester.allowed({"type": "teleport"}, APP, "mouse") == (False, "teleport is not something this test can do.")
 
 
+def test_keys_held_with_any_action_are_checked():
+    assert tester.allowed({"type": "type", "text": "x", "keys": ["win"]}, APP, "mouse") == (False, tester.LEAVES_NOTE)
+    assert tester.allowed({"type": "screenshot", "keys": ["alt", "tab"]}, APP, "keyboard") == (False, tester.LEAVES_NOTE)
+    assert tester.allowed({"type": "wait", "keys": ["hyper"]}, APP, "mouse") == (False, "There is no key called hyper.")
+    assert tester.allowed({"type": "keypress", "keys": "ctrl+c"}, APP, "mouse") == (False, tester.KEYS_NOTE)
+
+
+def test_the_window_menu_and_the_security_screen_are_refused_but_the_apps_own_keys_are_not():
+    for keys in (["alt", "space"], ["ctrl", "alt", "delete"], ["ctrl", "shift", "esc"], ["win", "r"]):
+        assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse") == (False, tester.LEAVES_NOTE)
+    for keys in (["alt", "enter"], ["shift", "f10"], ["apps"], ["f2"], ["ctrl", "shift", "enter"]):
+        assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse") == (True, "")   # Excel's own
+
+
 def test_a_run_passes_when_the_runner_ticks_every_step(tmp_path):
     lesson = three_steps()
     script = Script(act(typed("k0", 1)), act(typed("k1", 2)), act(typed("k2", 3)))
@@ -270,6 +293,31 @@ def test_nothing_is_seen_or_done_while_another_window_is_in_front(tmp_path):
     assert result.passed is False and hands.fronted == 1
     assert hands.grabs == [] and hands.done == [] and script.calls == []
     assert "run 1 failed: Fake app's window would not come to the front, so nothing more was done" in lines
+
+
+def test_nothing_is_seen_or_done_until_another_programs_window_moves_off_the_app(tmp_path, monkeypatch):
+    monkeypatch.setattr(tester, "COVER_WAIT_S", 0)
+    plugin = Recording()
+    hands = FakeHands(plugin, covered_for=3)                 # a notification, gone after three checks
+    script = Script(act(typed("k0", 1)), act(typed("k1", 2)), act(typed("k2", 3)))
+
+    result, _, _ = run(script, plugin=plugin, hands=hands, workdir=tmp_path)
+
+    assert result.passed
+    assert hands.seen[:4] == ["covered", "covered", "covered", "grab"]
+
+
+def test_a_window_that_stays_over_the_app_fails_the_run_with_nothing_sent(tmp_path, monkeypatch):
+    monkeypatch.setattr(tester, "COVER_WAIT_S", 0)
+    plugin = Recording()
+    hands = FakeHands(plugin, covered_for=10_000)
+    script = Script()
+
+    result, _, lines = run(script, plugin=plugin, hands=hands, workdir=tmp_path)
+
+    assert result.passed is False
+    assert hands.grabs == [] and hands.done == [] and script.calls == []
+    assert "run 1 failed: another program's window stayed over Fake app, so nothing more was done" in lines
 
 
 def test_closing_the_app_fails_the_run(tmp_path):
