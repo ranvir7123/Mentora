@@ -98,15 +98,20 @@ def test_the_step_says_what_to_do_why_and_how_far_along_you_are(panel):
     assert "2 of 9" in texts
 
 
-def test_the_goal_comes_first_then_folds_to_one_line_that_opens_with_a_tap(panel, qapp):
+def _chips(root):
+    return [i for i in _items(root.contentItem()) if i.metaObject().className().startswith("GoalChip") and _shown(i)]
+
+
+def test_the_goal_comes_first_then_folds_to_a_short_chip_that_opens_with_a_tap(panel, qapp):
     sentence = "Make a monthly budget that adds itself up and shows where money goes."
     _, _, root = panel("lesson_goal")
     assert not _text_item(root, sentence).property("truncated")       # step 1: the whole goal
     _, _, root = panel("lesson_step")
     folded = _text_item(root, sentence)
-    assert folded.property("truncated")                                # later: one line
+    assert _chips(root), "after step 1 the goal is not folded into its chip"
+    assert not folded.property("truncated") and folded.property("lineCount") <= 3   # still whole, short
     _click(qapp, root, folded)
-    assert not _text_item(root, sentence).property("truncated")       # one tap opens it
+    assert not _chips(root), "a tap on the chip did not open the goal"
 
 
 def test_show_me_and_hint_ask_the_backend_and_the_hint_appears(panel, qapp):
@@ -118,6 +123,17 @@ def test_show_me_and_hint_ask_the_backend_and_the_hint_appears(panel, qapp):
     assert "Click B8, below the amounts." in _texts(root)
     assert "Show another hint (2 left)" in [b.property("text") for b in _items(root.contentItem())
                                             if b.metaObject().className().startswith("ChunkyButton") and _shown(b)]
+
+
+def test_with_every_hint_shown_the_hint_button_says_so_and_lines_up_with_show_me(panel):
+    _, _, root = panel("long_text")
+    assert not _button(root, "No hints left").property("enabled")
+
+    def middle(text):
+        label = _text_item(root, text)
+        return label.mapToScene(QPointF(0, label.height() / 2)).y()
+
+    assert abs(middle("No hints left") - middle("Show me")) < 0.5
 
 
 def _scroller(root):

@@ -2,7 +2,8 @@ import QtQuick
 import Theme
 import "../components"
 
-// The goal folded to one line, one tap from opening again. As wide as its words, up to `maxWidth`.
+// The goal folded into a chip, one tap from opening again. As wide as its words, up to `maxWidth`; a goal
+// that doesn't fit takes up to three lines beside the mascot rather than being cut off.
 Item {
     id: root
     property string sentence: ""
@@ -10,7 +11,7 @@ Item {
     signal open()
 
     implicitWidth: Math.min(maxWidth, Theme.space16 + flag.width + Theme.space8 + words.implicitWidth + Theme.space16)
-    implicitHeight: 40
+    implicitHeight: Math.max(40, words.implicitHeight + 2 * Theme.space8)
     activeFocusOnTab: true
     Accessible.role: Accessible.Button
     Accessible.name: "Show your goal: " + sentence
@@ -20,7 +21,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: height / 2
+        radius: Math.min(height / 2, Theme.radiusLarge)      // a pill on one line, a soft card on two
         color: Theme.surface1
         border.width: root.activeFocus ? 2 : 0
         border.color: Theme.text
@@ -42,8 +43,9 @@ Item {
         width: parent.width - x - Theme.space16
         anchors.verticalCenter: parent.verticalCenter
         text: root.sentence
+        wrapMode: Text.Wrap
         elide: Text.ElideRight
-        maximumLineCount: 1
+        maximumLineCount: 3
         color: Theme.text
         font.family: Theme.fontBody
         font.weight: Font.Bold

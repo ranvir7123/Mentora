@@ -21,6 +21,7 @@ from PySide6.QtGui import QGuiApplication, QWindow
 
 from app.core.screen import ScreenBackend
 from app.core.types import Rect
+from app.meta.key import NAME as KEY_NAME
 from app.ui import landing, winstyle
 
 _STATES = ("home", "lesson", "pointer")
@@ -256,6 +257,13 @@ class Bridge(QObject):
     @Slot(str)
     def makeLesson(self, url: str) -> None:
         self._backend.make_lesson(url)
+
+    @Slot()
+    def copyKeySetup(self) -> None:
+        """Puts the PowerShell line that saves a Meta key on the clipboard, with a gap where the key goes.
+        The key itself is never read here."""
+        QGuiApplication.clipboard().setText(
+            f'[Environment]::SetEnvironmentVariable("{KEY_NAME}", "<your key>", "User")')
 
     @Slot(bool)
     def setMuted(self, on: bool) -> None:

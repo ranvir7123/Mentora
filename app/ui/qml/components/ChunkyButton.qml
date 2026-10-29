@@ -14,7 +14,7 @@ Item {
     readonly property bool down: (area.pressed || held) && enabled
     readonly property color face: !enabled ? Theme.surface2
                                   : kind === "main" ? Theme.accent : kind === "right" ? Theme.right : Theme.surface2
-    readonly property color edgeColour: !enabled ? Theme.surface2
+    readonly property color edgeColour: !enabled ? Theme.clear            // a disabled button has no edge to press
                                         : kind === "main" ? Theme.accentEdge
                                         : kind === "right" ? Theme.rightEdge : Theme.border
     readonly property color ink: !enabled ? Theme.muted : kind === "quiet" ? Theme.text : Theme.onColour
@@ -43,7 +43,7 @@ Item {
     Rectangle {
         width: parent.width
         height: parent.height - Theme.edge
-        y: root.down || !root.enabled ? Theme.edge : 0
+        y: root.down ? Theme.edge : 0            // a disabled face stays up, level with its neighbours
         radius: Theme.radiusMedium
         color: root.face
         border.width: root.activeFocus ? 2 : 0

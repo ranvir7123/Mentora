@@ -271,7 +271,7 @@ def _build(state: str) -> tuple[dict, dict, dict, str | None, dict]:
         lesson = _lesson(3, title=_LONG_TITLE, step=step, changed=[0, 1],
                          banner=_banner("not_yet", "Not yet: you divided the total by the rent. Divide "
                                                    "the rent in B2 by the total in B8 instead.", 3))
-        pointer, cue = _pointer(3, "watching", bubble="type it in this cell"), "not_yet"
+        pointer, cue = _pointer(3, "watching", bubble="Type it in this cell"), "not_yet"
     return home, lesson, pointer, cue, view
 
 

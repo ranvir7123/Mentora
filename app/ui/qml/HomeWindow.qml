@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import Theme
+import "components"
 import "home"
 
 // The app's main window. At the top, hello, your streak and today's points. Below, the lesson you are
@@ -151,7 +152,8 @@ Window {
                     onOpenLesson: (lessonId) => root.bridge.openLesson(lessonId)
                 }
 
-                // Without a Meta key, tips and making lessons wait for one; lessons themselves still work.
+                // Without a Meta key, tips and making lessons wait for one; lessons themselves still work. The
+                // card copies the PowerShell line that saves a key, with a gap where the key goes.
                 Rectangle {
                     visible: root.keyMissing
                     width: parent.width
@@ -160,16 +162,58 @@ Window {
                     color: Theme.clear
                     border.width: 2
                     border.color: Theme.border
-                    Text {
+
+                    Column {
                         id: noKey
                         x: Theme.space24
+                        y: Theme.space24
                         width: parent.width - 2 * Theme.space24
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "Add your Meta key to make lessons and get tips"
-                        wrapMode: Text.Wrap
-                        color: Theme.muted
-                        font.family: Theme.fontBody
-                        font.pixelSize: Theme.size16
+                        spacing: Theme.space16
+
+                        Column {
+                            width: parent.width
+                            spacing: Theme.space4
+                            Text {
+                                width: parent.width
+                                text: "Add your Meta key"
+                                wrapMode: Text.Wrap
+                                color: Theme.text
+                                font.family: Theme.fontHeading
+                                font.weight: Font.Bold
+                                font.pixelSize: Theme.size20
+                            }
+                            Text {
+                                width: parent.width
+                                text: "Lessons from videos and tips need it."
+                                wrapMode: Text.Wrap
+                                color: Theme.muted
+                                font.family: Theme.fontBody
+                                font.pixelSize: Theme.size16
+                            }
+                        }
+
+                        ChunkyButton {
+                            id: copyLine
+                            property bool copied: false
+                            width: parent.width
+                            kind: "quiet"
+                            text: copied ? "Copied" : "Copy the setup line"
+                            onClicked: {
+                                root.bridge.copyKeySetup()
+                                copied = true
+                                copiedFor.restart()
+                            }
+                            Timer { id: copiedFor; interval: 2000; onTriggered: copyLine.copied = false }
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: "Paste it in PowerShell, put your key in it, and press Enter."
+                            wrapMode: Text.Wrap
+                            color: Theme.muted
+                            font.family: Theme.fontBody
+                            font.pixelSize: Theme.size14
+                        }
                     }
                 }
             }

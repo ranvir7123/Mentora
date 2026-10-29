@@ -28,7 +28,7 @@ Item {
     implicitHeight: oneLine ? 40 : 2 * 40 + Theme.space8
 
     TextMetrics { id: showWords; font: show.labelFont; text: show.text }
-    TextMetrics { id: hintWords; font: show.labelFont; text: "Hint" }
+    TextMetrics { id: hintWords; font: show.labelFont; text: hint.text }
     TextMetrics { id: watchWords; font: show.labelFont; text: "Watch the clip" }
     TextMetrics { id: hideWords; font: show.labelFont; text: "Hide the clip" }
 
@@ -50,7 +50,7 @@ Item {
         width: root.hasClip && root.oneLine ? Math.floor(root.hintWidth + root.spare) : root.width - x
         kind: "quiet"
         compact: true
-        text: "Hint"
+        text: root.hintsLeft > 0 ? "Hint" : "No hints left"
         enabled: root.hintsLeft > 0
         onClicked: root.hint()
     }

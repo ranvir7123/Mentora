@@ -5,6 +5,7 @@ import time
 
 import pytest
 from PySide6.QtCore import QCoreApplication, QEvent, QPointF, QRectF, Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtQuick import QQuickItem, QQuickWindow  # noqa: F401  (so windows come back as Quick windows)
 from PySide6.QtTest import QTest
 
@@ -298,12 +299,17 @@ def test_loading_tips_show_a_calm_placeholder_only_after_200_ms(home, qapp):
     assert "Looking at your tries" in _texts(root)
 
 
-def test_without_a_meta_key_one_calm_line_says_how_to_fix_it(home):
+def test_without_a_meta_key_the_card_says_how_to_add_one_and_copies_the_line(home, qapp):
     _, _, root = home("home_no_key")
     texts = _texts(root)
-    assert texts.count("Add your Meta key to make lessons and get tips") == 1
+    assert "Add your Meta key" in texts
+    assert "Paste it in PowerShell, put your key in it, and press Enter." in texts
     assert "Make a lesson" not in _buttons(root)
     assert "Tips for you" not in texts
+    QGuiApplication.clipboard().clear()
+    _click(qapp, root, _button(root, "Copy the setup line"))
+    assert QGuiApplication.clipboard().text() ==         '[Environment]::SetEnvironmentVariable("META_API_KEY", "<your key>", "User")'
+    assert "Copied" in _buttons(root)
 
 
 # Making a lesson from a video.

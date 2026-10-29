@@ -2,6 +2,7 @@
 
     <py> probes\\ui_shot.py <window> --state <state> --out runs\\shots\\<window>-<state>.png
     <py> probes\\ui_shot.py --all            # every window in every state it has, into runs\\shots\\
+    <py> probes\\ui_shot.py --sheet          # only the contact sheet, runs\\shots\\all.png, from the shots there
 
 The windows are drawn off screen on a pretend 2560 x 1600 screen at 200% (Ranvir's laptop), so nothing
 flashes on the desktop and nothing steals the mouse or keyboard from a live Excel run. The overlay is
@@ -120,6 +121,42 @@ def shoot(window: str, state: str, out: Path, wait_ms: int = 1500) -> Path:
     return out
 
 
+def contact_sheet(paths: list[Path], out: Path, columns: int = 5, cell: tuple[int, int] = (640, 420)) -> Path:
+    """Every shot scaled to fit its own cell with its name underneath, on the app's background: one picture
+    to judge every window in every state side by side."""
+    app = QGuiApplication.instance() or QGuiApplication(sys.argv)  # noqa: F841  (drawing text needs one)
+    gap, label = 24, 44
+    rows = -(-len(paths) // columns)
+    sheet = QImage(gap + columns * (cell[0] + gap), gap + rows * (cell[1] + label + gap),
+                   QImage.Format.Format_RGB32)
+    sheet.fill(QColor("#151A2E"))
+    painter = QPainter(sheet)
+    font = QFont("Segoe UI")
+    font.setPixelSize(22)
+    painter.setFont(font)
+    for i, path in enumerate(paths):
+        x = gap + (i % columns) * (cell[0] + gap)
+        y = gap + (i // columns) * (cell[1] + label + gap)
+        thumb = QImage(str(path)).scaled(cell[0], cell[1], Qt.AspectRatioMode.KeepAspectRatio,
+                                         Qt.TransformationMode.SmoothTransformation)
+        left, top = x + (cell[0] - thumb.width()) // 2, y + (cell[1] - thumb.height()) // 2
+        painter.drawImage(left, top, thumb)
+        painter.setPen(QPen(QColor("#363E66"), 2))      # an edge, since most shots share the sheet's background
+        painter.drawRect(left - 1, top - 1, thumb.width() + 1, thumb.height() + 1)
+        painter.setPen(QColor("#9AA3C0"))
+        painter.drawText(QRectF(x, y + cell[1] + 8, cell[0], label - 8),
+                         int(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop), path.stem)
+    painter.end()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(str(out))
+    return out
+
+
+def _every_shot(shots: Path) -> list[Path]:
+    return [shots / f"{window}-{state}.png" for window, states in ALL.items() for state in states
+            if (shots / f"{window}-{state}.png").exists()]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("window", nargs="?", choices=[*WINDOWS, *EXTRA])
@@ -127,6 +164,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path)
     parser.add_argument("--wait", type=int, default=1500, help="ms to let animations settle")
     parser.add_argument("--all", action="store_true", help="every window in every state it has")
+    parser.add_argument("--sheet", action="store_true", help="only the contact sheet, from the shots already taken")
     args = parser.parse_args()
     shots = ROOT / "runs" / "shots"
     if args.all:
@@ -135,6 +173,10 @@ def main() -> int:
                 continue
             for state in states:
                 print(shoot(window, state, shots / f"{window}-{state}.png", args.wait))
+        print(contact_sheet(_every_shot(shots), shots / "all.png"))
+        return 0
+    if args.sheet:
+        print(contact_sheet(_every_shot(shots), shots / "all.png"))
         return 0
     if not args.window:
         parser.error("name a window, or use --all")

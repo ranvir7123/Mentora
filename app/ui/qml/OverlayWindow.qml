@@ -247,7 +247,10 @@ Window {
     // The mascot's words: typed out a letter at a time, in a box beside it with a small tail toward it.
     Item {
         id: words
-        readonly property string text: root.pointer.bubble !== "" ? root.pointer.bubble : "this one!"
+        readonly property string text: {
+            const said = root.pointer.bubble !== "" ? root.pointer.bubble : "This one!"
+            return said.charAt(0).toUpperCase() + said.slice(1)        // sentence case, whoever wrote it
+        }
         property bool said: false
         property int letters: 0
         readonly property bool shown: said && flight.phase === "landed" && root.pointer.visible

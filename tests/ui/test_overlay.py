@@ -35,3 +35,28 @@ def test_the_layer_is_put_on_screen_once_at_start_then_hides(qapp):
         root.deleteLater()
         engine.deleteLater()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)    # no event loop runs to do it
+
+
+def _items(item):
+    yield item
+    for child in item.childItems():
+        yield from _items(child)
+
+
+def test_the_mascots_words_start_with_a_capital_letter(qapp):
+    for state, words in (("pointer_watching", "This one!"), ("long_text", "Type it in this cell")):
+        backend = DemoBackend(state)
+        bridge = Bridge(backend)
+        engine = make_engine(bridge)
+        root = load_window(engine, "overlay", backend.view.get("overlay"))
+        backend.replay()
+        _settle(qapp, 0.1)
+        try:
+            said = [i.property("text") for i in _items(root.contentItem())
+                    if i.property("said") is not None and i.property("text") is not None]
+            assert said == [words]
+        finally:
+            root.close()
+            root.deleteLater()
+            engine.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
