@@ -1,8 +1,9 @@
+import contextlib
 import time
 
-from PySide6.QtCore import QtMsgType, qInstallMessageHandler
+from PySide6.QtCore import QtMsgType, QUrl, qInstallMessageHandler
 
-from app.ui.app import WINDOWS, load_window, make_engine
+from app.ui.app import QML_DIR, WINDOWS, load_window, make_engine
 from app.ui.bridge import Bridge
 from app.ui.demo_backend import STATES, DemoBackend
 
@@ -14,26 +15,37 @@ def _settle(qapp, seconds=0.06):
         time.sleep(0.005)
 
 
-def test_every_window_loads_in_every_state_without_qml_warnings(qapp):
-    problems = []
+@contextlib.contextmanager
+def _warnings():
+    """Every Qt warning (QML errors included) raised inside the block, labelled with `where[0]`."""
+    problems, where = [], ["start"]
 
     def on_message(kind, context, text):
-        if kind != QtMsgType.QtDebugMsg and kind != QtMsgType.QtInfoMsg:
-            problems.append(f"[{current}] {text}")
+        if kind not in (QtMsgType.QtDebugMsg, QtMsgType.QtInfoMsg):
+            problems.append(f"[{where[0]}] {text}")
 
     previous = qInstallMessageHandler(on_message)
     try:
+        yield problems, where
+    finally:
+        qInstallMessageHandler(previous)
+
+
+def _watch(engine, problems, label):
+    engine.warnings.connect(lambda errors: problems.extend(f"[{label}] {e.toString()}" for e in errors))
+
+
+def test_every_window_loads_in_every_state_without_qml_warnings(qapp):
+    with _warnings() as (problems, where):
         for window in WINDOWS:
             for state in STATES:
-                current = f"{window} / {state}"
+                where[0] = f"{window} / {state}"
                 backend = DemoBackend(state)
-                bridge = Bridge(backend)
-                engine = make_engine(bridge)
-                engine.warnings.connect(lambda errors, c=current: problems.extend(
-                    f"[{c}] {e.toString()}" for e in errors))
+                engine = make_engine(Bridge(backend))
+                _watch(engine, problems, where[0])
                 root = load_window(engine, window, backend.view.get(window))
                 if root is None:
-                    problems.append(f"[{current}] did not load")
+                    problems.append(f"[{where[0]}] did not load")
                     continue
                 backend.replay()          # the state's sound and moment, as the screens see them live
                 _settle(qapp)
@@ -41,6 +53,18 @@ def test_every_window_loads_in_every_state_without_qml_warnings(qapp):
                 root.deleteLater()
                 engine.deleteLater()
                 _settle(qapp, 0.01)
-    finally:
-        qInstallMessageHandler(previous)
+    assert problems == []
+
+
+def test_gallery_shows_every_component_without_qml_warnings(qapp):
+    with _warnings() as (problems, where):
+        where[0] = "gallery"
+        engine = make_engine(Bridge(DemoBackend("lesson_step")))
+        _watch(engine, problems, "gallery")
+        engine.load(QUrl.fromLocalFile(str(QML_DIR / "Gallery.qml")))
+        assert engine.rootObjects(), "Gallery.qml did not load"
+        _settle(qapp, 0.6)          # let the slide-ins, the ring and the spinner run a little
+        engine.rootObjects()[0].close()
+        engine.deleteLater()
+        _settle(qapp, 0.01)
     assert problems == []

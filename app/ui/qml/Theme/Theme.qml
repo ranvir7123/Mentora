@@ -22,6 +22,9 @@ QtObject {
     readonly property color rightEdge: "#1FA46C"
     readonly property color notYet: "#FF6B81"
     readonly property color notYetEdge: "#C9405A"
+    // The banners' backgrounds: mint and rose laid thinly over surface1, so their words keep 4.5:1.
+    readonly property color rightTint: "#23414E"
+    readonly property color notYetTint: "#3E2E49"
 
     readonly property color text: "#EEF1FA"
     readonly property color muted: "#9AA3C0"
