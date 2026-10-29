@@ -11,6 +11,9 @@ the window gone, or Excel itself gone (killed outright). A busy Excel means "can
 on_closed() then fires once; it never fires when the program closes the session itself. The owner
 calls close() afterwards to let this Excel go.
 
+perform() carries out one operation from the menu in ops.py; reset() puts the lesson's starter
+back. Both run on the COM thread and ask for a read when they finish.
+
 Every Excel call happens on the COM thread. on_snapshot and on_closed run there too and must
 return at once.
 """
@@ -23,8 +26,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.core.lesson import Lesson
-from app.core.types import Rect
-from app.excel.busy import is_busy
+from app.core.types import Call, Rect
+from app.excel import ops
+from app.excel.busy import ExcelBusy, is_busy, next_delay
 from app.excel.com_thread import ComThread
 from app.excel.reads import ReadScheduler
 from app.excel.snapshot import read_snapshot
@@ -34,6 +38,7 @@ from app.win import windows
 CLOSED_CHECK_S = 1.0
 CLOSED_CHECK_SOON_S = 0.25         # after BeforeClose: the learner is probably closing
 IDLE_REREAD_S = 1.0                # while a step waits: freezing panes and renaming fire no event
+PERFORM_BUSY_LIMIT_S = 30.0        # an operation Excel refuses for this long has failed
 
 
 def _new_excel():
@@ -160,6 +165,32 @@ class ExcelSession:
             windows.place_window(self._hwnd, rect)
         return self._com.submit(move)
 
+    def perform(self, op: Call) -> Future:
+        """Carry out one operation; the Future fails if Excel refuses it or stays busy too long."""
+        fut: Future = Future()
+        if self._closed or self._stopping:
+            fut.set_exception(RuntimeError("Excel was closed"))
+            return fut
+        self._com.submit(lambda: self._attempt(op, fut, 0.0, 0.0))
+        return fut
+
+    def reset(self) -> Future:
+        """Throw away the learner's changes: close without saving, rebuild the starter, reopen it."""
+        fut: Future = Future()
+        if self._closed or self._stopping:
+            fut.set_exception(RuntimeError("Excel was closed"))
+            return fut
+
+        def run() -> None:
+            try:
+                self._reopen_starter()
+            except Exception as exc:   # noqa: BLE001 - the caller sees why; the close check notices
+                fut.set_exception(exc)
+                return
+            fut.set_result(None)
+        self._com.submit(run)
+        return fut
+
     def close(self, save: bool = False) -> None:
         """Close the workbook (saving it into the work folder if asked) and quit this Excel."""
         if self._stopping:
@@ -199,6 +230,38 @@ class ExcelSession:
         waiters, self._read_waiters = self._read_waiters, []
         for fut in waiters:
             fut.set_exception(RuntimeError("Excel was closed"))
+
+    def _attempt(self, op: Call, fut: Future, delay_s: float, waited_s: float) -> None:
+        if self._closed or self._stopping:
+            fut.set_exception(RuntimeError("Excel was closed"))
+            return
+        try:
+            ops.do(self._app, self._wb, op)
+        except Exception as exc:   # noqa: BLE001 - busy is waited out; anything else is the answer
+            if not is_busy(exc):
+                fut.set_exception(exc)
+            elif waited_s >= PERFORM_BUSY_LIMIT_S:
+                fut.set_exception(ExcelBusy(f"Excel stayed busy for {waited_s:.0f} s; {op.kind} was not done"))
+            else:
+                # Waiting is counted from the pauses, not the clock, so the limit means the same
+                # in tests. An op that half-ran before the refusal (a chart) may run twice.
+                pause = next_delay(delay_s)
+                self._com.call_later(pause, lambda: self._attempt(op, fut, pause, waited_s + pause))
+            return
+        fut.set_result(None)
+        self._scheduler.read_soon()
+
+    def _reopen_starter(self) -> None:
+        # The events go first, so the workbook closing is never taken for the learner closing it.
+        self._close_sink()
+        wb, self._wb = self._wb, None
+        wb.Close(SaveChanges=False)
+        del wb
+        gc.collect()
+        build_starter(self._lesson.starter, self.path)
+        self._wb = self._app.Workbooks.Open(str(self.path))
+        self._sink = self._attach(self._wb, _Handler(self))
+        self._scheduler.read_soon()
 
     def _set_waiting(self, waiting: bool) -> None:
         if waiting == self._waiting:

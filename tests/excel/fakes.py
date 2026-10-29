@@ -228,3 +228,44 @@ class FakeReader:
             raise com_error(-2146777998)   # VBA_E_IGNORE: the learner is typing in a cell
         self.reads += 1
         return {"read": self.reads, "book": wb.path.name}
+
+
+class ComRecorder:
+    """A pretend Excel object that writes down every property set and method call made on it.
+
+    Reading an attribute gives another recorder whose name is the path so far, so
+    `wb.Worksheets("Budget").Range("B8").Formula = "=SUM(B2:B6)"` is logged as exactly that.
+    Looking things up (Worksheets(...), Range(...)) is not logged, only what is done with them.
+    A few position properties read as numbers, so code can do sums with them.
+    """
+    NUMBERS = {"Left": 10.0, "Top": 20.0, "Width": 300.0, "Height": 100.0}
+    LOOKUPS = {"Worksheets", "Sheets", "Range", "Cells", "Windows", "Item"}
+
+    def __init__(self, log: list[str], path: str, values: dict | None = None) -> None:
+        object.__setattr__(self, "_log", log)
+        object.__setattr__(self, "_path", path)
+        object.__setattr__(self, "_values", values if values is not None else {})
+
+    def __getattr__(self, name: str):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        path = f"{self._path}.{name}"
+        if path in self._values:
+            return self._values[path]
+        if name in self.NUMBERS:
+            return self.NUMBERS[name]
+        return ComRecorder(self._log, path, self._values)
+
+    def __setattr__(self, name: str, value) -> None:
+        self._log.append(f"{self._path}.{name} = {_shown(value)}")
+
+    def __call__(self, *args, **kwargs):
+        parts = [_shown(a) for a in args] + [f"{k}={_shown(v)}" for k, v in kwargs.items()]
+        path = f"{self._path}({', '.join(parts)})"
+        if self._path.rsplit(".", 1)[-1] not in self.LOOKUPS:
+            self._log.append(path)
+        return ComRecorder(self._log, path, self._values)
+
+
+def _shown(value) -> str:
+    return value._path if isinstance(value, ComRecorder) else repr(value)
