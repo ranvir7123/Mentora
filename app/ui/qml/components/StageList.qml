@@ -17,7 +17,7 @@ Column {
         "publish": "Putting it on your shelf"
     })
     readonly property real mark: 24
-    readonly property real gap: Theme.space24
+    property real gap: Theme.space24             // the room under each stage; the home screen packs them tighter
 
     Accessible.role: Accessible.List
 
