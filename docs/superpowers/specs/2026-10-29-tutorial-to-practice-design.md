@@ -77,7 +77,9 @@ Built by hand from Qt Quick shapes so it animates smoothly; no Rive, no Lottie d
 
 ## 3. Goals, non-goals, anti-goals
 
-**Goals (in build order; each must work every time before the next starts)**
+**Goals.** They are built at the same time by several AI coding sessions (Ranvir asked for parallel
+building). The order below is the order in which pieces must become solid and get joined: a later goal
+never appears in the demo until the goals above it work every time.
 1. The Excel lesson experience end to end (home → lesson in real Excel → complete → home), polished.
 2. Make a lesson from a YouTube video: download, Muse Spark writes it, every check proven in real Excel.
 3. Meta's computer-use agent tests each lesson as a learner; Muse Spark's predicted mistakes must be rejected.
@@ -123,6 +125,20 @@ generating images for courses.
 - **Dark mode only.** Never design, check or mention a light mode.
 - **Tests:** keep them short and automatic (seconds). Pure logic gets unit tests; each live piece gets one
   short live check; the five-minute typing test runs once before the freeze, not after every change.
+- **Who builds, and on what:** AI coding sessions, all on Ranvir's one laptop, each in its own git
+  worktree. Ranvir starts each session himself from a prompt Claude writes. Anything needing real Excel,
+  real screenshots at 200% or the tester runs one session at a time; everything else runs against fake
+  snapshots and saved Meta answers, so it never needs the real apps. Ranvir approved the plan as a whole;
+  he does not approve each screenshot. Before any live run, free memory is checked and Ranvir is told which
+  sessions to close. The tester (it moves the real mouse) runs only after Ranvir says he is away.
+- **Spending:** every Meta call is logged with its cost in a local file. Tests replay saved Meta answers;
+  live calls happen only in pipeline runs and named live checks. At $100 spent, stop and tell Ranvir.
+- **Videos:** short (under about 15 minutes), single-task tutorials, hand-picked. Claude proposes a
+  shortlist (Creative Commons first, sheets that fit 920 px, tasks the check menu covers); Ranvir approves
+  it. Long multi-topic videos are out of scope.
+- **Judges:** the submission is the video plus a readable public repository. The README gives setup steps
+  for anyone with Windows, desktop Excel and their own Meta key. When a lesson's video isn't on the machine,
+  Watch the clip becomes "Get the video". Whether judges install entries stays a Discord question.
 
 ## 5. How it is built (decided)
 
@@ -167,6 +183,14 @@ target, check (a check kind + arguments), the replay operation that does it, thr
 mistakes (each a replay operation + its own "Not yet" line), and the clip's start and end seconds.
 A lesson also records its proof results and its test results; only lessons with both passed appear on
 the shelf.
+
+A person may edit a generated lesson (wording, hints, starter data). Every edit re-runs the proof and the
+test, the lesson records that it was edited by hand, and the README says lessons are generated and then
+reviewed. The first monthly-budget lesson is written by hand so the screens can be built against it; it is
+replaced by one made from a video once the pipeline works.
+
+VS Code lessons use the same format and the same proof (the extension can write files and run the
+learner's code). The agent tester is pointed at VS Code only after it works in Excel.
 
 ### 5.4 Making a lesson from a video
 1. Get the video: yt-dlp downloads it (and its captions when they exist) into `recordings/`.
@@ -246,10 +270,20 @@ before the mascot is built for real.
 | Write a lesson from a video | Muse Spark 1.3 (video + transcript in, lesson form out) |
 | Transcript when a video has no captions; voice questions (extra) | Muse Voice Transcribe |
 | Predict likely mistakes | Muse Spark 1.3 |
-| Play the learner to test a lesson | Meta's computer-use agent |
+| Play the learner to test a lesson | Meta's computer-use tool (Responses API, `{"type": "computer"}`), Muse Wonder 1.0 by default, Muse Spark 1.3 to save money |
 | Point when UI Automation can't find a button | Muse Spark 1.3 on a screenshot, cross-checked |
 | AI tips; Ask box | Muse Spark 1.3 |
 | Outlines that hug a target (extra, only if its test passes) | SAM 3.1 |
+
+**Go / no-go tests, in the first hours after the key works** (the old Fri 30 checkpoint, kept): Muse Spark
+reads a short Excel MP4 and fills the lesson form; the computer-use tool clicks a named cell in Excel at
+200% (and how its click positions map to the screen is written down); the credit left is noted. Saved
+answers are kept as test data.
+
+If the computer-use tool can't play the budget lesson in at least 4 of 5 runs, the tester switches to
+keyboard routes only (Name Box, shortcuts). If that also fails, a lesson reaches the shelf on its proof
+alone, its card shows "proven" instead of "proven and tested", and the README says so. Ranvir is told the
+moment either switch happens.
 
 ## 8. The demo (3 minutes)
 Hook: a YouTube tutorial playing; someone tries it in Excel and is stuck. Paste the link; watch the lesson
@@ -271,3 +305,8 @@ licence); the mascot's exact shape within section 2.3; how the VS Code extension
 - "Step 3 changed. Fix it" when earlier work gets undone.
 - A failed proof gets one retry from Muse Spark, then the step is dropped.
 - The typing test runs once before the freeze instead of after every change.
+- Hand edits to generated lessons are allowed, re-proven, re-tested and labelled.
+- Short, single-task videos only; Claude proposes the shortlist, Ranvir approves it.
+- The tester's fallbacks (keyboard only, then "proven" only) and the 4-of-5 bar.
+- The $100 stop-and-tell on spending.
+- "Get the video" when a lesson's video isn't on the machine.
