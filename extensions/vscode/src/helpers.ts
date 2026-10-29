@@ -89,6 +89,19 @@ export function isPythonRun(command: string): boolean {
   return PYTHON.test(command);
 }
 
+// The answers to type into a running program, one per line. A newline at the very end only ends
+// the last answer.
+export function inputLines(text: string): string[] {
+  if (text === "") {
+    return [];
+  }
+  const lines = text.split(/\r?\n/);
+  if (lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  return lines;
+}
+
 export class LineReader {
   private rest = "";
 

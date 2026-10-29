@@ -262,7 +262,10 @@ def test_a_malformed_state_gives_an_empty_snapshot():
 
 
 def test_the_operation_menu():
-    assert set(OPS) == {"write_file", "append_line", "open_file", "save_file", "run_file", "clear_terminal"}
+    assert set(OPS) == {"write_file", "append_line", "open_file", "save_file", "delete_file", "run_file",
+                        "clear_terminal"}
     assert validate_args(OPS["write_file"], {"path": "hello.py", "text": "print(1)\n"}) == []
     assert validate_args(OPS["run_file"], {"path": "../outside.py"}) != []
     assert validate_args(OPS["clear_terminal"], {}) == []
+    assert validate_args(OPS["run_file"], {"path": "ask.py", "input": "Ranvir"}) == []
+    assert validate_args(OPS["run_file"], {"path": "ask.py", "input": ""}) != []

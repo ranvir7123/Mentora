@@ -15,6 +15,7 @@ import {
   LineReader,
   OutputClip,
   Throttle,
+  inputLines,
   insideFolder,
   isPythonRun,
   lineHeightPx,
@@ -42,6 +43,9 @@ const RETRY_MS = 1000;
 const RETRIES = 30;
 const SHELL_WAIT_MS = 5000;
 const OUTPUT_GRACE_MS = 1000;
+const STOP_WAIT_MS = 3000;
+const POLL_MS = 50;
+const CTRL_C = String.fromCharCode(3);
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 interface LinkInfo {
@@ -51,7 +55,9 @@ interface LinkInfo {
 }
 
 interface Running {
+  terminal: vscode.Terminal;
   execution: vscode.TerminalShellExecution;
+  ended: boolean;
   run: Run;
   clip: OutputClip;
   reading: Promise<void>;
@@ -215,7 +221,7 @@ class Link implements vscode.Disposable {
       vscode.window.onDidChangeTextEditorSelection(poke),
       vscode.window.onDidChangeTextEditorVisibleRanges(poke),
       vscode.languages.onDidChangeDiagnostics(poke),
-      vscode.window.onDidStartTerminalShellExecution((e) => this.runStarted(e.execution)),
+      vscode.window.onDidStartTerminalShellExecution((e) => this.runStarted(e.terminal, e.execution)),
       vscode.window.onDidEndTerminalShellExecution((e) => void this.runEnded(e.execution, e.exitCode)),
     ];
   }
@@ -228,7 +234,7 @@ class Link implements vscode.Disposable {
     this.throttle.dispose();
   }
 
-  private runStarted(execution: vscode.TerminalShellExecution): void {
+  private runStarted(terminal: vscode.Terminal, execution: vscode.TerminalShellExecution): void {
     const command = execution.commandLine.value;
     if (!isPythonRun(command)) {
       return;
@@ -242,7 +248,7 @@ class Link implements vscode.Disposable {
         this.throttle.poke();
       }
     })().catch(() => undefined);
-    this.running = { execution, run, clip, reading };
+    this.running = { terminal, execution, ended: false, run, clip, reading };
     this.run = run;
     this.throttle.poke();
   }
@@ -252,6 +258,7 @@ class Link implements vscode.Disposable {
     if (!running || running.execution !== execution) {
       return;
     }
+    running.ended = true;
     await Promise.race([running.reading, delay(OUTPUT_GRACE_MS)]);
     running.run.output = running.clip.text;
     running.run.exit_code = exitCode ?? null;
@@ -445,7 +452,16 @@ class Link implements vscode.Disposable {
       }
       case "run_file":
         return this.runFile(args);
+      case "delete_file": {
+        const uri = this.uriOf(args);
+        await this.closeTabs(uri);
+        if (await this.exists(uri)) {
+          await vscode.workspace.fs.delete(uri, { useTrash: false });
+        }
+        return;
+      }
       case "clear_terminal":
+        await this.stopRun();
         this.run = null;
         this.running = undefined;
         if (vscode.window.activeTerminal) {
@@ -477,7 +493,65 @@ class Link implements vscode.Disposable {
     if (!shell) {
       throw new Error("VS Code's terminal is not reporting runs (shell integration is off)");
     }
+    const before = this.running;
     shell.executeCommand("python", [relativeInside(this.folder.uri.fsPath, uri.fsPath) as string]);
+    const answers = typeof args.input === "string" ? inputLines(args.input) : [];
+    if (answers.length === 0) {
+      return;
+    }
+    // Type the answers as a learner would, once the program has started and only while it runs.
+    await this.until(() => this.running !== before && this.running?.terminal === terminal, SHELL_WAIT_MS);
+    const running = this.running;
+    if (running === before || running?.terminal !== terminal) {
+      throw new Error(`${String(args.path)} did not start, so its input was not typed`);
+    }
+    for (const line of answers) {
+      if (running.ended) {
+        break;
+      }
+      terminal.sendText(line, true);
+    }
+  }
+
+  // Stop a program that is still running, as Ctrl+C would. A program that ignores Ctrl+C loses its
+  // terminal, so the next run starts in a fresh one.
+  private async stopRun(): Promise<void> {
+    const running = this.running;
+    if (!running || running.ended) {
+      return;
+    }
+    running.terminal.sendText(CTRL_C, false);
+    if (!(await this.until(() => running.ended, STOP_WAIT_MS))) {
+      running.terminal.dispose();
+      if (this.runTerminal === running.terminal) {
+        this.runTerminal = undefined;
+      }
+    }
+  }
+
+  // Close a file's tabs before it is deleted, saving it first so VS Code does not ask.
+  private async closeTabs(uri: vscode.Uri): Promise<void> {
+    const doc = this.openDoc(uri);
+    if (doc?.isDirty) {
+      await doc.save();
+    }
+    const tabs = vscode.window.tabGroups.all
+      .flatMap((group) => group.tabs)
+      .filter((tab) => tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === uri.toString());
+    if (tabs.length) {
+      await vscode.window.tabGroups.close(tabs);
+    }
+  }
+
+  private async until(done: () => boolean, ms: number): Promise<boolean> {
+    const end = Date.now() + ms;
+    while (!done()) {
+      if (Date.now() >= end) {
+        return false;
+      }
+      await delay(POLL_MS);
+    }
+    return true;
   }
 
   private shellOf(terminal: vscode.Terminal): Promise<vscode.TerminalShellIntegration | undefined> {

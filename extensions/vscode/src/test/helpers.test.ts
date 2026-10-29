@@ -5,6 +5,7 @@ import {
   LineReader,
   OutputClip,
   Throttle,
+  inputLines,
   insideFolder,
   isPythonRun,
   lineHeightPx,
@@ -95,4 +96,11 @@ test("only commands that run Python count as runs", () => {
   assert.equal(isPythonRun("cls"), false);
   assert.equal(isPythonRun("pip install openai"), false);
   assert.equal(isPythonRun("notepad pythonnotes.txt"), false);
+});
+
+test("a run's input is typed one answer per line, and a last newline adds no empty answer", () => {
+  assert.deepEqual(inputLines("Ranvir"), ["Ranvir"]);
+  assert.deepEqual(inputLines("Ranvir\n20\n"), ["Ranvir", "20"]);
+  assert.deepEqual(inputLines("Ranvir\r\n\r\n20"), ["Ranvir", "", "20"]);
+  assert.deepEqual(inputLines(""), []);
 });
