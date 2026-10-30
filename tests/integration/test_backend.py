@@ -44,8 +44,10 @@ class RecordingPlugin(FakePlugin):
                                on_closed=on_closed)
         session.close_reason = ""
         gate, plain_close = self.close_gate, session.close
+        calls = session.close_calls = []
 
         def close(save=False):
+            calls.append(save)
             if gate is not None:
                 gate.wait(5)
             plain_close(save)
@@ -64,6 +66,7 @@ class FakeCoach:
         self.failure: Exception | None = None
         self.asked: list[tuple[str, dict]] = []
         self.tips_asked: list[list] = []
+        self.gate: threading.Event | None = None     # holds answers back until the test lets them go
 
     def tips(self, log):
         self.tips_asked.append(list(log))
@@ -73,6 +76,8 @@ class FakeCoach:
 
     def answer(self, question, context):
         self.asked.append((question, dict(context)))
+        if self.gate is not None:
+            self.gate.wait(5)
         if self.failure is not None:
             raise self.failure
         return self.answer_text
@@ -740,3 +745,126 @@ def test_every_shape_the_backend_sends_has_exactly_the_keys_the_screens_read(wor
     for i, (name, payload) in enumerate(sent):
         problems += shape_problems(payload, shapes[name], f"#{i} {name}")
     assert problems == []
+
+
+
+def _until(condition, timeout=5.0):
+    end = time.monotonic() + timeout
+    while not condition():
+        assert time.monotonic() < end, "it never happened"
+        time.sleep(0.01)
+
+
+def test_an_app_the_learner_closed_is_let_go(world):
+    session = world.open()
+    session.closed_by_learner()
+    world.idle()
+    assert session.close_calls == [True]        # its own clean-up runs (Excel quits), keeping any work left
+
+
+def test_a_step_passed_again_after_reopening_earns_nothing_new(world):
+    session = world.open()
+    world.learner_sets("k0", 1)
+    world.run_later()
+    session.closed_by_learner()
+    world.idle()
+    (world.tmp / "mentora" / "work" / "two-keys" / "state.json").unlink(missing_ok=True)  # Don't save
+    world.backend.reopen_app()
+    world.idle()
+    assert world.backend.lesson()["stepIndex"] == 0
+    world.learner_sets("k0", 1)
+    assert world.backend.lesson()["banner"]["kind"] == "right"
+    assert world.progress.points_today() == 10
+    assert world.backend.lesson()["points"] == 10
+
+
+def test_an_answer_that_arrives_after_the_step_is_passed_is_dropped(world):
+    world.open()
+    world.coach.gate = threading.Event()
+    world.backend.ask("Which key?")
+    _until(lambda: world.coach.asked)
+    world.plugin.session.learner_sets("k0", 1)
+    _until(lambda: (world.backend.lesson()["banner"] or {}).get("kind") == "right")
+    world.later.run()                           # the cheer ends and the Ask box clears for the next step
+    _until(lambda: world.backend.lesson()["ask"]["state"] == "idle")
+    world.coach.gate.set()
+    world.idle()
+    assert world.backend.lesson()["ask"] == {"state": "idle", "question": "", "answer": ""}
+
+
+def test_an_answer_about_a_passed_step_is_dropped_when_the_learner_carries_straight_on(world):
+    world.open()
+    world.coach.gate = threading.Event()
+    world.backend.ask("Which key?")
+    _until(lambda: world.coach.asked)
+    world.plugin.session.learner_sets("k0", 1)
+    _until(lambda: (world.backend.lesson()["banner"] or {}).get("kind") == "right")
+    world.plugin.session.learner_sets("k1", 5)  # straight on to the next step, which ends the cheer at once
+    _until(lambda: (world.backend.lesson()["banner"] or {}).get("kind") == "not_yet")
+    world.coach.gate.set()
+    world.idle()
+    assert world.backend.lesson()["ask"] == {"state": "idle", "question": "", "answer": ""}
+
+
+def test_tips_with_nothing_new_to_say_keep_the_last_ones(world):
+    world.progress.keep_tips("Try the Name Box.")
+    world.backend.shutdown()
+    world.start()
+    world.coach.tips = lambda log: ""
+    world.open()
+    world.learner_sets("k0", 1)
+    world.learner_sets("k1", 2)
+    assert world.backend.lesson()["complete"] is not None
+    assert world.backend.home()["tips"] == {"state": "ready", "text": "Try the Name Box."}
+    assert Progress(world.tmp / "mentora", today=lambda: TODAY).tips == "Try the Name Box."
+
+
+def test_hint_helps_with_the_step_that_came_undone(world):
+    world.open()
+    world.learner_sets("k0", 1)
+    world.run_later()
+    world.learner_sets("k0", 3)
+    world.learner_sets("k1", 2)
+    assert world.backend.lesson()["step"]["index"] == 0
+    world.backend.next_hint()
+    world.idle()
+    step = world.backend.lesson()["step"]
+    assert (step["hints"], step["hintsLeft"]) == (["Find k0."], 2)
+
+
+def test_quitting_does_not_wait_for_an_answer_from_the_coach(world):
+    world.coach.gate = threading.Event()
+    world.open()
+    world.backend.ask("Which key?")
+    _until(lambda: world.coach.asked)
+    started = time.monotonic()
+    world.backend.shutdown()
+    assert time.monotonic() - started < 1.0
+    assert world.plugin.session.close_calls == [True]   # the lesson's app is still saved and closed
+    world.coach.gate.set()
+
+
+def test_after_quitting_nothing_more_reaches_the_screens(world):
+    world.maker.gate = threading.Event()
+    world.backend.make_lesson(VIDEO)
+    _until(lambda: world.maker.made)
+    quitting = threading.Thread(target=world.backend.shutdown)
+    quitting.start()                            # waits for the lesson being made
+    time.sleep(0.2)
+    world.sent.clear()
+    world.maker.gate.set()
+    quitting.join(5)
+    assert not quitting.is_alive()
+    assert world.sent == []                     # the made lesson's news doesn't reach screens that are gone
+
+
+def test_questions_dropped_as_the_program_quits_are_not_left_counted(world):
+    world.coach.gate = threading.Event()
+    world.open()
+    world.backend.ask("Which key?")
+    _until(lambda: world.coach.asked)
+    world.backend.ask("Which cell?")            # waits in line behind the first question
+    time.sleep(0.2)
+    world.backend.shutdown()                    # drops the one waiting in line
+    world.coach.gate.set()
+    assert world.backend.wait_idle(2.0)

@@ -46,10 +46,13 @@ def split_screen(area: Rect, *, origin: tuple[float, float], dpr: float) -> tupl
     taskbar) in logical px. The panel is the right 360 logical px at full height; the app gets the rest.
     Edges land on whole pixels inside the work area, and the two meet with no gap."""
     ox, oy = origin
-    left = math.ceil(ox + (area.x - ox) * dpr)
-    top = math.ceil(oy + (area.y - oy) * dpr)
-    right = math.floor(ox + (area.x + area.w - ox) * dpr)
-    bottom = math.floor(oy + (area.y + area.h - oy) * dpr)
+
+    def px(v: float) -> float:          # 800 x 1.15 comes out as 919.9999999999999, which is 920
+        return round(v, 6)
+    left = math.ceil(px(ox + (area.x - ox) * dpr))
+    top = math.ceil(px(oy + (area.y - oy) * dpr))
+    right = math.floor(px(ox + (area.x + area.w - ox) * dpr))
+    bottom = math.floor(px(oy + (area.y + area.h - oy) * dpr))
     panel_left = right - round(PANEL_WIDTH * dpr)
     return (Rect(left, top, panel_left - left, bottom - top),
             Rect(panel_left, top, right - panel_left, bottom - top))
@@ -96,13 +99,18 @@ class Layout:
 
 class Docking(QObject):
     """Hides home while a lesson is open and brings it back when the lesson closes. Closing home (its X)
-    ends the program; hiding it never does."""
+    ends the program; hiding it never does. Closing the panel (Alt+F4) while a lesson is open closes the
+    lesson, so home comes back instead of the program being left with no window. With no lesson open the
+    panel lets itself close: Qt asks every window to close as the program quits, and one refusal stops it."""
 
-    def __init__(self, bridge: Bridge, home: QObject, *, quit: Callable[[], None]):
+    def __init__(self, bridge: Bridge, home: QObject, *, panel: QObject | None = None,
+                 quit: Callable[[], None]):
         super().__init__(home)
-        self._bridge, self._home, self._quit = bridge, home, quit
+        self._bridge, self._home, self._panel, self._quit = bridge, home, panel, quit
         self._lesson_open = False
         home.installEventFilter(self)
+        if panel is not None:
+            panel.installEventFilter(self)
         bridge.lessonChanged.connect(self._follow)
         self._follow()
 
@@ -120,9 +128,15 @@ class Docking(QObject):
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         # Qt may still call this while Python is tearing the program down, after this object's fields go.
-        home = getattr(self, "_home", None)
-        if home is not None and watched is home and event.type() == QEvent.Type.Close:
+        if event.type() != QEvent.Type.Close:
+            return False
+        home, panel = getattr(self, "_home", None), getattr(self, "_panel", None)
+        if home is not None and watched is home:
             self._quit()
+        elif panel is not None and watched is panel and self._lesson_open:
+            event.ignore()                   # the panel stays; closing the lesson hides it
+            self._bridge.closeLesson()
+            return True
         return False
 
 
@@ -221,6 +235,6 @@ def main(argv: list[str] | None = None) -> int:
     if opened is None:
         return 1
     bridge, _engine, windows = opened
-    docking = Docking(bridge, windows["home"], quit=app.quit)
+    docking = Docking(bridge, windows["home"], panel=windows["panel"], quit=app.quit)
     app._program = (lock, layout, docking)   # kept alive as long as the program
     return app.exec()

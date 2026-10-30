@@ -156,3 +156,46 @@ def test_the_file_is_plain_json_on_the_laptop(tmp_path):
     p.step_passed("budget", 0, 10)
     data = json.loads((tmp_path / "mentora" / "progress.json").read_text(encoding="utf-8"))
     assert data["days"] == {"2026-10-30": 10}
+
+
+
+def test_a_progress_file_that_cannot_be_read_is_never_overwritten(tmp_path, monkeypatch):
+    good = Progress(tmp_path, today=Clock())
+    good.step_passed("budget", 0, 10)
+    before = (tmp_path / "progress.json").read_text(encoding="utf-8")
+
+    real_read = type(tmp_path).read_text
+
+    def locked(self, *args, **kwargs):
+        if self.name == "progress.json":
+            raise PermissionError("another program has the file open")
+        return real_read(self, *args, **kwargs)
+    monkeypatch.setattr(type(tmp_path), "read_text", locked)
+    p = Progress(tmp_path, today=Clock())
+    p.step_passed("budget", 1, 10)                       # counted while the program runs ...
+    assert p.points_today() == 10
+    monkeypatch.undo()
+    assert (tmp_path / "progress.json").read_text(encoding="utf-8") == before   # ... but the good file stays
+
+
+def test_a_file_locked_for_a_moment_is_read_on_a_second_try(tmp_path, monkeypatch):
+    Progress(tmp_path, today=Clock()).step_passed("budget", 0, 10)
+    real_read, fails = type(tmp_path).read_text, [1]
+
+    def busy_once(self, *args, **kwargs):
+        if self.name == "progress.json" and fails:
+            fails.pop()
+            raise PermissionError("an antivirus scan has the file open")
+        return real_read(self, *args, **kwargs)
+    monkeypatch.setattr(type(tmp_path), "read_text", busy_once)
+    assert Progress(tmp_path, today=Clock()).points_today() == 10
+
+
+def test_a_step_earns_its_points_once(tmp_path):
+    p = Progress(tmp_path, today=Clock())
+    assert p.step_passed("budget", 0, 10) == 10
+    assert p.step_passed("budget", 0, 10) == 0           # passed again after reopening: nothing new
+    assert p.step_passed("budget", 1, 10) == 10
+    assert p.points_today() == 20
+    p.lesson_done("budget", None)
+    assert p.step_passed("budget", 0, 10) == 10          # a finished lesson played again earns again

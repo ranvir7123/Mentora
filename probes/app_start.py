@@ -45,7 +45,7 @@ class Probe:
 
     def run(self, script: Iterator[tuple[Callable[[], bool], float, str]]) -> None:
         """Each step the script yields is (condition, seconds allowed, what it means): the next step waits
-        until the condition holds, and a step that times out fails and ends the program."""
+        until the condition holds, and a step that times out fails and ends the program (exit code 1)."""
         from PySide6.QtCore import QTimer
         from PySide6.QtGui import QGuiApplication
 
@@ -56,7 +56,7 @@ class Probe:
                 return
             except Exception as e:                        # a broken step must not leave the program running
                 self.check(False, f"the probe itself broke: {e!r}")
-                QGuiApplication.quit()
+                QGuiApplication.exit(1)
                 return
             deadline = time.monotonic() + seconds
 
@@ -65,7 +65,7 @@ class Probe:
                     advance()
                 elif time.monotonic() > deadline:
                     self.check(False, f"{what} (waited {seconds:g} s)")
-                    QGuiApplication.quit()
+                    QGuiApplication.exit(1)          # not quit(): the panel refuses that while a lesson is open
                 else:
                     QTimer.singleShot(50, poll)
             poll()

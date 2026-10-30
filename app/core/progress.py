@@ -3,7 +3,12 @@
 `progress.json` holds the points earned each day, where each lesson is up to, the last lesson opened, the
 lessons the learner made, the last tips and the learner's name. It is written whole to a temporary file
 and then swapped in, so a power cut leaves either the old file or the new one, never half of one. A file
-that can't be read is set aside as `progress.broken-<time>.json` and the learner starts afresh.
+that is broken is set aside as `progress.broken-<time>.json` and the learner starts afresh. A file that
+can't be opened (another program holding it) is tried again; if it still can't be, this run's progress is
+counted but never saved, so the file is left as it was.
+
+A step's points are earned once: passing it again after reopening a lesson gives none. A finished lesson
+played again earns them again.
 
 `attempts.jsonl` is the attempt log the coach reads: one line per finished step, added as it happens. A
 half-written last line is skipped.
@@ -17,6 +22,7 @@ import json
 import logging
 import os
 import threading
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -27,6 +33,8 @@ from app.core.runner import LessonDone, StepRecord
 log = logging.getLogger(__name__)
 
 FORMAT = 1
+READ_TRIES = 3
+READ_GAP_S = 0.2
 
 
 def default_root() -> Path:
@@ -83,6 +91,7 @@ class Progress:
         self._root = Path(root)
         self._today = today
         self._lock = threading.RLock()
+        self._unreadable = False
         saved = self._load()
         self._days: dict[str, float] = saved.get("days", {})
         self._lessons: dict[str, dict] = saved.get("lessons", {})
@@ -101,13 +110,19 @@ class Progress:
         return self._root / "attempts.jsonl"
 
     def _load(self) -> dict:
-        try:
-            text = self._file.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            return {}
-        except OSError:
-            log.exception("progress.json could not be read; starting with an empty record")
-            return {}
+        for attempt in range(1, READ_TRIES + 1):
+            try:
+                text = self._file.read_text(encoding="utf-8")
+                break
+            except FileNotFoundError:
+                return {}
+            except OSError:
+                if attempt == READ_TRIES:
+                    log.exception("progress.json could not be read; this run is counted but not saved, so the "
+                                  "file stays as it was")
+                    self._unreadable = True
+                    return {}
+                time.sleep(READ_GAP_S)
         try:
             return _read(json.loads(text))
         except (ValueError, TypeError) as e:
@@ -125,6 +140,8 @@ class Progress:
         """Write the whole record to a temporary file, then swap it in. A failure is logged and the last
         good file stays; the program keeps counting in memory."""
         with self._lock:
+            if self._unreadable:                 # the file on disk holds progress this run never read
+                return
             data = {"format": FORMAT, "days": self._days, "lessons": self._lessons, "made": self.made,
                     "last_lesson": self.last_lesson, "tips": self.tips, "name": self.name,
                     "daily_goal": self.daily_goal}
@@ -172,13 +189,16 @@ class Progress:
     def _lesson(self, lesson_id: str) -> dict:
         return self._lessons.setdefault(lesson_id, {"step": 0, "done": False, "best_seconds": None})
 
-    def step_passed(self, lesson_id: str, index: int, points: int) -> None:
+    def step_passed(self, lesson_id: str, index: int, points: int) -> int:
+        """Counts a passed step and gives the points it earned: none when it was passed before."""
         with self._lock:
             state = self._lesson(lesson_id)
+            earned = points if state["done"] or index >= state["step"] else 0
             state["step"] = max(state["step"], index + 1)
             today = self._day(self._today())
-            self._days[today] = self._days.get(today, 0) + points
+            self._days[today] = self._days.get(today, 0) + earned
             self.save()
+            return earned
 
     def lesson_done(self, lesson_id: str, done: LessonDone | None) -> None:
         """`done` is None when the lesson's saved work already passed every step on reopening: it is done,

@@ -35,6 +35,14 @@ def test_at_150_percent_the_two_meet_exactly_on_whole_pixels():
     assert app.h == panel.h == 1600
 
 
+def test_at_110_or_115_percent_no_pixel_is_lost_to_rounding():
+    from app.main import split_screen
+    _, panel = split_screen(Rect(0, 0, 800, 600), origin=(0, 0), dpr=1.15)   # 800 x 1.15 is 919.99999...
+    assert panel.x + panel.w == 920
+    app, _ = split_screen(Rect(0, 50, 800, 600), origin=(0, 0), dpr=1.1)      # 50 x 1.1 is 55.000...01
+    assert app.y == 55
+
+
 def test_a_taskbar_on_the_left_is_kept_clear():
     from app.main import split_screen
     app, panel = split_screen(Rect(40, 0, 1240, 800), origin=(0, 0), dpr=2.0)
@@ -56,6 +64,9 @@ def test_the_layout_is_read_from_any_thread_and_follows_the_screen(qapp):
     assert panel.w > 0 and app.x + app.w == panel.x
     layout._update()                                      # the same screen again: nothing to redo
     assert changes == []
+    layout._value = (Rect(0, 0, 1, 1), Rect(1, 0, 1, 1))   # as if the taskbar had moved since
+    layout._update()
+    assert changes == [1] and layout() == (app, panel)
 
 
 # Home steps aside while a lesson is open.
@@ -68,7 +79,7 @@ def screens(qapp):
     backend = DemoBackend("first_run")
     quits = []
     bridge, engine, windows = open_screens(backend, show=("home", "panel"))
-    docking = Docking(bridge, windows["home"], quit=lambda: quits.append(1))
+    docking = Docking(bridge, windows["home"], panel=windows["panel"], quit=lambda: quits.append(1))
     _settle(qapp)
     yield backend, windows, quits
     docking.deleteLater()
@@ -96,6 +107,29 @@ def test_home_hides_while_a_lesson_is_open_and_comes_back_after(screens, qapp):
     assert quits == []                                    # hiding home never ends the program
 
 
+def test_closing_the_panel_closes_the_lesson_and_brings_home_back(screens, qapp):
+    backend, windows, quits = screens
+    backend.open_lesson("monthly-budget")
+    _settle(qapp)
+    windows["panel"].close()                             # Alt+F4 on the panel
+    _settle(qapp)
+    assert not backend.lesson()["open"]
+    assert windows["home"].isVisible() and not windows["panel"].isVisible()
+    assert quits == []
+    backend.open_lesson("monthly-budget")                # and the panel still opens next time
+    _settle(qapp)
+    assert windows["panel"].isVisible()
+
+
+def test_the_panel_never_holds_up_the_program_quitting_when_no_lesson_is_open(screens, qapp):
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtGui import QCloseEvent
+    _, windows, _ = screens
+    asked = QCloseEvent()                                # as Qt asks every window when the program quits
+    QCoreApplication.sendEvent(windows["panel"], asked)
+    assert asked.isAccepted()
+
+
 def test_closing_home_ends_the_program(screens, qapp):
     _, windows, quits = screens
     windows["home"].close()
@@ -114,6 +148,18 @@ def test_a_second_copy_does_not_start(tmp_path, qapp):
     again = only_copy(tmp_path)
     assert again is not None
     again.unlock()
+
+
+def test_a_lock_left_by_a_copy_that_crashed_is_taken_over(tmp_path, qapp):
+    from PySide6.QtCore import QCoreApplication, QSysInfo
+
+    from app.main import only_copy
+    gone = 4_000_000                                      # no process has this number
+    (tmp_path / "mentora.lock").write_text(
+        f"{gone}\n{QCoreApplication.applicationName()}\n{QSysInfo.machineHostName()}\n", encoding="utf-8")
+    lock = only_copy(tmp_path)
+    assert lock is not None
+    lock.unlock()
 
 
 # The real pieces.

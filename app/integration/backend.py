@@ -313,16 +313,15 @@ class Backend:
                 fn(*args)
             except Exception:
                 log.exception("backend job %s failed", getattr(fn, "__name__", fn))
-            finally:
-                with self._idle:
-                    self._pending -= 1
-                    self._idle.notify_all()
-        try:
-            pool.submit(job)
-        except RuntimeError:                     # shut down while this was being handed over
+
+        def finished(_: Future | None) -> None:  # it ran, or it was dropped as the program quit
             with self._idle:
                 self._pending -= 1
                 self._idle.notify_all()
+        try:
+            pool.submit(job).add_done_callback(finished)
+        except RuntimeError:                     # shut down while this was being handed over
+            finished(None)
 
     def _after(self, seconds: float, pool: ThreadPoolExecutor, fn: Callable, *args: Any) -> None:
         self._later(seconds, lambda: self._submit(pool, fn, *args))
@@ -333,16 +332,21 @@ class Backend:
             return self._idle.wait_for(lambda: self._pending == 0, timeout)
 
     def shutdown(self) -> None:
-        """Saves and closes the lesson's app, then stops the workers. Call once, as the program quits."""
+        """Saves and closes the lesson's app, then stops the workers. Call once, as the program quits.
+        A question to the coach isn't waited for. A lesson being made is: it can't be stopped from here,
+        and it records the made lesson in the learner's progress when it finishes. The screens are gone,
+        so nothing more is sent to them."""
         with self._lock:
             self._key_hunt += 1
             o, self._open = self._open, None
             session = self._detach(o)
+            self._listeners.clear()
         if session is not None:
             self._submit(self._work, self._close_app, session)
         with self._idle:
             self._stopped = True
-        for pool in (self._work, self._meta_pool, self._factory_pool):
+        self._meta_pool.shutdown(wait=False, cancel_futures=True)
+        for pool in (self._work, self._factory_pool):
             pool.shutdown(wait=True)
 
     # The home screen.
@@ -606,6 +610,8 @@ class Backend:
             o.pointer = copy.deepcopy(HIDDEN_POINTER)
             self._publish_lesson()
             self._publish_pointer()
+        if session is not None:                  # let that app go (Excel quits), keeping any work left open
+            self._close_app(session)
 
     # What the app says.
 
@@ -644,8 +650,9 @@ class Backend:
         done: LessonDone | None = None
         for event in events:
             if isinstance(event, StepPassed):
-                o.points += event.points
-                self._progress.step_passed(o.lesson.id, event.index, event.points)
+                o.points += self._progress.step_passed(o.lesson.id, event.index, event.points)
+                o.ask = {"state": "idle", "question": "", "answer": ""}
+                o.asked += 1                     # the Ask box was about this step: an answer on its way is dropped
                 o.banner = {"kind": "right", "text": "", "stepIndex": event.index}
                 passed = event.index
                 if "right" not in cues:
@@ -693,7 +700,6 @@ class Backend:
             o.cheering = None
             o.shown = min(o.run.index, len(o.lesson.steps) - 1)
             o.banner = None
-            o.ask = {"state": "idle", "question": "", "answer": ""}
             self._publish_lesson()
         self._follow(o, gen)
 
@@ -810,10 +816,17 @@ class Backend:
             o = self._open
             if o is None or o.run is None or o.cheering is not None:
                 return
-            hint = o.run.hint()
+            index = o.run.index
+            if index >= len(o.lesson.steps) and o.shown in o.run.changed:
+                # Every step done, but the one shown came undone: its own hints, after those seen before.
+                index = o.shown
+                seen, hints = o.hints.get(index, []), o.lesson.steps[index].hints
+                hint = hints[len(seen)] if len(seen) < len(hints) else None
+            else:
+                hint = o.run.hint()
             if hint is None:
                 return
-            o.hints.setdefault(o.run.index, []).append(hint)
+            o.hints.setdefault(index, []).append(hint)
             self._publish_lesson()
 
     def watch_clip(self) -> None:
@@ -879,8 +892,12 @@ class Backend:
         meta = None
         try:
             text = self._coach.tips(self._progress.attempts())
-            tips, meta = ({"state": "ready", "text": text} if text else {"state": "none", "text": ""}), "ok"
-            self._progress.keep_tips(text)
+            meta = "ok"
+            if text:
+                self._progress.keep_tips(text)
+            else:                                # nothing new to say: the last tips stay
+                text = self._progress.tips
+            tips = {"state": "ready", "text": text} if text else {"state": "none", "text": ""}
         except CoachUnavailable as e:
             tips, meta = {"state": "error", "text": str(e)}, self._meta_after(e)
         except Exception:
