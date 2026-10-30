@@ -134,6 +134,13 @@ class LessonState(TypedDict):
     badge: str | None
 
 
+class Box(TypedDict):
+    x: int                       # physical screen pixels, like the pointer's own
+    y: int
+    w: int
+    h: int
+
+
 class PointerState(TypedDict):
     visible: bool
     x: int                       # x, y, w, h are physical screen pixels; the screens divide by the
@@ -143,6 +150,10 @@ class PointerState(TypedDict):
     mascot: Literal["resting", "flying", "watching", "thinking", "cheering"]
     bubble: str
     ring: Literal["pulse", "right", "none"]
+    room: Box | None             # where the mascot and its words go (a cell's: the sheet's visible cells, clear
+                                 # of the app's buttons and bars); None: anywhere on the screen beside the target
+    filled: Box | None           # what they keep off when there is space (a cell's: the sheet's filled cells on
+                                 # screen, so the learner can still read them); None: nothing
 
 
 CUES = ("click", "right", "not_yet", "complete", "hop")
@@ -166,6 +177,7 @@ CLOSED_LESSON: LessonState = {
 
 HIDDEN_POINTER: PointerState = {
     "visible": False, "x": 0, "y": 0, "w": 0, "h": 0, "mascot": "resting", "bubble": "", "ring": "none",
+    "room": None, "filled": None,
 }
 
 

@@ -74,6 +74,33 @@ def test_the_words_find_their_place_once_the_mascot_lands_not_on_every_frame_of_
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
+def test_the_mascot_picks_its_side_for_the_words_it_is_about_to_say(qapp, monkeypatch):
+    """It lands where its words fit, so the size it lands by must be the new step's words, not the last's."""
+    from app.ui import landing
+    sizes = []
+    real = landing.landing_spot
+    monkeypatch.setattr(landing, "landing_spot", lambda *a, **k: sizes.append(k.get("words")) or real(*a, **k))
+    backend = DemoBackend("pointer_watching")
+    engine = make_engine(Bridge(backend))
+    root = load_window(engine, "overlay", backend.view.get("overlay"))
+    try:
+        words = next(i for i in _items(root.contentItem())
+                     if i.property("said") is not None and i.property("text") is not None)
+        backend.replay()
+        _settle(qapp, 0.1)
+        short = (words.width(), words.height())
+        backend._publish(pointer=dict(backend.pointer(), x=backend.pointer()["x"] + 200, mascot="flying",
+                                      bubble="type it in this cell"))
+        _settle(qapp, 0.1)
+        assert words.width() > short[0]
+        assert sizes[-1] == (words.width(), words.height()), f"landed by {sizes[-1]}, says {words.width()} wide"
+    finally:
+        root.close()
+        root.deleteLater()
+        engine.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 def test_the_mascots_words_start_with_a_capital_letter(qapp):
     for state, words in (("pointer_watching", "This one!"), ("long_text", "Type it in this cell")):
         backend = DemoBackend(state)

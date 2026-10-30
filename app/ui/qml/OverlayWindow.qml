@@ -49,7 +49,7 @@ Window {
         const t = bridge.pointerRect, d = ringOutset + pulseReach
         return Qt.rect(t.x - d, t.y - d, t.width + 2 * d, t.height + 2 * d)
     }
-    function landing() { return fromScreen(bridge.landingSpot(keepClear(), size, headroom)) }
+    function landing() { return fromScreen(bridge.landingSpot(keepClear(), size, headroom, Qt.size(words.width, words.height))) }
     function home() {
         const h = bridge.mascotHome
         return fromScreen(Qt.point(h.x + (h.width - size) / 2, h.y + (h.height - size) / 2))

@@ -3,7 +3,11 @@
 Pure geometry, so it can be tested without a screen. Every rectangle is in one unit (the bridge uses
 physical pixels, so the 8 px gap stays 8 real pixels at any scaling). The rules: the mascot sits beside
 the target, never on it (it keeps clear of the target grown by 6 px), stays on the screen and out of the
-lesson panel, and tries the target's left first, then above, right and below.
+lesson panel, and tries the target's left first, then above, right and below. It takes a side only where its
+words fit beside it too, if any side has that. When the app gives a room (for a cell, the sheet's visible
+cells), the mascot and its words stay inside it, so they never cover the app's own buttons and bars; only
+when nothing fits there do the screen's rules apply. Inside it they keep off the filled cells the app
+gives, when there is space, so the learner can still read them.
 """
 from __future__ import annotations
 
@@ -28,6 +32,19 @@ def _clamp(v: float, low: float, high: float) -> float:
     return max(low, min(v, high))
 
 
+def _common(a: Rect, b: Rect) -> Rect | None:
+    x0, y0 = max(a.x, b.x), max(a.y, b.y)
+    x1, y1 = min(a.x + a.w, b.x + b.w), min(a.y + a.h, b.y + b.h)
+    return Rect(x0, y0, x1 - x0, y1 - y0) if x1 > x0 and y1 > y0 else None
+
+
+def _areas(target: Rect, screen: Rect, room: Rect | None) -> list[Rect]:
+    """Where to look, in turn: the part of the room on the screen (only a room that holds the target; any
+    other is out of date), then the whole screen."""
+    inside = _common(room, screen) if room is not None and room.intersects(target) else None
+    return ([inside] if inside is not None else []) + [screen]
+
+
 def _overlap(a: Rect, b: Rect) -> float:
     w = min(a.x + a.w, b.x + b.w) - max(a.x, b.x)
     h = min(a.y + a.h, b.y + b.h) - max(a.y, b.y)
@@ -46,44 +63,51 @@ def _onto_screen(r: Rect, screen: Rect, avoid: Rect | None) -> Rect:
     return min(ways, key=lambda w: abs(w.x - r.x) + abs(w.y - r.y)) if ways else r
 
 
-def landing_spot(target: Rect, mascot: float, screen: Rect, avoid: Rect | None,
-                 *, headroom: float = 0.0, gap: float = GAP) -> tuple[float, float]:
-    """Top-left of the mascot's body (a `mascot`-sized square) beside `target`.
-
-    `headroom` is the space kept free above the body for the parts that stick up (its curl, its hop), so
-    they never reach the target either. If the target leaves no room on any side, the spot on the screen
-    and out of `avoid` that covers the least of the target is used.
-    """
+def _sides(target: Rect, mascot: float, area: Rect, headroom: float, gap: float) -> list[Rect]:
+    """The footprint (body plus headroom) on each side of the target, `gap` from it, centred on it and slid
+    along the side to stay in `area`: left, above, right, below."""
     full = mascot + headroom
     cx, cy = target.center
-    # Each side: the footprint (body plus headroom) placed `gap` from the target, centred on it, and slid
-    # along the side to stay on the screen.
-    sides = [
-        Rect(target.x - gap - mascot, cy - mascot / 2 - headroom, mascot, full),      # left
-        Rect(cx - mascot / 2, target.y - gap - full, mascot, full),                   # above
-        Rect(target.x + target.w + gap, cy - mascot / 2 - headroom, mascot, full),    # right
-        Rect(cx - mascot / 2, target.y + target.h + gap, mascot, full),               # below
-    ]
-    for i, s in enumerate(sides):
-        if i in (0, 2):
-            sides[i] = Rect(s.x, _clamp(s.y, screen.y, screen.y + screen.h - full), s.w, s.h)
-        else:
-            sides[i] = Rect(_clamp(s.x, screen.x, screen.x + screen.w - mascot), s.y, s.w, s.h)
-    keep_clear = [target.inflate(CLEAR)] + ([avoid] if avoid is not None else [])
-    for s in sides:
-        if _fits(s, keep_clear, screen):
-            return s.x, s.y + headroom
-    best = min((_onto_screen(s, screen, avoid) for s in sides), key=lambda s: _overlap(s, target.inflate(CLEAR)))
+    level = _clamp(cy - mascot / 2 - headroom, area.y, area.y + area.h - full)
+    middle = _clamp(cx - mascot / 2, area.x, area.x + area.w - mascot)
+    return [Rect(target.x - gap - mascot, level, mascot, full), Rect(middle, target.y - gap - full, mascot, full),
+            Rect(target.x + target.w + gap, level, mascot, full), Rect(middle, target.y + target.h + gap, mascot, full)]
+
+
+def _keep_offs(avoid: Rect | None, filled: Rect | None) -> list[list[Rect]]:
+    """What to keep clear of, besides the target, in turn: `avoid` and the filled cells, then `avoid` alone."""
+    always = [avoid] if avoid is not None else []
+    return ([always + [filled]] if filled is not None else []) + [always]
+
+
+def landing_spot(target: Rect, mascot: float, screen: Rect, avoid: Rect | None, *, room: Rect | None = None,
+                 filled: Rect | None = None, headroom: float = 0.0, words: tuple[float, float] | None = None,
+                 gap: float = GAP) -> tuple[float, float]:
+    """Top-left of the mascot's body (a `mascot`-sized square) beside `target`, inside `room` and off
+    `filled` when a side fits there.
+
+    `headroom` is the space kept free above the body for the parts that stick up (its curl, its hop), so
+    they never reach the target either. `words` is the size (w, h) of what it will say: a side counts first
+    only where those fit beside it in the same area. The order of what gives way first: the filled cells,
+    then the room, then the words. If the target leaves no room on any side, the spot on the screen and out
+    of `avoid` that covers the least of the target is used.
+    """
+    tries = [(area, with_words, off) for with_words in ([True] if words is not None else []) + [False]
+             for area in _areas(target, screen, room) for off in _keep_offs(avoid, filled)]
+    for area, with_words, off in tries:
+        for s in _sides(target, mascot, area, headroom, gap):
+            if _fits(s, [target.inflate(CLEAR)] + off, area) and (
+                    not with_words or _words_in(target, s, words, area, off, gap) is not None):
+                return s.x, s.y + headroom
+    best = min((_onto_screen(s, screen, avoid) for s in _sides(target, mascot, screen, headroom, gap)),
+               key=lambda s: _overlap(s, target.inflate(CLEAR)))
     return best.x, best.y + headroom
 
 
-def bubble_spot(target: Rect, mascot: Rect, bubble: tuple[float, float], screen: Rect, avoid: Rect | None,
-                *, gap: float = GAP) -> tuple[float, float]:
-    """Top-left of the mascot's words (a `bubble` = (w, h) box) next to `mascot`, its whole footprint.
-
-    Above the mascot first, leaning away from the target, then below, then beside it on the far side;
-    never on the target, the mascot, off the screen or in `avoid`.
-    """
+def _word_spots(target: Rect, mascot: Rect, bubble: tuple[float, float], area: Rect, gap: float) -> list[Rect]:
+    """Where the words may go beside `mascot`, in order: above it leaning away from the target, above it
+    centred, the same two below, then beside it on the far side and the near side; each slid along to stay
+    in `area`."""
     w, h = bubble
     mx, my = mascot.center
     away_left = mx < target.center[0]       # the mascot is left of the target, so its words lean left
@@ -92,13 +116,35 @@ def bubble_spot(target: Rect, mascot: Rect, bubble: tuple[float, float], screen:
     above, below = mascot.y - gap - h, mascot.y + mascot.h + gap
     far = mascot.x - gap - w if away_left else mascot.x + mascot.w + gap
     near = mascot.x + mascot.w + gap if away_left else mascot.x - gap - w
-    spots = [Rect(lean, above, w, h), Rect(centred, above, w, h), Rect(lean, below, w, h),
-             Rect(centred, below, w, h), Rect(far, my - h / 2, w, h), Rect(near, my - h / 2, w, h)]
-    keep_clear = [target.inflate(CLEAR), mascot] + ([avoid] if avoid is not None else [])
-    for s in spots:
-        if _fits(s, keep_clear, screen):
-            return s.x, s.y
-    best = min((_onto_screen(s, screen, avoid) for s in spots),
+
+    def across(x: float) -> float:
+        return _clamp(x, area.x, area.x + area.w - w)
+    level = _clamp(my - h / 2, area.y, area.y + area.h - h)
+    return [Rect(across(lean), above, w, h), Rect(across(centred), above, w, h), Rect(across(lean), below, w, h),
+            Rect(across(centred), below, w, h), Rect(far, level, w, h), Rect(near, level, w, h)]
+
+
+def _words_in(target: Rect, mascot: Rect, bubble: tuple[float, float], area: Rect, off: list[Rect],
+              gap: float) -> Rect | None:
+    """The first spot for the words in `area` that is clear of the target, the mascot and everything in `off`."""
+    keep_clear = [target.inflate(CLEAR), mascot] + off
+    return next((s for s in _word_spots(target, mascot, bubble, area, gap) if _fits(s, keep_clear, area)), None)
+
+
+def bubble_spot(target: Rect, mascot: Rect, bubble: tuple[float, float], screen: Rect, avoid: Rect | None,
+                *, room: Rect | None = None, filled: Rect | None = None, gap: float = GAP) -> tuple[float, float]:
+    """Top-left of the mascot's words (a `bubble` = (w, h) box) next to `mascot`, its whole footprint.
+
+    Above the mascot first, leaning away from the target, then below, then beside it on the far side;
+    inside `room` and off `filled` when one of those fits there; never on the target, the mascot, off the
+    screen or in `avoid`.
+    """
+    for area in _areas(target, screen, room):
+        for off in _keep_offs(avoid, filled):
+            spot = _words_in(target, mascot, bubble, area, off, gap)
+            if spot is not None:
+                return spot.x, spot.y
+    best = min((_onto_screen(s, screen, avoid) for s in _word_spots(target, mascot, bubble, screen, gap)),
                key=lambda s: _overlap(s, target.inflate(CLEAR)) + _overlap(s, mascot))
     return best.x, best.y
 

@@ -25,7 +25,7 @@ STATES: tuple[str, ...] = (
     "lesson_goal", "lesson_step", "lesson_right", "lesson_not_yet", "lesson_hints", "lesson_changed",
     "lesson_clip", "lesson_clip_missing", "lesson_ask", "lesson_app_closed", "lesson_complete",
     "lesson_undone", "lesson_note", "lesson_ask_error", "lesson_app_lost",
-    "pointer_flying", "pointer_watching", "pointer_right", "long_text",
+    "pointer_flying", "pointer_watching", "pointer_right", "pointer_top_row", "pointer_button", "long_text",
 )
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -48,6 +48,8 @@ def _lesson_file() -> Lesson:
 
 _COLS = {"A": (60, 200), "B": (260, 170), "C": (430, 140), "D": (570, 140)}
 _ROW1, _ROW_H = 470, 40
+_CELLS = {"x": 60, "y": 470, "w": 1780, "h": 1130}       # the sheet's cells: under the headings, left of the panel
+_FILLED = {"x": 60, "y": 470, "w": 510, "h": 8 * _ROW_H}  # A1:C8, the budget's filled cells
 _CONTROLS = {
     "Insert > Pie": (612, 168, 96, 112),
     "View > Freeze Panes": (838, 168, 120, 112),
@@ -170,8 +172,12 @@ def _banner(kind: str, text: str, index: int) -> dict:
 
 
 def _pointer(index: int, mascot: str, ring: str = "pulse", bubble: str = "") -> dict:
+    """Like Excel's plug-in: a cell's mascot stays on the sheet's empty cells when there is space; a button's
+    goes anywhere beside it."""
     x, y, w, h = target_rect(index)
-    return {"visible": True, "x": x, "y": y, "w": w, "h": h, "mascot": mascot, "bubble": bubble, "ring": ring}
+    cell = _lesson_file().steps[index].target.kind != "control"
+    return {"visible": True, "x": x, "y": y, "w": w, "h": h, "mascot": mascot, "bubble": bubble, "ring": ring,
+            "room": dict(_CELLS) if cell else None, "filled": dict(_FILLED) if cell else None}
 
 
 _LONG_TITLE = "Track your monthly spending with a budget that adds itself up"
@@ -272,6 +278,10 @@ def _build(state: str) -> tuple[dict, dict, dict, str | None, dict]:
     elif state == "pointer_right":
         lesson = _lesson(1, banner=_banner("right", "", 1), points=20)
         pointer = _pointer(1, "cheering", ring="right")
+    elif state == "pointer_top_row":            # the headings in the sheet's top row, right under the ribbon
+        lesson, pointer = _lesson(0), _pointer(0, "watching")
+    elif state == "pointer_button":             # a ribbon button: the mascot goes right beside it
+        lesson, pointer = _lesson(6), _pointer(6, "watching")
     elif state == "long_text":
         home = _build("home_long_text")[0]
         step = _step_view(3, hints_shown=3)

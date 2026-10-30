@@ -106,13 +106,26 @@ def spot_rect(pieces: Iterable[tuple[PaneInfo, float, float, float, float]]) -> 
     return _union(r for r in shown if r is not None)
 
 
+def room_of(panes: Iterable[PaneInfo]) -> Rect | None:
+    """The sheet's cells on screen, every pane's together: where the mascot and its words go beside a cell,
+    clear of the ribbon, the formula bar, the Name Box and the headings."""
+    return _union(p.visible for p in panes if p.visible.w > 0 and p.visible.h > 0)
+
+
+def _shifted(old: Rect | None, new: Rect | None) -> bool:
+    if old is None or new is None:
+        return (old is None) != (new is None)
+    return any(abs(a - b) >= 1 for a, b in zip(astuple(old), astuple(new)))
+
+
 def moved(old: Spot | None, new: Spot | None) -> bool:
-    """True when the pointer should be told: it appeared, went, changed words, or moved 1 px or more."""
+    """True when the pointer should be told: it appeared, went, changed words, or it, its room or the filled
+    cells moved 1 px or more."""
     if old is None or new is None:
         return (old is None) != (new is None)
     if old.bubble != new.bubble:
         return True
-    return any(abs(a - b) >= 1 for a, b in zip(astuple(old.rect), astuple(new.rect)))
+    return any(_shifted(a, b) for a, b in ((old.rect, new.rect), (old.room, new.room), (old.filled, new.filled)))
 
 
 # ------------------------------------------------------------------ cells: Excel's numbers (COM thread)
@@ -149,13 +162,19 @@ def cell_spot(wb, hwnd: int, area: Area) -> Spot | None:
         panes = {n: _pane_info(win.Panes.Item(n), zoom, px_per_pt, grid) for n in range(1, int(win.Panes.Count) + 1)}
     else:
         panes = {1: _pane_info(win.ActivePane, zoom, px_per_pt, grid)}   # a plain split scrolls as one
-    pieces = []
-    for n, part in split_area(area, frozen_rows, frozen_cols):
-        if n in panes:
-            cells = sheet.Range(part.a1)
-            pieces.append((panes[n], float(cells.Left), float(cells.Top), float(cells.Width), float(cells.Height)))
-    rect = spot_rect(pieces)
-    return Spot(rect) if rect is not None else None
+
+    def shown(cells: Area) -> Rect | None:
+        pieces = []
+        for n, part in split_area(cells, frozen_rows, frozen_cols):
+            if n in panes:
+                r = sheet.Range(part.a1)
+                pieces.append((panes[n], float(r.Left), float(r.Top), float(r.Width), float(r.Height)))
+        return spot_rect(pieces)
+
+    rect = shown(area)
+    if rect is None:
+        return None
+    return Spot(rect, room=room_of(panes.values()), filled=shown(parse_area(str(sheet.UsedRange.Address))))
 
 
 # ------------------------------------------------------------------ controls: by name (pure over a tree)

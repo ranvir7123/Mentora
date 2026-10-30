@@ -57,6 +57,100 @@ def test_cell_in_frozen_rows_uses_the_top_pane():
     assert astuple(spot_rect([(top, 0, 0, 48, 15), (rest, 0, 15, 48, 105)])) == xywh(Rect(100, 200, 128, 120))
 
 
+class _Range:
+    def __init__(self, left, top, width, height):
+        self.Left, self.Top, self.Width, self.Height = left, top, width, height
+
+
+class _Pane:
+    """One of Excel's panes: what it shows, in points, and where its first cell is on screen."""
+    def __init__(self, seen: _Range, x0: float, y0: float, scroll_row=1, scroll_col=1):
+        self.VisibleRange, self._x0, self._y0 = seen, x0, y0
+        self.ScrollRow, self.ScrollColumn = scroll_row, scroll_col
+
+    def PointsToScreenPixelsX(self, _left):
+        return self._x0
+
+    def PointsToScreenPixelsY(self, _top):
+        return self._y0
+
+
+class _Panes:
+    def __init__(self, panes):
+        self._panes, self.Count = panes, len(panes)
+
+    def Item(self, n):
+        return self._panes[n - 1]
+
+
+def _workbook(ranges: dict, panes: list, split=(0, 0), used: str = ""):
+    """The few parts of Excel's workbook that cell_spot reads: one window, its panes and the sheet, whose
+    filled part is `used` (Excel's address, such as $A$1:$C$8; by default the first range)."""
+    sheet = type("Sheet", (), {"Range": lambda self, a1: ranges[a1],
+                               "UsedRange": type("Used", (), {"Address": used or next(iter(ranges))})()})()
+    win = type("Win", (), {})()
+    win.ActiveSheet, win.Zoom, win.ActivePane = sheet, 100, panes[0]
+    win.FreezePanes, win.Panes = len(panes) > 1, _Panes(panes)
+    win.SplitRow, win.SplitColumn = split
+    return type("Workbook", (), {"Windows": lambda self, n: win})()
+
+
+@pytest.fixture
+def screen(monkeypatch):
+    """A 200% screen whose workbook area (cells, headings and scroll bars) starts under the ribbon."""
+    monkeypatch.setattr(windows, "dpi_scale", lambda hwnd: 2.0)
+    monkeypatch.setattr(windows, "find_child", lambda hwnd, *classes: 7)
+    monkeypatch.setattr(windows, "outer_rect", lambda hwnd: Rect(0, 430, 1840, 1000))
+
+
+def test_a_cell_spot_gives_the_sheets_visible_cells_as_the_mascots_room(screen):
+    # Only the cells: not the ribbon, the formula bar, the Name Box or the headings above them.
+    wb = _workbook({"A1:C1": _Range(0, 0, 204, 15)}, [_Pane(_Range(0, 0, 900, 600), 55, 470)])
+    spot = locate.cell_spot(wb, 1, parse_area("A1:C1"))
+    assert astuple(spot.rect) == xywh(Rect(55, 470, 204 * PX, 15 * PX))
+    assert astuple(spot.room) == xywh(Rect(55, 470, 1840 - 55, 1430 - 470))
+
+
+def test_with_frozen_panes_the_room_is_every_pane_s_cells(screen):
+    top = _Pane(_Range(0, 0, 900, 15), 55, 470)
+    rest = _Pane(_Range(0, 105, 900, 300), 55, 470 + 15 * PX, scroll_row=8)
+    wb = _workbook({"B8": _Range(48, 105, 48, 15)}, [top, rest], split=(1, 0))
+    spot = locate.cell_spot(wb, 1, parse_area("B8"))
+    assert astuple(spot.room) == xywh(Rect(55, 470, 1840 - 55, (15 + 300) * PX))
+
+
+def test_a_cell_spot_gives_the_sheets_filled_cells_so_the_mascot_keeps_off_them(screen):
+    # The budget fills A1:C8; the mascot and its words land on the empty cells beyond it.
+    wb = _workbook({"B8": _Range(48, 105, 48, 15), "A1:C8": _Range(0, 0, 204, 120)},
+                   [_Pane(_Range(0, 0, 900, 600), 55, 470)], used="$A$1:$C$8")
+    spot = locate.cell_spot(wb, 1, parse_area("B8"))
+    assert astuple(spot.filled) == xywh(Rect(55, 470, 204 * PX, 120 * PX))
+
+
+def test_with_frozen_panes_the_filled_cells_are_what_each_pane_shows_of_them(screen):
+    # Row 1 frozen; the pane below is scrolled so row 8 is its first row: rows 2 to 7 are out of sight.
+    top = _Pane(_Range(0, 0, 900, 15), 55, 470)
+    rest = _Pane(_Range(0, 105, 900, 300), 55, 470 + 15 * PX, scroll_row=8)
+    wb = _workbook({"B8": _Range(48, 105, 48, 15), "A1:C1": _Range(0, 0, 204, 15), "A2:C8": _Range(0, 15, 204, 105)},
+                   [top, rest], split=(1, 0), used="$A$1:$C$8")
+    spot = locate.cell_spot(wb, 1, parse_area("B8"))
+    assert astuple(spot.filled) == xywh(Rect(55, 470, 204 * PX, 30 * PX))
+
+
+def test_a_spot_whose_room_changed_is_news_for_the_pointer():
+    spot = Spot(Rect(10, 20, 30, 40), room=Rect(0, 0, 500, 500))
+    assert not locate.moved(spot, Spot(Rect(10, 20, 30, 40), room=Rect(0, 0.5, 500, 500)))
+    assert locate.moved(spot, Spot(Rect(10, 20, 30, 40), room=Rect(0, 60, 500, 440)))
+    assert locate.moved(spot, Spot(Rect(10, 20, 30, 40)))
+
+
+def test_a_spot_whose_filled_cells_grew_is_news_for_the_pointer():
+    # The learner typed in a new cell, maybe right under the mascot: it moves off it.
+    spot = Spot(Rect(10, 20, 30, 40), room=Rect(0, 0, 500, 500), filled=Rect(0, 0, 100, 80))
+    assert not locate.moved(spot, Spot(Rect(10, 20, 30, 40), room=Rect(0, 0, 500, 500), filled=Rect(0, 0, 100, 80)))
+    assert locate.moved(spot, Spot(Rect(10, 20, 30, 40), room=Rect(0, 0, 500, 500), filled=Rect(0, 0, 160, 80)))
+
+
 def test_cell_scrolled_out_of_view_is_none():
     vis = Rect(100, 240, 2000, 960)
     assert clip_to(Rect(100, 40, 128, 40), vis) is None

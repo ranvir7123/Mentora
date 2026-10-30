@@ -36,9 +36,16 @@ class Rect:
 
 @dataclass(frozen=True)
 class Spot:
-    """Where to point. `bubble` replaces the default words, e.g. "open this first" on a folded group."""
+    """Where to point. `bubble` replaces the default words, e.g. "open this first" on a folded group.
+
+    `room` is where the mascot and its words may go: for a cell, the sheet's visible cells, so they never
+    cover the app's own buttons and bars. None lets them go anywhere on the screen beside the target.
+    `filled` is what they keep off when there is space: for a cell, the sheet's filled cells on screen, so
+    the learner can still read them."""
     rect: Rect
     bubble: str = ""
+    room: Rect | None = None
+    filled: Rect | None = None
 
 
 @dataclass(frozen=True)

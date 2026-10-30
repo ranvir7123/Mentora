@@ -405,6 +405,20 @@ def test_show_me_flies_the_mascot_to_the_target_again(world):
     assert world.backend.pointer()["mascot"] == "watching"
 
 
+def test_the_pointer_carries_the_room_the_app_gives_its_mascot_and_the_cells_to_keep_off(world):
+    session = world.open()
+    world.run_later()
+    pointer = world.backend.pointer()
+    assert pointer["visible"] and pointer["room"] is None              # no room given: anywhere on the screen
+    assert pointer["filled"] is None
+    session.spots["k1"] = Spot(Rect(300, 400, 80, 24), room=Rect(55.4, 470, 1785, 930.2),
+                               filled=Rect(55.4, 470, 544.6, 320))
+    world.learner_sets("k0", 1)
+    world.run_later()
+    assert world.backend.pointer()["room"] == {"x": 55, "y": 470, "w": 1785, "h": 930}
+    assert world.backend.pointer()["filled"] == {"x": 55, "y": 470, "w": 545, "h": 320}
+
+
 def test_a_target_the_app_cannot_find_hides_the_pointer(world):
     session = world.open()
     world.run_later()

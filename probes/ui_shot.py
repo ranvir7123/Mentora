@@ -45,7 +45,8 @@ HOME_STATES = ("first_run", "home_progress", "home_long_text", "home_no_key", "h
 PANEL_STATES = ("lesson_goal", "lesson_step", "lesson_right", "lesson_not_yet", "lesson_hints", "lesson_changed",
                 "lesson_clip", "lesson_clip_missing", "lesson_ask", "lesson_app_closed", "lesson_complete",
                 "lesson_undone", "lesson_note", "lesson_ask_error", "lesson_app_lost", "long_text")
-OVERLAY_STATES = ("pointer_flying", "pointer_watching", "pointer_right", "lesson_not_yet", "long_text")
+OVERLAY_STATES = ("pointer_flying", "pointer_watching", "pointer_right", "pointer_top_row", "pointer_button",
+                  "lesson_not_yet", "long_text")
 ALL = {"home": HOME_STATES, "panel": PANEL_STATES, "overlay": OVERLAY_STATES, "gallery": ("gallery",)}
 
 
