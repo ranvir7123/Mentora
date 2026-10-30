@@ -12,9 +12,16 @@ and the build plans are in [docs/superpowers/plans/](docs/superpowers/plans/).
 
 ## What works so far
 
-Each part below is built and tested on its own. Joining them into one program is the next step, and no
-lesson is proven yet.
+Each part below is built and tested, and the program now joins them. It has been tried once in real
+Excel, where one problem showed (see the first item), and no lesson is proven yet.
 
+- The program ([app/main.py](app/main.py), [app/integration/](app/integration/)): `python -m app` opens
+  the home screen with your streak, points and courses. Opening a lesson hides home, docks the lesson
+  panel on the right and puts the app beside it. Your progress stays on your computer, in
+  `%LOCALAPPDATA%\mentora\`. Only lessons that passed their proof and test are on the shelf, so today the
+  shelf is empty unless the developer switch `MENTORA_SHOW_UNPROVEN=1` is set, which shows the others
+  marked "not proven yet". Known problem, not fixed yet: in the real-Excel run, Excel opened behind other
+  windows, so the mascot pointed at the window in front of it.
 - The screens ([app/ui/](app/ui/)): the home screen, the lesson panel and the flying mascot pointer. See
   them with sample data: `python -m app.ui.app --demo first_run`.
 - The Excel plug-in ([app/excel/](app/excel/)): opens its own copy of Excel, reads the sheet after every
@@ -74,4 +81,10 @@ Save your Meta key once, in your own PowerShell window:
 
 ```powershell
 [Environment]::SetEnvironmentVariable("META_API_KEY", "<your key>", "User")
+```
+
+Start Mentora:
+
+```powershell
+.venv\Scripts\python -m app
 ```
