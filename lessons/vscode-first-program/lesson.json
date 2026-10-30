@@ -3,7 +3,7 @@
   "id": "vscode-first-program",
   "title": "Your first Python program",
   "app": "vscode",
-  "course": "vscode",
+  "course": "python",
   "source": null,
   "goal": {
     "sentence": "Write a program that asks your name and greets you.",

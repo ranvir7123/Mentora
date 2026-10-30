@@ -1,0 +1,5 @@
+[
+  {"id": "excel", "title": "Excel", "app": "excel", "colour": "courseExcel"},
+  {"id": "python", "title": "Python in VS Code", "app": "vscode", "colour": "coursePython"},
+  {"id": "meta-ai", "title": "Build with Meta's AI", "app": "vscode", "colour": "courseMeta"}
+]
