@@ -1,8 +1,8 @@
-// The Project X add-on: tells the Project X program what is happening in a lesson's VS Code window
+// The Mentora add-on: tells the Mentora program what is happening in a lesson's VS Code window
 // (the files, the problems list, the cursor, the last Python run) and carries out its operations.
 //
 // It wakes up only in a window whose folder is the lesson folder named in the program's link file
-// (%LOCALAPPDATA%\projectx\vscode.json, or the file PROJECTX_VSCODE names), connects to 127.0.0.1 on
+// (%LOCALAPPDATA%\mentora\vscode.json, or the file MENTORA_VSCODE names), connects to 127.0.0.1 on
 // the port written there and says hello with the one-time token. It never reads or writes outside
 // that folder, and it keeps any terminal settings the program sends in memory only.
 
@@ -14,10 +14,12 @@ import * as vscode from "vscode";
 import {
   LineReader,
   OutputClip,
+  SHELL_ENV,
   Throttle,
   inputLines,
   insideFolder,
   isPythonRun,
+  lessonShell,
   lineHeightPx,
   relativeInside,
   sameFolder,
@@ -42,6 +44,7 @@ const STATE_EVERY_MS = 100;
 const RETRY_MS = 1000;
 const RETRIES = 30;
 const SHELL_WAIT_MS = 5000;
+const SHELL_START_MS = 20000; // PowerShell runs the learner's profile first: conda's alone took 3 s
 const OUTPUT_GRACE_MS = 1000;
 const STOP_WAIT_MS = 3000;
 const POLL_MS = 50;
@@ -64,7 +67,7 @@ interface Running {
 }
 
 function linkFile(): string {
-  return process.env.PROJECTX_VSCODE || path.join(process.env.LOCALAPPDATA ?? "", "projectx", "vscode.json");
+  return process.env.MENTORA_VSCODE || path.join(process.env.LOCALAPPDATA ?? "", "mentora", "vscode.json");
 }
 
 function readLinkInfo(file: string): LinkInfo | null {
@@ -130,7 +133,7 @@ class Link implements vscode.Disposable {
     socket.setEncoding("utf8");
     socket.on("connect", () => {
       this.connected = true;
-      this.log.info(`connected to Project X on port ${info.port}`);
+      this.log.info(`connected to Mentora on port ${info.port}`);
       this.write({ type: "hello", token: info.token, version: PROTOCOL_VERSION });
       this.listen();
       void this.sendState();
@@ -158,7 +161,7 @@ class Link implements vscode.Disposable {
         return;
       }
       if (this.connected) {
-        this.log.info("Project X closed the link");
+        this.log.info("Mentora closed the link");
       }
       this.connected = false;
       this.socket = undefined;
@@ -493,10 +496,7 @@ class Link implements vscode.Disposable {
     if (doc?.isDirty) {
       await doc.save();
     }
-    if (!this.runTerminal || this.runTerminal.exitStatus !== undefined) {
-      this.runTerminal = vscode.window.createTerminal({ name: "Python", cwd: this.folder.uri });
-    }
-    const terminal = this.runTerminal;
+    const terminal = this.runTerminalOf();
     terminal.show(true);
     const shell = terminal.shellIntegration ?? (await this.shellOf(terminal));
     if (!shell) {
@@ -563,12 +563,23 @@ class Link implements vscode.Disposable {
     return true;
   }
 
+  private runTerminalOf(): vscode.Terminal {
+    if (!this.runTerminal || this.runTerminal.exitStatus !== undefined) {
+      this.runTerminal = vscode.window.createTerminal({
+        name: "Python",
+        cwd: this.folder.uri,
+        ...lessonShell(process.platform, process.env),
+      });
+    }
+    return this.runTerminal;
+  }
+
   private shellOf(terminal: vscode.Terminal): Promise<vscode.TerminalShellIntegration | undefined> {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         sub.dispose();
         resolve(terminal.shellIntegration);
-      }, SHELL_WAIT_MS);
+      }, SHELL_START_MS);
       const sub = vscode.window.onDidChangeTerminalShellIntegration((e) => {
         if (e.terminal === terminal) {
           clearTimeout(timer);
@@ -585,7 +596,13 @@ class Link implements vscode.Disposable {
     const env = this.context.environmentVariableCollection;
     env.persistent = false;
     env.clear();
-    env.description = "Set by Project X for this lesson";
+    env.description = "Set by Mentora for this lesson";
+    if (process.platform === "win32") {
+      // The learner's own terminals and the Run button's: PowerShell reports runs, conda stays off.
+      for (const [name, value] of Object.entries(SHELL_ENV)) {
+        env.replace(name, value);
+      }
+    }
     if (values && typeof values === "object") {
       for (const [name, value] of Object.entries(values)) {
         if (ENV_NAME.test(name) && typeof value === "string") {
@@ -599,6 +616,7 @@ class Link implements vscode.Disposable {
         env.prepend("PATH", dirs.join(path.delimiter) + path.delimiter);
       }
     }
+    this.runTerminalOf(); // start the shell now, with these settings, so the first run need not wait for it
   }
 
   private async closeWindow(): Promise<void> {
@@ -624,14 +642,14 @@ export function activate(context: vscode.ExtensionContext): void {
     return;
   }
   const file = linkFile();
-  const workRoot = path.join(process.env.LOCALAPPDATA ?? "", "projectx", "work");
+  const workRoot = path.join(process.env.LOCALAPPDATA ?? "", "mentora", "work");
   const named = readLinkInfo(file);
   const isLesson = relativeInside(workRoot, folder.uri.fsPath) !== null
     || (named !== null && sameFolder(named.folder, folder.uri.fsPath));
   if (!isLesson) {
     return; // the learner's own projects: stay asleep
   }
-  const log = vscode.window.createOutputChannel("Project X", { log: true });
+  const log = vscode.window.createOutputChannel("Mentora", { log: true });
   const link = new Link(context, folder, log, file);
   const recheck = () => link.tryConnect();
   fs.watchFile(file, { interval: RETRY_MS }, recheck);

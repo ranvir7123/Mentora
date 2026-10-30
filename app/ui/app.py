@@ -71,7 +71,7 @@ def attach_window(bridge: Bridge, name: str, root: QObject) -> None:
 def run_screens(backend: ScreenBackend, *, show: Iterable[str] = ("home",)) -> int:
     """Open the named windows on `backend` and run until the learner quits."""
     app = QGuiApplication.instance() or QGuiApplication(sys.argv)
-    app.setApplicationName("Project X")
+    app.setApplicationName("Mentora")
     bridge = Bridge(backend)
     engine = make_engine(bridge)
     views = getattr(backend, "view", {}) or {}

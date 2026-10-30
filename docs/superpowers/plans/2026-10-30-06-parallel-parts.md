@@ -61,8 +61,8 @@ demo, each checked against what the Excel checks and the factory's everyday-form
 ## Here (the joining session)
 
 - Join the VS Code session's last fix (`8bacfbe`, real VS Code runs) when Ranvir says.
-- If Ranvir confirms the program itself is called Mentora: rename it everywhere a learner sees it, after
-  that join.
+- Rename the program to Mentora (Ranvir confirmed on 30 Oct): done, with `tests/test_name.py` failing on any
+  "projectx" or "project x" left in `app/`, `extensions/vscode/`, `probes/`, `lessons/` or `tools/`.
 - Join each part as it finishes, run the full suite, push `main` with the secret scan.
 
 ## Waiting on Ranvir

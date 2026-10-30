@@ -52,7 +52,7 @@ def test_a_plugin_missing_from_this_copy_is_named(tmp_path, monkeypatch, capsys)
     folder = _saved(tmp_path, app="ghost")
 
     assert main(["prove", str(folder)]) == 2
-    assert ("The ghost plug-in is not on this copy of Project X (app.ghost.plugin is missing)."
+    assert ("The ghost plug-in is not on this copy of Mentora (app.ghost.plugin is missing)."
             in capsys.readouterr().err)
 
 

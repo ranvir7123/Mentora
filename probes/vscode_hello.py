@@ -3,7 +3,7 @@
 Run from the repository root, with real VS Code installed and the add-on built:
     <python> probes\\vscode_hello.py
 
-It installs extensions/vscode/projectx-<version>.vsix, opens a scratch lesson folder in a new VS Code
+It installs extensions/vscode/mentora-<version>.vsix, opens a scratch lesson folder in a new VS Code
 window, prints the hello and the first state, writes a line through the add-on's write_file
 operation and prints the next state, runs the file and prints the run, then closes the window.
 """
@@ -48,7 +48,7 @@ def next_state(states: queue.Queue, want, timeout: float = 15.0) -> dict:
 
 def main() -> None:
     version = json.loads((EXT / "package.json").read_text(encoding="utf-8"))["version"]
-    vsix = EXT / f"projectx-{version}.vsix"
+    vsix = EXT / f"mentora-{version}.vsix"
     if not vsix.exists():
         raise SystemExit(f"{vsix} is missing: run `npm install` and `npm run package` in {EXT}")
     code = shutil.which("code")
@@ -57,7 +57,7 @@ def main() -> None:
     print(subprocess.run([code, "--install-extension", str(vsix), "--force"],
                          capture_output=True, text=True, timeout=120).stdout.strip())
 
-    base = Path(os.environ["LOCALAPPDATA"]) / "projectx"
+    base = Path(os.environ["LOCALAPPDATA"]) / "mentora"
     folder = base / "work" / "probe-hello"
     shutil.rmtree(folder, ignore_errors=True)
     folder.mkdir(parents=True)
@@ -79,10 +79,12 @@ def main() -> None:
 
         line = "print('A line the program typed')\n"
         bridge.send_op(Call("write_file", {"path": "hello.py",
-                                           "text": "print('Hello from the probe')\n" + line})).result(15)
-        show("after write_file", next_state(states, lambda s: line in s["files"].get("hello.py", {}).get("text", "")))
+                                           "text": "import sys\nprint('Hello from the probe, run by', sys.executable)\n"
+                                                   + line})).result(15)
+        # VS Code keeps the file's own line endings (\r\n on Windows), so look for the line's words.
+        show("after write_file", next_state(states, lambda s: line.strip() in s["files"].get("hello.py", {}).get("text", "")))
 
-        bridge.send_op(Call("run_file", {"path": "hello.py"})).result(20)
+        bridge.send_op(Call("run_file", {"path": "hello.py"})).result(40)   # the shell may take 20 s to start
         show("after run_file", next_state(states, lambda s: bool(s["run"] and s["run"]["finished"]), timeout=25))
     finally:
         bridge.close_window()

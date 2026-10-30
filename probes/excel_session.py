@@ -81,7 +81,7 @@ def excel_pids() -> set[int]:
 
 def main() -> int:
     lesson = load_lesson(ROOT / "lessons" / "monthly-budget")
-    workdir = Path(os.environ["LOCALAPPDATA"]) / "projectx" / "probe" / lesson.id
+    workdir = Path(os.environ["LOCALAPPDATA"]) / "mentora" / "probe" / lesson.id
     before = excel_pids()
     t0 = time.perf_counter()
     closed = threading.Event()

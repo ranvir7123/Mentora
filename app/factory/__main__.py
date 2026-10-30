@@ -62,7 +62,7 @@ def plugin_for(app: str) -> AppPlugin:
         return getattr(importlib.import_module(module), name)()
     except ModuleNotFoundError as exc:
         if exc.name and (module == exc.name or module.startswith(exc.name + ".")):
-            raise _Refused(f"The {app} plug-in is not on this copy of Project X ({module} is missing).", 2) from None
+            raise _Refused(f"The {app} plug-in is not on this copy of Mentora ({module} is missing).", 2) from None
         raise _Refused(f"The {app} plug-in could not load: {exc}", 2) from None
 
 

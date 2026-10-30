@@ -5,6 +5,10 @@ control type, a name and, from the page's HTML, a class name. One read takes the
 single call (a cache request) and `pick` chooses from it, so the choosing is plain code that tests
 can drive. A read is kept for READ_EVERY_S, because the pointer asks ten times a second.
 
+Chromium describes the page only once someone asks: in real VS Code the first read held just the
+window's frame (13 parts), and a read 0.28 s later held the whole page (281). So the first ask for a
+window reads again until the page is there, for at most PAGE_WAIT_S.
+
 What each kind is (probes/vscode_session.py prints what each one finds in the real VS Code):
 - editor: the open file's text area, the element whose class list holds "monaco-editor" (the
   biggest one, since the search box and other small inputs are editors too).
@@ -23,6 +27,7 @@ from typing import Iterable
 from app.core.types import Rect
 
 READ_EVERY_S = 0.5
+PAGE_WAIT_S = 3.0
 
 # UI Automation's numbers for what is read (UIAutomationClient.h).
 TREE_SCOPE_DESCENDANTS = 4
@@ -51,6 +56,10 @@ def _area(e: Element) -> float:
 
 def _classes(e: Element) -> set[str]:
     return set(e.class_name.split())
+
+
+def _has_page(elements: list[Element]) -> bool:
+    return any(e.control == "document" for e in elements)
 
 
 def pick(elements: Iterable[Element], kind: str, ref: str) -> Rect | None:
@@ -87,6 +96,7 @@ class Finder:
         self._uia = None
         self._cache_request = None
         self._read: tuple[float, int, list[Element]] | None = None
+        self._asked: set[int] = set()           # windows whose page Chromium was asked for
         self._lock = threading.Lock()
 
     def init_thread(self) -> None:
@@ -107,7 +117,14 @@ class Finder:
         with self._lock:
             now = time.monotonic()
             if self._read is None or self._read[1] != hwnd or now - self._read[0] > READ_EVERY_S:
-                self._read = (now, hwnd, self._elements(hwnd))
+                elements = self._elements(hwnd)
+                if hwnd not in self._asked:
+                    self._asked.add(hwnd)
+                    deadline = now + PAGE_WAIT_S
+                    while not _has_page(elements) and time.monotonic() < deadline:
+                        time.sleep(0.1)
+                        elements = self._elements(hwnd)
+                self._read = (time.monotonic(), hwnd, elements)
             elements = self._read[2]
         return pick(elements, kind, ref)
 

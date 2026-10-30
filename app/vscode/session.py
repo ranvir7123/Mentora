@@ -49,7 +49,7 @@ LOST_TOUCH = "lost touch with VS Code"
 STOPPED = "this lesson's VS Code was closed"
 
 TARGET_KINDS = frozenset({"editor_line", "explorer_item", "run_button", "terminal"})
-MARKER = Path(".vscode") / "projectx.json"     # says the folder is the program's own work copy
+MARKER = Path(".vscode") / "mentora.json"     # says the folder is the program's own work copy
 SETTINGS = {
     "editor.stickyScroll.enabled": False,      # it covers the top lines, so a line would be elsewhere
     "editor.wordWrap": "off",                  # one screen line per line of code
@@ -57,6 +57,11 @@ SETTINGS = {
     "window.title": "${dirty}${activeEditorShort}${separator}${rootName}${separator}${appName}",
     "files.exclude": {"**/.vscode": True, "**/__pycache__": True},
     "python.defaultInterpreterPath": sys.executable,   # the Run button's Python, the one that has openai
+    "terminal.integrated.defaultProfile.windows": "PowerShell",  # runs are seen only in a shell VS Code reports on
+    # The add-on's terminal settings reach only terminals made after it starts: none from last time.
+    "terminal.integrated.enablePersistentSessions": False,
+    "terminal.integrated.hideOnStartup": "always",
+    "code-runner.showRunIconInEditorTitleMenu": False,  # its Run Code runs where input() can't be answered
 }
 
 _ENDED = ("closed", "stopped")
@@ -65,7 +70,7 @@ _UNSET = object()
 
 def default_link_file() -> Path:
     """Where the add-on looks for the port and token (extensions/vscode/src/extension.ts, linkFile)."""
-    return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "projectx" / "vscode.json"
+    return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "mentora" / "vscode.json"
 
 
 def parse_line_ref(ref: str) -> tuple[str, int] | None:
@@ -120,7 +125,7 @@ def _prepare_folder(folder: Path, files: dict[str, str], resume: bool, lesson_id
     if not resume:
         leftovers = [p for p in folder.iterdir() if p.name != ".vscode"]
         if leftovers and not (folder / MARKER).is_file():
-            raise ValueError(f"The work folder {folder} holds files Project X didn't make, so it was left alone.")
+            raise ValueError(f"The work folder {folder} holds files Mentora didn't make, so it was left alone.")
         for p in leftovers:
             if p.is_dir() and not p.is_symlink():
                 shutil.rmtree(p)
@@ -238,7 +243,7 @@ class VsCodeSession:
     def _start(self) -> None:
         open_file = self.folder / self._open if self._open else None
         try:
-            self._host.launch(self.folder, open_file, {"PROJECTX_VSCODE": str(self._link_file)})
+            self._host.launch(self.folder, open_file, {"MENTORA_VSCODE": str(self._link_file)})
         except Exception as exc:                 # LaunchError says why in plain words
             self._fail(str(exc) or DIDNT_START)
             return
@@ -422,6 +427,7 @@ class VsCodeSession:
                                f"stopped. A program that waits for typing needs the run's input.")
 
     def _read_now(self) -> VsSnapshot:
+        self._ready()                            # VS Code may still be starting: the read's time starts after
         deadline = time.monotonic() + READ_TIMEOUT_S
         while True:
             bridge = self._ready()

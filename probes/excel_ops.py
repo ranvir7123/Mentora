@@ -44,7 +44,7 @@ def judge(session: ExcelSession, step):
 
 def main() -> int:
     lesson = load_lesson(ROOT / "lessons" / "monthly-budget")
-    workdir = Path(os.environ["LOCALAPPDATA"]) / "projectx" / "probe" / f"{lesson.id}-ops"
+    workdir = Path(os.environ["LOCALAPPDATA"]) / "mentora" / "probe" / f"{lesson.id}-ops"
     before = excel_pids()
     t0 = time.perf_counter()
     bad = 0

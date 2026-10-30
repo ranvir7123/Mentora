@@ -17,9 +17,9 @@ three windows, and docks the panel beside the app.
 ## Global Constraints
 
 See `2026-10-29-00-overview.md`, "Global Constraints". Also:
-- Progress lives only in `%LOCALAPPDATA%\projectx\` (`progress.json`, `attempts.jsonl`, `work\`).
+- Progress lives only in `%LOCALAPPDATA%\mentora\` (`progress.json`, `attempts.jsonl`, `work\`).
 - A lesson is on the shelf only when `shelf_badge(lesson)` is not None. A developer switch
-  `PROJECTX_SHOW_UNPROVEN=1` shows unproven lessons marked "not proven yet"; it is never on in recordings.
+  `MENTORA_SHOW_UNPROVEN=1` shows unproven lessons marked "not proven yet"; it is never on in recordings.
 - No guilt copy: a broken streak resets quietly; nothing is ever taken away for a mistake.
 - Merges into `main` only when Ranvir says so; the full suite runs after each merge (paste it).
 - Ranvir records his voice, posts on X, fills in the submission form and asks the Discord questions.

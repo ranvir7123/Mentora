@@ -42,7 +42,7 @@ Window {
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
     visible: root.lesson.open
     color: Theme.bg
-    title: "Project X lesson"
+    title: "Mentora lesson"
 
     // A new step folds the goal away (it stays open on the first step) and closes the clip.
     property string seen: ""

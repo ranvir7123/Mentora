@@ -1,9 +1,9 @@
 {
-  "name": "projectx",
-  "displayName": "Project X lessons",
-  "description": "Lets the Project X program see your lesson's files, problems and runs, so it can tick your steps.",
+  "name": "mentora",
+  "displayName": "Mentora lessons",
+  "description": "Lets the Mentora program see your lesson's files, problems and runs, so it can tick your steps.",
   "version": "0.1.0",
-  "publisher": "projectx",
+  "publisher": "mentora",
   "license": "UNLICENSED",
   "private": true,
   "engines": {
