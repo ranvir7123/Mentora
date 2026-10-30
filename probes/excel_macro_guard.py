@@ -1,6 +1,9 @@
 """Live check of the macro guard: macros are forced off, and the macro editor is not one of Excel's own windows.
 
 Run:   C:\\dev\\meta-hackathon\\.venv\\Scripts\\python.exe probes\\excel_macro_guard.py
+       From a Claude app session, first set LOCALAPPDATA to a folder in the project (for example runs\\appdata):
+       the Claude app keeps new folders its programs make in AppData in its own private copy, which Excel
+       can't see, so Excel would say it can't find the lesson's file.
 Needs: Excel installed and about 600 MB of free memory. It presses no key and moves no mouse. Excel and
 its macro editor show on screen for a few seconds, then close by themselves. It changes no setting:
 macros are forced off only inside the Excel it starts, and the macro editor is opened the way its ribbon
@@ -14,7 +17,7 @@ It prints:
     excel window <number> (XLMAIN)
     macro editor window <number> (wndclass_desked_gsk), owner chain: <number> -> ...
     tester would click there: <True or False>          (want False)
-    new EXCEL.EXE left behind: <n>                     (want 0)
+    new EXCEL.EXE left behind: <n>                     (want 0, waited up to 15 s)
 Last line:
     macro_guard ok=<True or False>
 """
@@ -36,6 +39,7 @@ from app.win import windows                           # noqa: E402
 
 MACRO_EDITOR = "wndclass_desked_gsk"   # the macro editor's main window, as Windows names its kind
 FIND_S = 10.0
+LEFT_S = 15.0
 
 
 def excel_pids() -> set[int]:
@@ -91,9 +95,10 @@ def main() -> int:
         s.close()
         for err in s.errors[:3]:
             print("session error:", err.splitlines()[-1], flush=True)
-        time.sleep(2)
-        left = excel_pids() - before
-        print(f"new EXCEL.EXE left behind: {len(left)}  (want 0)", flush=True)
+        deadline = time.monotonic() + LEFT_S          # Excel can take a few seconds to end after it quits
+        while (left := excel_pids() - before) and time.monotonic() < deadline:
+            time.sleep(0.5)
+        print(f"new EXCEL.EXE left behind: {len(left)}  (want 0, waited up to {LEFT_S:.0f} s)", flush=True)
         ok = ok and not left
         print(f"macro_guard ok={ok}", flush=True)
     return 0 if ok else 1
