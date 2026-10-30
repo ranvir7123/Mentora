@@ -300,7 +300,7 @@ def test_loading_tips_show_a_calm_placeholder_only_after_200_ms(home, qapp):
 
 
 def test_without_a_meta_key_the_card_says_how_to_add_one_and_copies_the_line(home, qapp):
-    _, _, root = home("home_no_key")
+    backend, _, root = home("home_no_key")
     texts = _texts(root)
     assert "Add your Meta key" in texts
     assert "Paste it in PowerShell, put your key in it, and press Enter." in texts
@@ -310,6 +310,7 @@ def test_without_a_meta_key_the_card_says_how_to_add_one_and_copies_the_line(hom
     _click(qapp, root, _button(root, "Copy the setup line"))
     assert QGuiApplication.clipboard().text() ==         '[Environment]::SetEnvironmentVariable("META_API_KEY", "<your key>", "User")'
     assert "Copied" in _buttons(root)
+    assert ("key_setup_copied", ()) in backend.actions        # so the key is looked for again
 
 
 # Making a lesson from a video.
@@ -345,6 +346,7 @@ def test_a_video_that_cannot_become_a_lesson_says_why_and_offers_another(home, q
     assert backend.home()["factory"]["reason"] in _texts(root)
     _click(qapp, root, _button(root, "Try another video"))
     assert _link_field(root).hasActiveFocus()
+    assert ("dismiss_factory", ()) in backend.actions
 
 
 def test_a_ready_lesson_lands_on_the_shelf_with_a_short_highlight(home, qapp):
@@ -364,6 +366,7 @@ def test_a_ready_lesson_lands_on_the_shelf_with_a_short_highlight(home, qapp):
     assert _scene_rect(glow[0]).contains(_scene_rect(_text_item(root, "Excel")).center())
     _click(qapp, root, _button(root, "Open the lesson"))
     assert ("open_lesson", ("pivot-tables",)) in backend.actions
+    assert ("dismiss_factory", ()) in backend.actions
     _settle(qapp, 1.6)
     assert not [i for i in _items(root.contentItem()) if i.objectName() == "highlight" and _shown(i)]
 

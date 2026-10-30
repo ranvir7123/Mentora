@@ -180,12 +180,15 @@ class Progress:
             self._days[today] = self._days.get(today, 0) + points
             self.save()
 
-    def lesson_done(self, lesson_id: str, done: LessonDone) -> None:
+    def lesson_done(self, lesson_id: str, done: LessonDone | None) -> None:
+        """`done` is None when the lesson's saved work already passed every step on reopening: it is done,
+        with no time to keep."""
         with self._lock:
             state = self._lesson(lesson_id)
             state["done"] = True
             best = state.get("best_seconds")
-            state["best_seconds"] = done.seconds if best is None else min(best, done.seconds)
+            if done is not None:
+                state["best_seconds"] = done.seconds if best is None else min(best, done.seconds)
             self.save()
 
     def opened(self, lesson_id: str) -> None:

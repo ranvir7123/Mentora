@@ -127,6 +127,15 @@ def test_a_finished_lesson_keeps_its_best_time(tmp_path):
     assert p.lesson_state("budget").best_seconds == 80.0
 
 
+def test_a_lesson_found_finished_on_reopening_is_done_with_no_time(tmp_path):
+    p = Progress(tmp_path, today=Clock())
+    p.lesson_done("budget", None)                 # its saved work already passed every step
+    assert p.lesson_state("budget") == LessonProgress(step=0, done=True, best_seconds=None)
+    p.lesson_done("sum", LessonDone(seconds=50.0, points=30, first_try=3, steps=3))
+    p.lesson_done("sum", None)
+    assert Progress(tmp_path, today=Clock()).lesson_state("sum").best_seconds == 50.0
+
+
 def test_the_last_lesson_made_lessons_tips_and_name_are_kept(tmp_path):
     p = Progress(tmp_path, today=Clock())
     assert (p.last_lesson, p.made, p.tips, p.name, p.daily_goal) == (None, [], "", "", 30)

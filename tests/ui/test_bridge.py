@@ -1,13 +1,11 @@
 import copy
 import threading
 import time
-import typing
 
-from app.core.screen import (CLOSED_LESSON, EMPTY_HOME, HIDDEN_POINTER, AskView, Banner, ClipView, Complete,
-                             ContinueCard, Course, Factory, FactoryStage, GoalView, HomeState, Learner,
-                             LessonCard, LessonState, PointerState, StepView, Tips)
+from app.core.screen import CLOSED_LESSON, EMPTY_HOME, HIDDEN_POINTER, HomeState, LessonState, PointerState
 from app.ui.bridge import Bridge
 from app.ui.demo_backend import STATES, DemoBackend
+from tests.screen_shapes import shape_problems
 
 
 def _pump(qapp, until, timeout=2.0):
@@ -76,32 +74,20 @@ def test_updates_from_other_threads_arrive_in_order(qapp):
     assert cues == ["right"]
 
 
-_NESTED = {
-    "learner": Learner, "continueCard": ContinueCard, "tips": Tips, "factory": Factory, "goal": GoalView,
-    "step": StepView, "banner": Banner, "ask": AskView, "complete": Complete, "clip": ClipView,
-}
-_LISTS = {"courses": Course, "lessons": LessonCard, "stages": FactoryStage}
-
-
-def _shape_problems(value, shape, where):
-    problems = []
-    want = set(typing.get_type_hints(shape))
-    if set(value) != want:
-        problems.append(f"{where}: keys {sorted(set(value) ^ want)} differ")
-    for key, inner in value.items():
-        if key in _NESTED and isinstance(inner, dict):     # the continue card's "step" is a number
-            problems += _shape_problems(inner, _NESTED[key], f"{where}.{key}")
-        if key in _LISTS:
-            for i, item in enumerate(inner):
-                problems += _shape_problems(item, _LISTS[key], f"{where}.{key}[{i}]")
-    return problems
-
-
 def test_every_demo_state_has_every_key():
     problems = []
     for s in STATES:
         d = DemoBackend(s)
-        problems += _shape_problems(d.home(), HomeState, f"{s} home")
-        problems += _shape_problems(d.lesson(), LessonState, f"{s} lesson")
-        problems += _shape_problems(d.pointer(), PointerState, f"{s} pointer")
+        problems += shape_problems(d.home(), HomeState, f"{s} home")
+        problems += shape_problems(d.lesson(), LessonState, f"{s} lesson")
+        problems += shape_problems(d.pointer(), PointerState, f"{s} pointer")
     assert problems == []
+
+
+def test_pointing_at_a_changed_step_clearing_the_maker_and_copying_the_key_line_reach_the_backend(qapp):
+    backend = DemoBackend("lesson_changed")
+    bridge = Bridge(backend)
+    bridge.goToStep(1)
+    bridge.dismissFactory()
+    bridge.copyKeySetup()
+    assert backend.actions == [("go_to_step", (1,)), ("dismiss_factory", ()), ("key_setup_copied", ())]

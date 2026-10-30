@@ -330,9 +330,15 @@ class Bridge(QObject):
     @Slot()
     def copyKeySetup(self) -> None:
         """Puts the PowerShell line that saves a Meta key on the clipboard, with a gap where the key goes.
-        The key itself is never read here."""
+        The key itself is never read here. The backend then looks for the key for a while, so the card
+        clears once the learner has saved it."""
         QGuiApplication.clipboard().setText(
             f'[Environment]::SetEnvironmentVariable("{KEY_NAME}", "<your key>", "User")')
+        self._backend.key_setup_copied()
+
+    @Slot()
+    def dismissFactory(self) -> None:
+        self._backend.dismiss_factory()
 
     @Slot(bool)
     def setMuted(self, on: bool) -> None:
@@ -344,3 +350,7 @@ class Bridge(QObject):
     @Slot()
     def reopenApp(self) -> None:
         self._backend.reopen_app()
+
+    @Slot(int)
+    def goToStep(self, index: int) -> None:
+        self._backend.go_to_step(index)

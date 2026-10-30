@@ -3,7 +3,8 @@ import Theme
 import "../components"
 
 // Your question and its answer, under the step. While the answer is coming it says so, but only once it
-// has taken more than 200 ms, so a quick answer never flashes a waiting line.
+// has taken more than 200 ms, so a quick answer never flashes a waiting line. When no answer can come,
+// a calm line in the quieter colour says what still works.
 Card {
     id: root
     property var ask: ({ "state": "idle", "question": "", "answer": "" })
@@ -38,7 +39,7 @@ Card {
         width: parent.width
         text: root.thinking ? "Thinking about your question…" : root.ask.answer
         wrapMode: Text.Wrap
-        color: root.thinking ? Theme.muted : Theme.text
+        color: root.thinking || root.ask.state === "error" ? Theme.muted : Theme.text
         font.family: Theme.fontBody
         font.pixelSize: Theme.size16
     }
