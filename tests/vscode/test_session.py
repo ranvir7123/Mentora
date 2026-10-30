@@ -37,7 +37,7 @@ def wait_for(condition, timeout: float = 5.0) -> bool:
 
 
 class FakeVsCode:
-    """VS Code with the Project X add-on, as the program sees it on the wire."""
+    """VS Code with the Mentora add-on, as the program sees it on the wire."""
 
     def __init__(self, folder: Path, link_file: Path, *, version: int = PROTOCOL_VERSION,
                  hang: bool = False, output: str = "Hello\n"):
@@ -258,7 +258,7 @@ def test_open_writes_the_starter_and_waits_for_hello(opened):
     assert snapshots and snapshots[-1] == snap and session.latest() == snap
     folder, open_file, env = host.launched[0]
     assert folder == workdir and open_file == workdir / "hello.py"
-    assert env == {"PROJECTX_VSCODE": str(host.link_file)}
+    assert env == {"MENTORA_VSCODE": str(host.link_file)}
     assert session.hwnd() == WINDOW and not closed and session.close_reason == ""
 
 

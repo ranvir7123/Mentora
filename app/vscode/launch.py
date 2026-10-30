@@ -1,4 +1,4 @@
-"""Starting VS Code on a lesson's folder, with the Project X add-on installed first.
+"""Starting VS Code on a lesson's folder, with the Mentora add-on installed first.
 
 VS Code's `code.cmd` only sets two variables and runs `Code.exe cli.js <args>`. Running a .cmd file
 from Python goes through cmd.exe, which mangles paths holding characters such as & or %, so the
@@ -16,7 +16,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-ADDON = "projectx.projectx"
+ADDON = "mentora.mentora"
 ADDON_VERSION = "0.1.0"          # extensions/vscode/package.json's version; a test keeps them in step
 INSTALL_TIMEOUT_S = 120.0
 NOT_INSTALLED = "VS Code isn't installed. Get it from code.visualstudio.com, then open the lesson again."
@@ -65,7 +65,7 @@ def cli_command() -> tuple[list[str], dict[str, str]]:
 
 
 def vsix_path() -> Path:
-    return _REPO / "extensions" / "vscode" / f"projectx-{ADDON_VERSION}.vsix"
+    return _REPO / "extensions" / "vscode" / f"mentora-{ADDON_VERSION}.vsix"
 
 
 def addon_installed(extensions_dir: Path | None = None) -> bool:
@@ -82,16 +82,16 @@ def _run_quietly(argv: list[str], env: dict[str, str], **kwargs) -> subprocess.C
 def install_addon() -> None:
     vsix = vsix_path()
     if not vsix.is_file():
-        raise LaunchError("The Project X add-on for VS Code hasn't been built. In extensions/vscode, run "
+        raise LaunchError("The Mentora add-on for VS Code hasn't been built. In extensions/vscode, run "
                           "npm install, then npm run package.")
     start, env = cli_command()
     try:
         done = _run_quietly(start + ["--install-extension", str(vsix), "--force"], env, timeout=INSTALL_TIMEOUT_S)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise LaunchError(f"VS Code could not install the Project X add-on ({exc}).") from exc
+        raise LaunchError(f"VS Code could not install the Mentora add-on ({exc}).") from exc
     if done.returncode != 0 or not addon_installed():
         said = (done.stderr or done.stdout or "").strip().splitlines()
-        raise LaunchError("VS Code could not install the Project X add-on"
+        raise LaunchError("VS Code could not install the Mentora add-on"
                           + (f" ({said[-1]})." if said else "."))
 
 

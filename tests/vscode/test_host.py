@@ -129,15 +129,17 @@ def test_code_cmd_names_code_exe_and_its_command_line_script():
 
 def test_the_add_on_version_matches_the_extension_package():
     package = json.loads((REPO / "extensions" / "vscode" / "package.json").read_text(encoding="utf-8"))
-    assert f"{package['publisher']}.{package['name']}" == "projectx.projectx"
+    assert f"{package['publisher']}.{package['name']}" == "mentora.mentora"
     assert package["version"] == ADDON_VERSION
 
 
 def test_the_add_on_counts_as_installed_only_at_this_version(tmp_path):
     assert not addon_installed(tmp_path)
-    (tmp_path / "projectx.projectx-lesson-helper-0.1.1").mkdir()
-    (tmp_path / "projectx.projectx-lesson-helper-0.1.1" / "package.json").write_text("{}", encoding="utf-8")
+    for other in ("projectx.projectx-lesson-helper-0.1.1", f"projectx.projectx-{ADDON_VERSION}",
+                  "mentora.mentora-0.0.9"):      # the old project's add-ons, and an older Mentora one
+        (tmp_path / other).mkdir()
+        (tmp_path / other / "package.json").write_text("{}", encoding="utf-8")
     assert not addon_installed(tmp_path)
-    (tmp_path / f"projectx.projectx-{ADDON_VERSION}").mkdir()
-    (tmp_path / f"projectx.projectx-{ADDON_VERSION}" / "package.json").write_text("{}", encoding="utf-8")
+    (tmp_path / f"mentora.mentora-{ADDON_VERSION}").mkdir()
+    (tmp_path / f"mentora.mentora-{ADDON_VERSION}" / "package.json").write_text("{}", encoding="utf-8")
     assert addon_installed(tmp_path)

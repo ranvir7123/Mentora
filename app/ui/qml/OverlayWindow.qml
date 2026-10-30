@@ -39,7 +39,7 @@ Window {
     // nothing, and hides after that first frame.
     property bool warm: false
     onFrameSwapped: warm = true
-    title: "Project X pointer"
+    title: "Mentora pointer"
 
     function toScreen(r) { return Qt.rect(r.x + root.x, r.y + root.y, r.width, r.height) }
     function fromScreen(p) { return Qt.point(p.x - root.x, p.y - root.y) }

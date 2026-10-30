@@ -185,7 +185,7 @@ def check_controls(s: ExcelSession, hwnd: int) -> int:
 
 def main() -> int:
     lesson = load_lesson(ROOT / "lessons" / "monthly-budget")
-    workdir = Path(os.environ["LOCALAPPDATA"]) / "projectx" / "probe" / f"{lesson.id}-locate"
+    workdir = Path(os.environ["LOCALAPPDATA"]) / "mentora" / "probe" / f"{lesson.id}-locate"
     before = excel_pids()
     t0 = time.perf_counter()
     bad = 0

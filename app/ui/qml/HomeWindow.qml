@@ -43,7 +43,7 @@ Window {
     minimumHeight: 480
     visible: true
     color: Theme.bg
-    title: "Project X"
+    title: "Mentora"
 
     // Centred on the primary screen, and never bigger than what is free of its taskbar.
     Component.onCompleted: {
