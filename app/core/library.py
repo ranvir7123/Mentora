@@ -2,7 +2,7 @@
 
 `lessons/courses.json` lists the courses in the order the home screen shows them. Each folder under
 `lessons/` holds one lesson. A lesson is on the shelf only when it passed its proof and has a test result
-(`shelf_badge`); a developer switch (`PROJECTX_SHOW_UNPROVEN=1`, read by the program at start-up) also
+(`shelf_badge`); a developer switch (`MENTORA_SHOW_UNPROVEN=1`, read by the program at start-up) also
 shows the others, marked "not proven yet". It is never on in recordings.
 
 A folder that can't be read, breaks a lesson rule or names a course that isn't listed is skipped. Its

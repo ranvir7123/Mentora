@@ -1,4 +1,4 @@
-"""The learner's progress, kept on the laptop in `%LOCALAPPDATA%\\projectx\\`.
+"""The learner's progress, kept on the laptop in `%LOCALAPPDATA%\\mentora\\`.
 
 `progress.json` holds the points earned each day, where each lesson is up to, the last lesson opened, the
 lessons the learner made, the last tips and the learner's name. It is written whole to a temporary file
@@ -30,7 +30,7 @@ FORMAT = 1
 
 
 def default_root() -> Path:
-    return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "projectx"
+    return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "mentora"
 
 
 @dataclass(frozen=True)

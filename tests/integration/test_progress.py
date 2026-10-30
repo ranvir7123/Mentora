@@ -152,7 +152,7 @@ def test_the_last_lesson_made_lessons_tips_and_name_are_kept(tmp_path):
 
 
 def test_the_file_is_plain_json_on_the_laptop(tmp_path):
-    p = Progress(tmp_path / "projectx", today=Clock())
+    p = Progress(tmp_path / "mentora", today=Clock())
     p.step_passed("budget", 0, 10)
-    data = json.loads((tmp_path / "projectx" / "progress.json").read_text(encoding="utf-8"))
+    data = json.loads((tmp_path / "mentora" / "progress.json").read_text(encoding="utf-8"))
     assert data["days"] == {"2026-10-30": 10}

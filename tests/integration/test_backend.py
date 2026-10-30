@@ -134,9 +134,9 @@ class World:
 
     def start(self):
         self.library = Library(self.lessons_dir)
-        self.progress = Progress(self.tmp / "projectx", today=lambda: TODAY)
+        self.progress = Progress(self.tmp / "mentora", today=lambda: TODAY)
         self.backend = Backend(self.library, self.progress, {"fake": self.plugin}, self.coach, self.maker,
-                               workdir=self.tmp / "projectx" / "work", layout=lambda: (APP_RECT, PANEL_RECT),
+                               workdir=self.tmp / "mentora" / "work", layout=lambda: (APP_RECT, PANEL_RECT),
                                later=self.later, find_key=lambda: (self.key, "test"),
                                recordings=self.tmp / "recordings", maker_app="fake", login_name="ranvir")
         self.backend.subscribe(lambda name, payload: self.sent.append((name, payload)))
@@ -180,7 +180,7 @@ def test_a_lesson_opens_on_its_first_step_with_the_app_placed_beside_the_panel(w
     assert lesson["step"]["instruction"] == "Set k0 to 1."
     assert lesson["badge"] == "proven and tested" and lesson["appName"] == "Fake app"
     assert session.placed == APP_RECT
-    assert world.plugin.opens[0]["workdir"] == world.tmp / "projectx" / "work" / "two-keys"
+    assert world.plugin.opens[0]["workdir"] == world.tmp / "mentora" / "work" / "two-keys"
     assert session.watching.ref == "k0" and session.waiting
     pointer = world.backend.pointer()
     assert pointer["visible"] and (pointer["x"], pointer["y"], pointer["w"], pointer["h"]) == (100, 100, 80, 24)
@@ -306,7 +306,7 @@ def test_opening_another_lesson_saves_and_closes_the_first(tmp_path):
         w.learner_sets("k0", 1)
         w.backend.open_lesson("b")
         w.idle()
-        assert first.closed and (w.tmp / "projectx" / "work" / "a" / "state.json").exists()
+        assert first.closed and (w.tmp / "mentora" / "work" / "a" / "state.json").exists()
         assert [o["lesson"] for o in w.plugin.opens] == ["a", "b"]
         assert w.backend.lesson()["id"] == "b"
     finally:
@@ -660,7 +660,7 @@ def test_go_home_closes_the_lesson_and_refreshes_home(world):
 
 def test_a_saved_copy_that_already_passes_every_step_opens_finished(world):
     world.progress.step_passed("two-keys", 0, 10)
-    saved = world.tmp / "projectx" / "work" / "two-keys" / "state.json"
+    saved = world.tmp / "mentora" / "work" / "two-keys" / "state.json"
     saved.parent.mkdir(parents=True)
     saved.write_text('{"k0": 1, "k1": 2}', encoding="utf-8")
     world.open()
