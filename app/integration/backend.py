@@ -208,16 +208,20 @@ class _Open:
 class Backend:
     def __init__(self, library: Library, progress: Progress, plugins: Mapping[str, AppPlugin],
                  coach: Coach | None, maker: LessonMaker | None, *, workdir: Path,
-                 layout: Callable[[], tuple[Rect, Rect]],
+                 layout: Callable[[], tuple[Rect, Rect]], front: Callable[[int, Callable[[], bool]], object],
                  later: Callable[[float, Callable[[], None]], None] = _timer,
                  find_key: Callable[[], tuple[str | None, str]] = _find_key,
                  recordings: Path = Path("recordings"), maker_app: str = "excel",
                  login_name: str | None = None):
         """`layout()` gives (where the app goes, where the panel is) in physical px; it is called on the app
-        worker, so it must not touch the screens. `later(seconds, fn)` runs `fn` once after `seconds`, on
-        any thread. `recordings` holds the lesson maker's saved videos, one folder per YouTube id."""
+        worker, so it must not touch the screens. `front(hwnd, still)` is called on the app worker once the
+        lesson's app is in its place as it opens, to bring it to the front; it must hand that to the screens'
+        thread, after the news it has already been sent, and bring the app forward only if `still()` is true
+        by then (the learner may have gone home in between). `later(seconds, fn)` runs `fn` once after
+        `seconds`, on any thread. `recordings` holds the lesson maker's saved videos, one folder per YouTube id."""
         self._library = library
         self._progress = progress
+        self._front = front
         self._plugins = dict(plugins)
         self._coach = coach
         self._maker = maker
@@ -568,21 +572,36 @@ class Backend:
         if stale:                                # the lesson was closed while its app opened
             self._close_app(session)
             return
-        self._place(session)
+        self._place(session, then=lambda: self._from_app(o, gen, self._bring_forward, session))
         if not resume:                           # a resumed lesson points once its first snapshot says where
             self._follow(o, gen)
 
-    def _place(self, session: AppSession) -> None:
+    def _place(self, session: AppSession, then: Callable[[], None] | None = None) -> None:
+        """Puts the app's window beside the panel; `then()` runs once it is there, or could not be moved."""
         try:
             future = session.place(self._layout()[0])
         except Exception:
             log.exception("the app's window could not be placed")
+            if then is not None:
+                then()
             return
 
         def placed(f: Future) -> None:
             if f.exception() is not None:
                 log.warning("the app's window could not be placed: %s", f.exception())
+            if then is not None:
+                then()
         future.add_done_callback(placed)
+
+    def _bring_forward(self, o: _Open, gen: int, session: AppSession) -> None:
+        """The app has just opened in its place: it comes to the front, so the learner sees it and types into
+        it. Only as it opens, never when the screen changes: by then the learner may be in another window."""
+        if self._still_open(o, gen):
+            self._front(session.hwnd(), lambda: self._still_open(o, gen))
+
+    def _still_open(self, o: _Open, gen: int) -> bool:
+        with self._lock:
+            return self._current(o, gen)
 
     def relayout(self) -> None:
         """The screen changed: put the app's window in its place again."""

@@ -2,6 +2,7 @@
 told when the learner works in the app, and what each button does."""
 import threading
 import time
+from concurrent.futures import Future
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -34,6 +35,7 @@ class RecordingPlugin(FakePlugin):
         self.opens: list[dict] = []
         self.open_error: Exception | None = None
         self.close_gate: threading.Event | None = None
+        self.held_places: list[Future] | None = None    # a list: each move waits there until the test ends it
 
     def open(self, lesson, workdir, *, visible=True, resume=False, on_snapshot, on_closed):
         self.opens.append({"lesson": lesson.id, "workdir": workdir, "resume": resume, "visible": visible})
@@ -52,6 +54,18 @@ class RecordingPlugin(FakePlugin):
                 gate.wait(5)
             plain_close(save)
         session.close = close
+        number = 1000 + len(self.sessions)                 # each app's own window
+        session.hwnd = lambda: number
+        held, plain_place = self.held_places, session.place
+
+        def place(rect):
+            if held is None:
+                return plain_place(rect)
+            moving = Future()
+            moving.add_done_callback(lambda _: plain_place(rect))
+            held.append(moving)
+            return moving
+        session.place = place
         self.sessions.append(session)
         return session
 
@@ -135,6 +149,8 @@ class World:
         self.key = key
         self.later = Later()
         self.sent: list[tuple[str, dict]] = []
+        self.fronts: list[int] = []                         # the windows brought to the front, in order
+        self.stills: list = []                              # with each, whether its lesson is still open
         self.start()
 
     def start(self):
@@ -143,9 +159,14 @@ class World:
         self.backend = Backend(self.library, self.progress, {"fake": self.plugin}, self.coach, self.maker,
                                workdir=self.tmp / "mentora" / "work", layout=lambda: (APP_RECT, PANEL_RECT),
                                later=self.later, find_key=lambda: (self.key, "test"),
-                               recordings=self.tmp / "recordings", maker_app="fake", login_name="ranvir")
+                               recordings=self.tmp / "recordings", maker_app="fake", login_name="ranvir",
+                               front=self._front)
         self.backend.subscribe(lambda name, payload: self.sent.append((name, payload)))
         return self.backend
+
+    def _front(self, hwnd, still):
+        self.fronts.append(hwnd)
+        self.stills.append(still)
 
     def idle(self):
         assert self.backend.wait_idle(5), "the backend's work never finished"
@@ -868,3 +889,71 @@ def test_questions_dropped_as_the_program_quits_are_not_left_counted(world):
     world.backend.shutdown()                    # drops the one waiting in line
     world.coach.gate.set()
     assert world.backend.wait_idle(2.0)
+
+
+def test_the_app_comes_to_the_front_once_it_is_in_its_place(world):
+    world.plugin.held_places = []
+    session = world.open()
+    assert world.fronts == []                    # still moving: not shown off in the wrong place
+    world.plugin.held_places[0].set_result(None)
+    world.idle()
+    assert session.placed == APP_RECT and world.fronts == [session.hwnd()]
+
+
+def test_an_app_that_would_not_move_still_comes_to_the_front(world):
+    world.plugin.held_places = []
+    session = world.open()
+    world.plugin.held_places[0].set_exception(OSError("the window would not move"))
+    world.idle()
+    assert world.fronts == [session.hwnd()]      # the learner must still see it
+
+
+def test_a_reopened_app_comes_to_the_front_too(world):
+    first = world.open()
+    first.closed_by_learner()
+    world.idle()
+    world.backend.reopen_app()
+    world.idle()
+    again = world.plugin.session
+    assert again is not first and world.fronts == [first.hwnd(), again.hwnd()]
+
+
+def test_the_screen_changing_never_pulls_the_app_to_the_front(world):
+    session = world.open()
+    world.backend.relayout()
+    world.idle()
+    assert world.fronts == [session.hwnd()]      # only as it opened: by now the learner may be in another window
+
+
+def test_an_app_whose_lesson_closed_while_it_moved_stays_behind(world):
+    world.plugin.held_places = []
+    world.open()
+    world.backend.close_lesson()
+    world.idle()
+    world.plugin.held_places[0].set_result(None)
+    world.idle()
+    assert world.fronts == []
+
+
+def test_only_the_app_of_the_lesson_open_now_comes_to_the_front(world):
+    world.plugin.held_places = []
+    first = world.open()
+    world.backend.close_lesson()
+    again = world.open()                         # opened again while the first app was still moving
+    world.plugin.held_places[0].set_result(None)
+    world.idle()
+    assert world.fronts == []
+    world.plugin.held_places[1].set_result(None)
+    world.idle()
+    assert again is not first and world.fronts == [again.hwnd()]
+
+
+def test_the_ask_to_bring_the_app_forward_lapses_when_its_lesson_closes(world):
+    world.open()
+    still = world.stills[0]
+    assert still()                               # the screens bring the app forward only while this holds
+    world.backend.close_lesson()                 # the learner went home before the screens got to the ask
+    world.idle()
+    assert not still()
+    world.open()
+    assert not still() and world.stills[1]()

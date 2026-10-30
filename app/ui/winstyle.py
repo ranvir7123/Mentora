@@ -78,6 +78,7 @@ def foreground() -> int:
 
 
 def give_keyboard_to(hwnd: int) -> bool:
-    """Brings `hwnd` (the app's window, such as Excel's) to the front, so the keyboard is back in it. Windows
-    allows this while one of this program's windows has the keyboard. False if that window has closed."""
+    """Brings `hwnd` (the app's window, such as Excel's, or the panel) to the front, so the keyboard is in it.
+    Windows allows this while one of this program's windows has the keyboard, or the learner's last click was
+    in one. False if that window has closed, or Windows said no."""
     return bool(hwnd and _user32.IsWindow(hwnd) and _user32.SetForegroundWindow(hwnd))
