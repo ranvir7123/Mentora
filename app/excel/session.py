@@ -1,8 +1,11 @@
 """One lesson's Excel: our own copy of Excel, the lesson's workbook, its events, and a clean exit.
 
 The session starts a new Excel (never the learner's own), opens the lesson's workbook from the
-work folder, and listens to the workbook's events. Events only say "something changed", and Excel
-must not be called from inside one, so each handler just asks the read scheduler for a read.
+work folder, and listens to the workbook's events. Before any workbook opens, macros are forced off
+in that Excel (AutomationSecurity 3), so no file it opens can run one; this lasts only for that Excel
+and changes none of the learner's settings. An Excel that will not take it never opens the lesson.
+Events only say "something changed", and Excel must not be called from inside one, so each handler
+just asks the read scheduler for a read.
 
 Closing is noticed two ways. BeforeClose says the learner asked to close, but they can still press
 Cancel at the "save your changes?" box, so it only brings the next check forward. The check itself
@@ -58,6 +61,7 @@ PERFORM_BUSY_LIMIT_S = 30.0        # an operation Excel refuses for this long ha
 LOCATE_BUSY_LIMIT_S = 5.0          # a busy Excel for this long means "can't say where it is"
 TEARDOWN_BUSY_LIMIT_S = 5.0        # closing waits this long for a busy Excel, then ends it
 VISION_STILL_S = 0.3               # a picture is taken once the window has stopped changing this long
+MACROS_FORCED_OFF = 3              # msoAutomationSecurityForceDisable
 
 
 def _new_excel():
@@ -261,7 +265,8 @@ class ExcelSession:
         self._com.submit(lambda: self._set_watch(target, on_spot))
 
     def set_vision_fallback(self, fn: Callable[[bytes, str], Rect | None] | None) -> None:
-        """fn(png, target ref) -> a rectangle on screen; asked off the COM thread, so it may be slow."""
+        """fn(png of the window, target ref) -> the target's rectangle in pixels of that picture, from its
+        top-left corner, or None. Asked off the COM thread, so it may be slow."""
         def change() -> None:
             self._vision = fn
             self._vision_round += 1
@@ -308,6 +313,7 @@ class ExcelSession:
     def _setup(self) -> None:
         windows.dpi_aware_thread()
         self._app = self._factory()
+        self._force_macros_off()
         self._app.Visible = self._visible
         # Held before anything can go wrong, so a closing that finds Excel stuck can still end it.
         self._pid = windows.process_id(int(self._app.Hwnd))
@@ -319,6 +325,11 @@ class ExcelSession:
         self._scheduler = ReadScheduler(self._com.call_later, self._read, self._deliver)
         self._scheduler.read_soon()
         self._schedule_check(CLOSED_CHECK_S)
+
+    def _force_macros_off(self) -> None:
+        self._app.AutomationSecurity = MACROS_FORCED_OFF
+        if self._app.AutomationSecurity != MACROS_FORCED_OFF:
+            raise RuntimeError("Excel would not turn macros off, so the lesson was not opened")
 
     def _read(self) -> Any:
         if self._closed or self._stopping:
@@ -492,11 +503,10 @@ class ExcelSession:
         if (place.w, place.h) != (asked_at.w, asked_at.h):
             self._look_soon()                    # resized while the model thought: ask about the new size
             return
-        box = None
-        if rect is not None:
-            box = Rect(rect.x - asked_at.x, rect.y - asked_at.y, rect.w, rect.h)
-            if not locate.confirm_vision(Rect(place.x + box.x, place.y + box.y, box.w, box.h), target):
-                box = None
+        box = rect                               # in the picture, so from the window's corner
+        if box is not None and not locate.confirm_vision(Rect(place.x + box.x, place.y + box.y, box.w, box.h),
+                                                         target):
+            box = None
         # Answers for other sizes are dropped: a window is rarely put back to an old size.
         self._vision_known = {k: v for k, v in self._vision_known.items() if k[1:] == key[1:]}
         self._vision_known[key] = box

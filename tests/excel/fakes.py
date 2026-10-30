@@ -7,12 +7,16 @@ anything touches it while an event handler is running (handlers may only ask for
 from __future__ import annotations
 
 import heapq
+import json
 import itertools
 import traceback
 from concurrent.futures import Future
 from pathlib import Path
 
 import pywintypes
+
+from app.meta.client import Answer
+from app.meta.prices import Usage
 
 BUSY = -2147417846                 # RPC_E_SERVERCALL_RETRYLATER
 GONE = -2147023174                 # RPC_S_SERVER_UNAVAILABLE: the Excel process was killed
@@ -152,8 +156,10 @@ class FakeApp:
         self.busy = False
         self.refusals = 0                  # refuse this many more calls as busy, then answer
         self.fail_open = False
+        self.keeps_macros_on = False       # an Excel that ignores the order to force macros off
         self._visible = False
         self._alerts = True
+        self._security = 1                 # msoAutomationSecurityLow: what an automated Excel starts with
 
     def check_alive(self) -> None:
         if self.dead:
@@ -184,6 +190,16 @@ class FakeApp:
     def Visible(self, v: bool) -> None:
         self.rec.touch(f"Visible={v}", record=True)
         self._visible = v
+
+    @property
+    def AutomationSecurity(self) -> int:
+        return self._security
+
+    @AutomationSecurity.setter
+    def AutomationSecurity(self, v: int) -> None:
+        self.rec.touch(f"AutomationSecurity={v}", record=True)
+        if not self.keeps_macros_on:
+            self._security = v
 
     @property
     def DisplayAlerts(self) -> bool:
@@ -312,3 +328,23 @@ class FakeNode:
 
     def __repr__(self) -> str:
         return f"FakeNode({self.control_type}, {self.name!r}, {self.rect})"
+
+
+class FakeMeta:
+    """Stands in for MetaClient: writes down each request and gives one set answer, or raises."""
+
+    def __init__(self, data=None, *, refusal: str = "", error: Exception | None = None) -> None:
+        self.data, self.refusal, self.error = data, refusal, error
+        self.asked: list[dict] = []
+
+    def respond(self, model, input, *, label, schema=None, **extra) -> Answer:
+        self.asked.append({"model": model, "input": input, "label": label, "schema": schema})
+        if self.error is not None:
+            raise self.error
+        return Answer(text=json.dumps(self.data), data=self.data, output=[], usage=Usage(),
+                      response_id="resp_1", cost=0.0, refusal=self.refusal)
+
+
+def box(left, top, right, bottom, found=True) -> dict:
+    """Muse Spark's answer: where a button is, on a 0 to 1000 grid over the picture."""
+    return {"found": found, "left": left, "top": top, "right": right, "bottom": bottom}

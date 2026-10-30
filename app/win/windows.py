@@ -10,6 +10,8 @@ Two facts measured on this laptop (1280 px wide at 200%) in the earlier project 
 location_hook() tells a thread when a window moves; it needs the thread to pump messages, as the
 COM thread does. screenshot_png() takes a picture of part of the screen, for the vision fallback.
 open_process() and end_process() let a session end its own Excel when that Excel will not quit.
+owner() says which window owns another (Excel owns its dialog boxes); the tester clicks only in windows
+Excel owns.
 """
 from __future__ import annotations
 
@@ -28,6 +30,7 @@ PER_MONITOR_AWARE_V2 = -4          # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
 MONITOR_DEFAULTTONEAREST = 2
 SW_RESTORE = 9
+GW_OWNER = 4
 SWP_NOZORDER = 0x0004
 SWP_NOACTIVATE = 0x0010
 BASE_DPI = 96
@@ -91,6 +94,8 @@ _gdi32.GetDIBits.argtypes = [wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, wint
 _gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
 _gdi32.DeleteDC.argtypes = [wintypes.HDC]
 _user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+_user32.GetWindow.restype = wintypes.HWND
+_user32.GetWindow.argtypes = [wintypes.HWND, wintypes.UINT]
 _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 _kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 _kernel32.OpenProcess.restype = wintypes.HANDLE
@@ -211,6 +216,11 @@ def class_name(hwnd: int) -> str:
     buf = ctypes.create_unicode_buffer(256)
     _user32.GetClassNameW(hwnd, buf, len(buf))
     return buf.value
+
+
+def owner(hwnd: int) -> int:
+    """The window that owns hwnd (a dialog box is owned by its program's main window); 0 for none."""
+    return (_user32.GetWindow(hwnd, GW_OWNER) or 0) if hwnd else 0
 
 
 def process_id(hwnd: int) -> int:

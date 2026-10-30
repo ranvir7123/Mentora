@@ -6,8 +6,10 @@ import sys
 import zlib
 
 from app.core.types import Rect
-from app.win.windows import (class_name, close_handle, end_process, open_process, outer_rect_for, png_bytes,
-                             process_id, program_windows)
+from ctypes import wintypes
+
+from app.win.windows import (class_name, close_handle, end_process, open_process, outer_rect_for, owner,
+                             png_bytes, process_id, program_windows)
 
 
 def test_a_program_can_be_ended_through_the_handle_kept_on_it():
@@ -32,6 +34,27 @@ def test_no_window_means_no_program():
 def test_a_window_is_listed_under_its_program():
     desktop_shell = ctypes.windll.user32.GetShellWindow()      # the desktop, always there while Windows runs
     assert desktop_shell in program_windows(process_id(desktop_shell))
+
+
+def test_a_window_names_the_window_that_owns_it():
+    # Two hidden pop-up windows, the second owned by the first, as an Excel dialog box is owned by Excel.
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.CreateWindowExW.restype = wintypes.HWND
+    user32.CreateWindowExW.argtypes = [wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+                                       ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND,
+                                       wintypes.HMENU, wintypes.HINSTANCE, wintypes.LPVOID]
+    user32.DestroyWindow.argtypes = [wintypes.HWND]
+    popup = 0x80000000                           # WS_POPUP, and no WS_VISIBLE: nothing shows on screen
+    top = user32.CreateWindowExW(0, "STATIC", "owner", popup, 0, 0, 10, 10, None, None, None, None)
+    owned = user32.CreateWindowExW(0, "STATIC", "owned", popup, 0, 0, 10, 10, top, None, None, None)
+    try:
+        assert top and owned
+        assert owner(owned) == top
+        assert owner(top) == 0
+        assert owner(0) == 0
+    finally:
+        user32.DestroyWindow(owned)
+        user32.DestroyWindow(top)
 
 
 def test_a_window_kind_is_read():

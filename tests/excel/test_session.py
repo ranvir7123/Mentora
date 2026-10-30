@@ -172,6 +172,22 @@ def test_an_excel_that_cannot_open_the_file_is_quit_and_the_open_fails(rig):
     assert "Quit" in app.rec.calls
 
 
+def test_macros_are_forced_off_before_the_workbook_opens(rig):
+    r = rig()
+    calls = r.app.rec.calls
+    assert calls.index("AutomationSecurity=3") < calls.index("Open(monthly-budget.xlsx)")
+    assert r.app.AutomationSecurity == 3
+
+
+def test_an_excel_that_keeps_macros_on_never_opens_the_workbook(rig):
+    app = FakeApp()
+    app.keeps_macros_on = True
+    with pytest.raises(RuntimeError, match="macros"):
+        rig(app=app)
+    assert app.opened == []
+    assert "Quit" in app.rec.calls
+
+
 def test_an_invisible_excel_cannot_be_placed(rig):
     r = rig()
     with pytest.raises(ValueError, match="no window"):
