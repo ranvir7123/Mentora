@@ -10,10 +10,12 @@ the docked panel over a pretend spreadsheet (runs\\shots\\app-docked.png), close
 back, then closes home and checks the program ended.
 
 Live: the same on the real backend, with the learner's progress kept in runs\\app_start\\ instead of the real
-one. It opens the budget lesson in real Excel, waits until Excel is ready, checks the panel against where the
-program put Excel, grabs the whole screen (runs\\shots\\app-live.png), closes the lesson and quits, then counts
-the EXCEL.EXE processes left behind (want 0 new). Needs Excel and about 3 GB of free memory; leave the mouse
-and keyboard alone while it runs (about a minute).
+one. It clicks home's Continue button with the real mouse, as a learner would (a click is what lets Mentora
+bring Excel to the front), checks the budget lesson opened, waits until Excel is ready, checks Excel came to
+the front and the panel against where the program put Excel, grabs the whole screen (runs\\shots\\app-live.png),
+closes the lesson and quits, then waits up to 15 s for the EXCEL.EXE processes it started to end (want 0
+left). Needs Excel and about 3 GB of free memory; leave the mouse and keyboard alone while it runs (about a
+minute): it does not click if the mouse moved after home opened, and clicks only where home is on top.
 
 Each check prints "ok" or "FAILED"; exit code 0 means every check passed.
 """
@@ -128,6 +130,7 @@ def demo(probe: Probe, *, off_screen: bool):
     home, panel = windows["home"], windows["panel"]
     yield (lambda: home.isVisible() and home.isExposed()), 5, "home opens"
     probe.check(not panel.isVisible(), "the panel stays hidden while no lesson is open")
+    probe.check(_carry_on_button(home) is not None, "home shows a Continue or Start button")
     yield _settle(1.5)
     _save(home.grabWindow(), "app-first_run.png")
 
@@ -164,19 +167,81 @@ def excel_pids() -> set[int]:
     return {int(line.split('","')[1]) for line in out.splitlines() if line.startswith('"EXCEL.EXE"')}
 
 
-def live(probe: Probe):
+def _carry_on_button(home):
+    """Where home's Continue (or Start) button is, in physical px on the main screen; None if it isn't showing."""
+    from PySide6.QtCore import QPointF
     from PySide6.QtGui import QGuiApplication
+    items = [home.contentItem()]
+    while items:
+        item = items.pop()
+        items.extend(item.childItems())
+        if item.metaObject().className().startswith("ChunkyButton") and item.isVisible() \
+                and item.property("text") in ("Continue", "Start"):
+            p = item.mapToGlobal(QPointF(item.width() / 2, item.height() / 2))
+            screen = QGuiApplication.primaryScreen()
+            g, dpr = screen.geometry(), screen.devicePixelRatio()
+            return round(g.x() + (p.x() - g.x()) * dpr), round(g.y() + (p.y() - g.y()) * dpr)
+    return None
+
+
+def _on_top(window) -> None:
+    """Puts `window` above the other programs' windows without giving it the keyboard. A program started from
+    a terminal opens in front; this probe is started from a background shell, so home may open behind."""
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.WinDLL("user32")
+    user32.SetWindowPos.argtypes = (wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                    ctypes.c_int, wintypes.UINT)
+    keep = 0x0001 | 0x0002 | 0x0010                      # no size, move or keyboard change
+    for after in (-1, -2):                               # always on top, then back to normal: it stays above
+        user32.SetWindowPos(int(window.winId()), after, 0, 0, 0, 0, keep)
+
+
+def live(probe: Probe, before: set[int]):
+    from PySide6.QtGui import QGuiApplication
+
+    from app.factory.input import UserTookOver, WindowsHands
+    from app.ui.winstyle import foreground
+    from app.win.windows import process_id
 
     yield (lambda: True), 1, "the program starts"
     bridge, windows, layout = _parts()
     home, panel = windows["home"], windows["panel"]
     yield (lambda: home.isVisible() and home.isExposed()), 10, "home opens"
+    hands = WindowsHands()                               # from here on, the mouse must stay where it is
     app_spot, panel_spot = layout()
     probe.check((app_spot, panel_spot) == _expected_split(), "the program's layout matches this screen")
+    yield _settle(1.5)
 
-    bridge.openLesson(LESSON)
+    spot = _carry_on_button(home)
+    probe.check(spot is not None, "home shows a Continue or Start button")
+    if spot is None:
+        QGuiApplication.exit(1)
+        return
+    _on_top(home)
+    yield _settle(0.5)
+    if not hands.app_at(int(home.winId()), *spot):
+        probe.check(False, f"home is on top at {spot}, so the click lands on its button")
+        QGuiApplication.exit(1)
+        return
+    try:
+        hands.do({"type": "click", "x": spot[0], "y": spot[1]})
+    except UserTookOver:
+        probe.check(False, "the mouse stayed still until the click (someone moved it, so nothing was clicked)")
+        QGuiApplication.exit(1)
+        return
     yield (lambda: panel.isVisible() and not home.isVisible()), 10, "home steps aside and the panel opens"
+    # Mentora's own doing, not Excel's: the panel holds the front from the click until Excel is ready.
+    yield (lambda: foreground() == int(panel.winId())), 5, "the panel holds the front while Excel opens"
+    probe.check(True, "the panel held the front while Excel opened")
+    opened = bridge.lesson.get("id")
+    probe.check(opened == LESSON, f"the click opened {LESSON} (it opened {opened})")
     yield (lambda: bridge.lesson.get("appState") == "ready"), 90, "Excel opens and gets ready"
+    excel = excel_pids() - before
+    probe.check(bool(excel), "the lesson started its own Excel")
+    # A timeout here fails the check and ends the program; reaching the next line means Excel is in front.
+    yield (lambda: process_id(foreground()) in excel), 15, "Excel comes to the front, so the learner can type in it"
+    probe.check(True, "Excel came to the front")
     yield _settle(3)
     probe.check(_physical(panel) == (panel_spot.x, panel_spot.y, panel_spot.w, panel_spot.h),
                 f"the panel sits at {(panel_spot.x, panel_spot.y, panel_spot.w, panel_spot.h)}"
@@ -212,11 +277,14 @@ def main() -> int:
         os.environ["MENTORA_SHOW_UNPROVEN"] = "1"         # the budget lesson has no proof yet
         data = ROOT / "runs" / "app_start"
         program.default_root = lambda: data              # keep the learner's real progress out of it
+        program.Progress(data).opened(LESSON)             # so home's Continue button carries on with it
         before = excel_pids()
-        probe.run(live(probe))
+        probe.run(live(probe, before))
         code = program.main([])
-        time.sleep(2)
-        probe.check(not (excel_pids() - before), "no Excel left running")
+        end = time.monotonic() + 15                       # Excel saves and quits after the program has gone
+        while excel_pids() - before and time.monotonic() < end:
+            time.sleep(0.5)
+        probe.check(not (excel_pids() - before), "no Excel left running (waited up to 15 s)")
     else:
         probe.run(demo(probe, off_screen=off_screen))
         code = program.main(["--demo", "first_run"])

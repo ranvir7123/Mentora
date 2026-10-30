@@ -77,11 +77,15 @@ def screens(qapp):
     from app.ui.app import open_screens
     from app.ui.demo_backend import DemoBackend
     backend = DemoBackend("first_run")
-    quits = []
+    quits, fronts = [], []
     bridge, engine, windows = open_screens(backend, show=("home", "panel"))
-    docking = Docking(bridge, windows["home"], panel=windows["panel"], quit=lambda: quits.append(1))
+
+    def keep_front(window):                               # and whether panel and home showed at that moment
+        fronts.append((window, window.isVisible(), windows["home"].isVisible()))
+    docking = Docking(bridge, windows["home"], panel=windows["panel"], keep_front=keep_front,
+                      quit=lambda: quits.append(1))
     _settle(qapp)
-    yield backend, windows, quits
+    yield backend, windows, quits, fronts
     docking.deleteLater()
     for window in windows.values():
         window.hide()
@@ -90,7 +94,7 @@ def screens(qapp):
 
 
 def test_home_hides_while_a_lesson_is_open_and_comes_back_after(screens, qapp):
-    backend, windows, quits = screens
+    backend, windows, quits, _ = screens
     home, panel = windows["home"], windows["panel"]
     assert home.isVisible() and not panel.isVisible()
     backend.open_lesson("monthly-budget")
@@ -107,8 +111,107 @@ def test_home_hides_while_a_lesson_is_open_and_comes_back_after(screens, qapp):
     assert quits == []                                    # hiding home never ends the program
 
 
+def test_opening_a_lesson_hands_the_keyboard_to_the_panel_before_home_hides(screens, qapp):
+    backend, windows, _, fronts = screens
+    backend.open_lesson("monthly-budget")
+    _settle(qapp)
+    # Windows lets only the program in front bring the app forward, so the panel keeps Mentora there.
+    assert fronts == [(windows["panel"], True, True)]
+    assert not windows["home"].isVisible()
+
+
+def test_the_panel_takes_the_keyboard_again_whenever_the_app_starts_opening(screens, qapp):
+    backend, windows, _, fronts = screens
+    backend.open_lesson("monthly-budget")
+    _settle(qapp)
+    backend._publish(lesson={**backend.lesson(), "appState": "closed"})
+    _settle(qapp)
+    backend._publish(lesson={**backend.lesson(), "appState": "opening"})   # Reopen, or the next lesson
+    _settle(qapp)
+    backend._publish(lesson={**backend.lesson(), "appState": "ready"})
+    _settle(qapp)
+    assert [window for window, _, _ in fronts] == [windows["panel"], windows["panel"]]
+    backend.close_lesson()
+    _settle(qapp)
+    assert len(fronts) == 2                                # going home hands nothing over
+
+
+def test_the_panel_takes_the_keyboard_even_when_the_app_opened_too_fast_to_be_seen_opening(screens, qapp):
+    backend, windows, _, fronts = screens
+    backend.open_lesson("monthly-budget")
+    _settle(qapp)
+    backend._publish(lesson={**backend.lesson(), "appState": "closed"})
+    _settle(qapp)
+    backend._publish(lesson={**backend.lesson(), "appState": "ready"})            # Reopen
+    _settle(qapp)
+    assert len(fronts) == 2
+    backend._publish(lesson={**backend.lesson(), "id": "two-keys", "appState": "ready"})  # the next lesson
+    _settle(qapp)
+    assert len(fronts) == 3
+    backend._publish(lesson={**backend.lesson(), "stepIndex": 1})                  # a step passed: nothing opened
+    _settle(qapp)
+    assert [window for window, _, _ in fronts] == [windows["panel"]] * 3
+
+
+def test_the_app_is_brought_forward_on_the_screens_thread_only_if_its_lesson_is_still_open(qapp):
+    from app.main import Front
+    given = []
+    front = Front(lambda hwnd: given.append(hwnd) or True)
+    front(1, lambda: False)                      # the learner went home before the screens got to it
+    front(2, lambda: True)
+    assert given == []                           # nothing happens until the screens' thread gets to the asks
+    _settle(qapp)
+    assert given == [2]
+
+
+def test_with_the_real_backend_the_panel_holds_the_front_until_the_app_takes_it(tmp_path, qapp):
+    from app.core.fake_plugin import FakePlugin
+    from app.core.library import Library
+    from app.core.progress import Progress
+    from app.integration.backend import Backend
+    from app.main import Docking, Front
+    from app.ui.app import open_screens
+
+    class Plugin(FakePlugin):                            # keeps the session it opened last
+        def open(self, *args, **kwargs):
+            self.session = super().open(*args, **kwargs)
+            return self.session
+    lessons = tmp_path / "lessons"
+    write_courses(lessons)
+    write_lesson(lessons, "two-keys", title="Two keys")
+    plugin, events = Plugin(), []
+    backend = Backend(Library(lessons), Progress(tmp_path / "data"), {"fake": plugin}, None, None,
+                      workdir=tmp_path / "work", layout=lambda: (Rect(0, 0, 1840, 1500), Rect(1840, 0, 720, 1500)),
+                      front=Front(lambda hwnd: events.append("app") or True))
+    bridge, engine, windows = open_screens(backend, show=("home", "panel"))
+
+    def keep_front(window):
+        events.append(("panel", window.isVisible(), windows["home"].isVisible()))
+    docking = Docking(bridge, windows["home"], panel=windows["panel"], keep_front=keep_front, quit=lambda: None)
+    try:
+        def opened():
+            for _ in range(3):                           # the app opens on a worker; the screens hear of it after
+                assert backend.wait_idle(5)
+                _settle(qapp)
+        backend.open_lesson("two-keys")
+        opened()
+        assert events == [("panel", True, True), "app"]
+        plugin.session.closed_by_learner()
+        opened()
+        backend.reopen_app()
+        opened()
+        assert events == [("panel", True, True), "app", ("panel", True, False), "app"]
+    finally:
+        backend.shutdown()
+        docking.deleteLater()
+        for window in windows.values():
+            window.hide()
+            window.deleteLater()
+        _settle(qapp, 0.05)
+
+
 def test_closing_the_panel_closes_the_lesson_and_brings_home_back(screens, qapp):
-    backend, windows, quits = screens
+    backend, windows, quits, _ = screens
     backend.open_lesson("monthly-budget")
     _settle(qapp)
     windows["panel"].close()                             # Alt+F4 on the panel
@@ -124,14 +227,14 @@ def test_closing_the_panel_closes_the_lesson_and_brings_home_back(screens, qapp)
 def test_the_panel_never_holds_up_the_program_quitting_when_no_lesson_is_open(screens, qapp):
     from PySide6.QtCore import QCoreApplication
     from PySide6.QtGui import QCloseEvent
-    _, windows, _ = screens
+    _, windows, _, _ = screens
     asked = QCloseEvent()                                # as Qt asks every window when the program quits
     QCoreApplication.sendEvent(windows["panel"], asked)
     assert asked.isAccepted()
 
 
 def test_closing_home_ends_the_program(screens, qapp):
-    _, windows, quits = screens
+    _, windows, quits, _ = screens
     windows["home"].close()
     _settle(qapp)
     assert quits == [1]

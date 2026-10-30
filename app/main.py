@@ -21,14 +21,15 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Callable, Mapping
 
-from PySide6.QtCore import QEvent, QLockFile, QObject
-from PySide6.QtGui import QGuiApplication, QScreen
+from PySide6.QtCore import QEvent, QLockFile, QObject, Qt, Signal, Slot
+from PySide6.QtGui import QGuiApplication, QScreen, QWindow
 from PySide6.QtQuick import QQuickWindow  # noqa: F401  (so windows come back as QQuickWindow)
 
 from app.core.library import Library
 from app.core.plugin import AppPlugin
 from app.core.progress import Progress, default_root
 from app.core.types import Rect
+from app.ui import winstyle
 from app.ui.bridge import PANEL_WIDTH, Bridge
 
 log = logging.getLogger(__name__)
@@ -101,13 +102,19 @@ class Docking(QObject):
     """Hides home while a lesson is open and brings it back when the lesson closes. Closing home (its X)
     ends the program; hiding it never does. Closing the panel (Alt+F4) while a lesson is open closes the
     lesson, so home comes back instead of the program being left with no window. With no lesson open the
-    panel lets itself close: Qt asks every window to close as the program quits, and one refusal stops it."""
+    panel lets itself close: Qt asks every window to close as the program quits, and one refusal stops it.
+
+    Whenever the lesson's app starts opening (the learner opened a lesson, pressed Reopen or went on to the
+    next lesson), `keep_front(panel)` gives the panel the keyboard, before home hides. Mentora then stays in
+    front while the app opens, and Windows lets it bring the app forward once the app is in its place."""
 
     def __init__(self, bridge: Bridge, home: QObject, *, panel: QObject | None = None,
-                 quit: Callable[[], None]):
+                 keep_front: Callable[[QObject], object], quit: Callable[[], None]):
         super().__init__(home)
         self._bridge, self._home, self._panel, self._quit = bridge, home, panel, quit
+        self._keep_front = keep_front
         self._lesson_open = False
+        self._app: tuple[object, bool] | None = None     # the open lesson, and whether its app is up or opening
         home.installEventFilter(self)
         if panel is not None:
             panel.installEventFilter(self)
@@ -115,7 +122,14 @@ class Docking(QObject):
         self._follow()
 
     def _follow(self) -> None:
-        lesson_open = bool(self._bridge.lesson.get("open"))
+        lesson = self._bridge.lesson
+        lesson_open = bool(lesson.get("open"))
+        app = (lesson.get("id"), lesson.get("appState") != "closed") if lesson_open else None
+        # News is merged, so an app that opens fast may never be seen "opening": a start is told by what changed.
+        started = app is not None and (self._app is None or app[0] != self._app[0] or (app[1] and not self._app[1]))
+        self._app = app
+        if started and self._panel is not None:
+            self._keep_front(self._panel)
         if lesson_open == self._lesson_open:
             return
         self._lesson_open = lesson_open
@@ -138,6 +152,35 @@ class Docking(QObject):
             self._bridge.closeLesson()
             return True
         return False
+
+
+class Front(QObject):
+    """Brings the lesson's app to the front, on the screens' thread (make it there). The backend asks from its
+    worker; the ask joins the screens' queue behind the news already sent, so Docking has given the panel the
+    keyboard (the app is opening) before the app is brought forward, never after, however fast the app opens.
+    An ask whose lesson closed while it waited (`still()` is false) is dropped, so home stays in front."""
+    _asked = Signal(object, object)
+
+    def __init__(self, give: Callable[[int], object]):
+        super().__init__()
+        self._give = give
+        self._asked.connect(self._bring, Qt.ConnectionType.QueuedConnection)
+
+    def __call__(self, hwnd: int, still: Callable[[], bool]) -> None:
+        self._asked.emit(hwnd, still)
+
+    @Slot(object, object)
+    def _bring(self, hwnd: int, still: Callable[[], bool]) -> None:
+        if still() and not self._give(hwnd):
+            log.info("the lesson's app stayed behind: it has no window yet, or Windows let only the program in "
+                     "front bring it forward")
+
+
+def keep_front(window: QWindow) -> None:
+    """`window` takes the keyboard. Windows allows that while one of this program's windows has it, or the
+    learner's last click was in one; otherwise nothing changes."""
+    if not winstyle.give_keyboard_to(int(window.winId())):
+        log.info("the panel could not take the keyboard, so the lesson's app may open behind other windows")
 
 
 # One copy at a time, and a log.
@@ -195,7 +238,7 @@ def build_backend(*, lessons: Path, data: Path, recordings: Path, layout: Callab
     coach = MetaCoach(client, shelf=shelf)
     maker = LessonFactory(client, lessons, recordings, on_line=log.info) if "excel" in plugins else None
     return Backend(library, Progress(data), plugins, coach, maker, workdir=data / "work", layout=layout,
-                   recordings=recordings)
+                   front=Front(winstyle.give_keyboard_to), recordings=recordings)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -235,6 +278,6 @@ def main(argv: list[str] | None = None) -> int:
     if opened is None:
         return 1
     bridge, _engine, windows = opened
-    docking = Docking(bridge, windows["home"], panel=windows["panel"], quit=app.quit)
+    docking = Docking(bridge, windows["home"], panel=windows["panel"], keep_front=keep_front, quit=app.quit)
     app._program = (lock, layout, docking)   # kept alive as long as the program
     return app.exec()
