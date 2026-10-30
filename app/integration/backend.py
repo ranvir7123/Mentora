@@ -43,7 +43,7 @@ from app.core.library import Library
 from app.core.plugin import AppPlugin, AppSession
 from app.core.progress import Progress
 from app.core.runner import LessonDone, LessonRun, NotYet, StepPassed
-from app.core.screen import CLOSED_LESSON, EMPTY_HOME, HIDDEN_POINTER
+from app.core.screen import CLOSED_LESSON, EMPTY_HOME, HIDDEN_POINTER, Box
 from app.core.services import Coach, LessonMaker
 from app.core.types import Rect, Spot
 from app.meta.client import NoKey
@@ -172,6 +172,15 @@ def _undone_text(changed: list[int], app_name: str) -> str:
 def _capitalised(text: str) -> str:
     text = (text or "").strip()
     return text[:1].upper() + text[1:]
+
+
+def _box(r: Rect) -> Box:
+    """A rectangle as the screens get it: whole physical pixels."""
+    return {"x": int(round(r.x)), "y": int(round(r.y)), "w": int(round(r.w)), "h": int(round(r.h))}
+
+
+def _box_or_none(r: Rect | None) -> Box | None:
+    return None if r is None else _box(r)
 
 
 @dataclass
@@ -777,9 +786,8 @@ class Backend:
                 o.landed = False
                 o.pointer = copy.deepcopy(HIDDEN_POINTER)
             else:
-                r = spot.rect
-                o.pointer.update(visible=True, x=int(round(r.x)), y=int(round(r.y)), w=int(round(r.w)),
-                                 h=int(round(r.h)), bubble=spot.bubble)
+                o.pointer.update(visible=True, **_box(spot.rect), bubble=spot.bubble, room=_box_or_none(spot.room),
+                                 filled=_box_or_none(spot.filled))
                 if not o.landed:
                     o.landed = True
                     self._fly(o)

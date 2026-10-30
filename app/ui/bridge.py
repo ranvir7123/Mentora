@@ -16,7 +16,7 @@ import copy
 import threading
 from typing import Any, Mapping
 
-from PySide6.QtCore import Property, QObject, QPointF, QRectF, Qt, QUrl, Signal, Slot
+from PySide6.QtCore import Property, QObject, QPointF, QRectF, QSizeF, Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QGuiApplication, QWindow
 
 from app.core.screen import ScreenBackend
@@ -177,6 +177,18 @@ class Bridge(QObject):
         origin, dpr, _ = self._screen()
         return landing.to_physical(Rect(r.x(), r.y(), r.width(), r.height()), origin, dpr)
 
+    def _box(self, key: str) -> Rect | None:
+        r = self._state["pointer"].get(key)
+        return None if r is None else Rect(float(r["x"]), float(r["y"]), float(r["w"]), float(r["h"]))
+
+    def _room(self) -> Rect | None:
+        """Where the app lets the mascot and its words go, already in physical pixels; None: anywhere."""
+        return self._box("room")
+
+    def _filled(self) -> Rect | None:
+        """What the mascot and its words keep off when there is space, in physical pixels; None: nothing."""
+        return self._box("filled")
+
     def _logical(self, x: float, y: float) -> QPointF:
         origin, dpr, _ = self._screen()
         return QPointF(*landing.to_logical((x, y), origin, dpr))
@@ -214,13 +226,15 @@ class Bridge(QObject):
     # True while the overlay's mascot is out of the panel, so the panel hides its own.
     mascotAway = Property(bool, _get_mascot_away, _set_mascot_away, notify=mascotAwayChanged)
 
-    @Slot(QRectF, float, float, result=QPointF)
-    def landingSpot(self, target: QRectF, size: float, headroom: float) -> QPointF:
+    @Slot(QRectF, float, float, QSizeF, result=QPointF)
+    def landingSpot(self, target: QRectF, size: float, headroom: float, words: QSizeF) -> QPointF:
         """Top-left of the mascot's body beside `target` (logical, screen coordinates), with `headroom` kept
-        free above the body for its curl and hop."""
+        free above the body for its curl and hop, on a side where its `words` fit too."""
         _, dpr, area = self._screen()
+        said = None if words.isEmpty() else (words.width() * dpr, words.height() * dpr)
         x, y = landing.landing_spot(self._physical(target), size * dpr, self._physical(area),
-                                    self._physical(self._panel_area()), headroom=headroom * dpr)
+                                    self._physical(self._panel_area()), room=self._room(), filled=self._filled(),
+                                    headroom=headroom * dpr, words=said)
         return self._logical(x, y)
 
     @Slot(QRectF, QRectF, float, float, result=QPointF)
@@ -228,7 +242,8 @@ class Bridge(QObject):
         """Top-left of the mascot's words, a `width` x `height` box beside `mascot` (its whole footprint)."""
         _, dpr, area = self._screen()
         x, y = landing.bubble_spot(self._physical(target), self._physical(mascot), (width * dpr, height * dpr),
-                                   self._physical(area), self._physical(self._panel_area()))
+                                   self._physical(area), self._physical(self._panel_area()), room=self._room(),
+                                   filled=self._filled())
         return self._logical(x, y)
 
     @Slot(QPointF, QPointF, float, float, QRectF, result=list)
