@@ -171,7 +171,7 @@ class Bridge(QObject):
         if self._panel is not None:
             return QRectF(self._panel.geometry())
         area = self._screen()[2]
-        return QRectF(area.right() + 1 - PANEL_WIDTH, area.top(), PANEL_WIDTH, area.height())
+        return QRectF(area.x() + area.width() - PANEL_WIDTH, area.y(), PANEL_WIDTH, area.height())
 
     def _physical(self, r: QRectF) -> Rect:
         origin, dpr, _ = self._screen()

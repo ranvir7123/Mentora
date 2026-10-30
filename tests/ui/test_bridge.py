@@ -91,3 +91,10 @@ def test_pointing_at_a_changed_step_clearing_the_maker_and_copying_the_key_line_
     bridge.dismissFactory()
     bridge.copyKeySetup()
     assert backend.actions == [("go_to_step", (1,)), ("dismiss_factory", ()), ("key_setup_copied", ())]
+
+
+def test_before_the_panel_opens_its_column_is_the_right_360_px_of_the_work_area(qapp):
+    bridge = Bridge(DemoBackend("first_run"))
+    area = bridge.workArea
+    # The mascot rests 16 px into the panel's column; the column ends flush with the work area's right edge.
+    assert bridge.mascotHome.x() == area.x() + area.width() - 360 + 16

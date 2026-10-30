@@ -68,20 +68,30 @@ def attach_window(bridge: Bridge, name: str, root: QObject) -> None:
         winstyle.make_click_through(int(root.winId()))
 
 
-def run_screens(backend: ScreenBackend, *, show: Iterable[str] = ("home",)) -> int:
-    """Open the named windows on `backend` and run until the learner quits."""
+def open_screens(backend: ScreenBackend, *, show: Iterable[str] = ("home",)
+                 ) -> tuple[Bridge, QQmlApplicationEngine, dict[str, QObject]] | None:
+    """Open the named windows on `backend`, without running the program yet. None when one won't load."""
     app = QGuiApplication.instance() or QGuiApplication(sys.argv)
     app.setApplicationName("Mentora")
     bridge = Bridge(backend)
     engine = make_engine(bridge)
     views = getattr(backend, "view", {}) or {}
+    windows: dict[str, QObject] = {}
     for name in show:
         root = load_window(engine, name, views.get(name))
         if root is None:
-            return 1
+            return None
         attach_window(bridge, name, root)
+        windows[name] = root
     app._screens = (bridge, engine)      # keep both alive as long as the application
-    return app.exec()
+    return bridge, engine, windows
+
+
+def run_screens(backend: ScreenBackend, *, show: Iterable[str] = ("home",)) -> int:
+    """Open the named windows on `backend` and run until the learner quits."""
+    if open_screens(backend, show=show) is None:
+        return 1
+    return QGuiApplication.instance().exec()
 
 
 def main(argv: list[str] | None = None) -> int:
