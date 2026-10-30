@@ -158,7 +158,7 @@ def main() -> int:
     minutes = parser.parse_args().minutes
 
     lesson = load_lesson(ROOT / "lessons" / "monthly-budget")
-    workdir = Path(os.environ["LOCALAPPDATA"]) / "projectx" / "probe" / f"{lesson.id}-typing"
+    workdir = Path(os.environ["LOCALAPPDATA"]) / "mentora" / "probe" / f"{lesson.id}-typing"
     rng = random.Random(SEED)
     typed: dict[str, str] = {}             # cell -> what was typed
     entered: dict[str, float] = {}         # cell -> when Enter was pressed, until a read shows it

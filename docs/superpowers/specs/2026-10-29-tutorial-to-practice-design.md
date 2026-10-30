@@ -1,7 +1,8 @@
 # Design: tutorials you do for real (29 Oct 2026)
 
-This replaces the expert-recording design in `docs/plan.md`. Working name: Project X (the public name and
-the mascot's name are Ranvir's to pick; until then the code says `projectx` and the mascot is "the guide").
+This replaces the expert-recording design in `docs/plan.md`. Name: Mentora (picked by Ranvir on 30 Oct; the
+working name was Project X, and plans written before then say `projectx` where the code now says `mentora`).
+The mascot's name is still Ranvir's to pick; until then it is "the guide".
 
 ## 1. Intent
 
@@ -210,7 +211,7 @@ learner's code). The agent tester is pointed at VS Code only after it works in E
 7. Publish to the shelf, or show "not ready" with the reason.
 
 ### 5.5 Progress and coaching
-Everything stays on the laptop (`%LOCALAPPDATA%\projectx\`): progress, streak, points, the attempt log.
+Everything stays on the laptop (`%LOCALAPPDATA%\mentora\`): progress, streak, points, the attempt log.
 AI tips and the Ask box send Muse Spark a small summary, never the whole workbook.
 
 ## 6. Look and feel (decided direction)

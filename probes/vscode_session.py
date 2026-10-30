@@ -5,7 +5,7 @@ Run from the repository root, with real VS Code installed and the add-on built:
     <python> probes\\vscode_session.py            (VS Code shows on screen)
     <python> probes\\vscode_session.py --hidden   (VS Code opens minimised, as the prover uses it)
 
-It opens a scratch two-step lesson in %LOCALAPPDATA%\\projectx\\work\\probe-session through
+It opens a scratch two-step lesson in %LOCALAPPDATA%\\mentora\\work\\probe-session through
 VsCodePlugin, prints the state after each step's replay with that step's check, prints where line 3
 of hello.py, the file's explorer row, the editor, the terminal and the Run button are on screen,
 starts the lesson over and prints the files, then closes VS Code.
@@ -63,7 +63,7 @@ def show(label: str, snap: VsSnapshot | None) -> None:
 
 def main() -> None:
     hidden = "--hidden" in sys.argv[1:]
-    workdir = Path(os.environ["LOCALAPPDATA"]) / "projectx" / "work" / LESSON.id
+    workdir = Path(os.environ["LOCALAPPDATA"]) / "mentora" / "work" / LESSON.id
     events: list[str] = []
     plugin = VsCodePlugin()
     print(f"starter problems: {plugin.validate_starter(LESSON.starter)}")

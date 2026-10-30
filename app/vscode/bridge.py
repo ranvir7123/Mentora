@@ -24,7 +24,7 @@ HELLO_TIMEOUT = 5.0              # seconds a new connection has to say hello
 HELLO_LIMIT = 4096               # bytes a hello line may take
 LINE_LIMIT = 64 * 1024 * 1024    # bytes any later line may take
 
-OUT_OF_DATE = "The Project X add-on in VS Code is out of date. Install the one built from extensions/vscode."
+OUT_OF_DATE = "The Mentora add-on in VS Code is out of date. Install the one built from extensions/vscode."
 
 
 def _parse(line: bytes) -> dict | None:

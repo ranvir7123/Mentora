@@ -90,7 +90,7 @@ class Transcript:
 
 
 def default_log_path() -> Path:
-    return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "projectx" / "meta_calls.jsonl"
+    return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "mentora" / "meta_calls.jsonl"
 
 
 class MetaClient:

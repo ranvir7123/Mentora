@@ -1,4 +1,4 @@
-// The messages the add-on and the Project X program send each other: one JSON object per line.
+// The messages the add-on and the Mentora program send each other: one JSON object per line.
 // app/vscode/protocol.py names the same messages and fields; tests/vscode/test_protocol_in_step.py
 // keeps the two in step.
 

@@ -7,7 +7,7 @@ from app.ui import winstyle
 from app.ui.bridge import Bridge
 from app.ui.demo_backend import DemoBackend
 
-_CLASS = "ProjectXStyleTest"
+_CLASS = "MentoraStyleTest"
 
 
 @pytest.fixture

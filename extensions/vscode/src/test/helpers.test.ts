@@ -8,11 +8,23 @@ import {
   inputLines,
   insideFolder,
   isPythonRun,
+  lessonShell,
   lineHeightPx,
   relativeInside,
   sameFolder,
   stripAnsi,
 } from "../helpers";
+
+test("on Windows the run terminal is Windows PowerShell, allowed to load VS Code's run reporting", () => {
+  // Command Prompt has no shell integration, and a Restricted script policy would block VS Code's script.
+  // Conda's base Python would come first on PATH, and its "(base) " prompt would end every run's output.
+  assert.deepEqual(lessonShell("win32", { SystemRoot: "D:\\Win" }), {
+    shellPath: "D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    env: { PSExecutionPolicyPreference: "RemoteSigned", CONDA_AUTO_ACTIVATE_BASE: "false", CONDA_CHANGEPS1: "false" },
+  });
+  assert.equal(lessonShell("win32", {}).shellPath, "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+  assert.deepEqual(lessonShell("linux", {}), {});
+});
 
 test("colour codes and terminal titles are removed from run output", () => {
   assert.equal(stripAnsi("\x1b[32mHello\x1b[0m world\r\n"), "Hello world\n");

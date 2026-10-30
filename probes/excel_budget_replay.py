@@ -41,7 +41,7 @@ def excel_pids() -> set[int]:
 
 def main() -> int:
     lesson = load_lesson(ROOT / "lessons" / "monthly-budget")
-    workdir = Path(os.environ["LOCALAPPDATA"]) / "projectx" / "probe" / f"{lesson.id}-replay"
+    workdir = Path(os.environ["LOCALAPPDATA"]) / "mentora" / "probe" / f"{lesson.id}-replay"
     plugin = ExcelPlugin()
     run = LessonRun(lesson, plugin.checks)
     events: list[object] = []

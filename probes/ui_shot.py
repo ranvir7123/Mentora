@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 # A pretend 2560 x 1600 screen, scaled by 2 (1280 x 800 logical, like the real one at 200%). The
 # off-screen drawer's option parser splits on ":", so the config path is given without its drive letter.
-_config = Path(tempfile.gettempdir()) / "projectx_ui_shot_screen.json"
+_config = Path(tempfile.gettempdir()) / "mentora_ui_shot_screen.json"
 _config.write_text(json.dumps({"screens": [{"name": "laptop", "x": 0, "y": 0, "width": 2560, "height": 1600,
                                             "logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]}))
 os.environ["QT_QPA_PLATFORM"] = "offscreen:configfile=" + _config.as_posix()[2:]

@@ -37,7 +37,7 @@ def wait_for(condition, timeout: float = 5.0) -> bool:
 
 
 class FakeVsCode:
-    """VS Code with the Project X add-on, as the program sees it on the wire."""
+    """VS Code with the Mentora add-on, as the program sees it on the wire."""
 
     def __init__(self, folder: Path, link_file: Path, *, version: int = PROTOCOL_VERSION,
                  hang: bool = False, output: str = "Hello\n"):
@@ -154,10 +154,12 @@ class FakeVsCode:
 class FakeHost:
     """The computer: starting VS Code, its window, and UI Automation's answers."""
 
-    def __init__(self, link_file: Path, *, starts: bool = True, launch_error: str = "", **vscode_options):
+    def __init__(self, link_file: Path, *, starts: bool = True, launch_error: str = "", hello_after: float = 0.0,
+                 **vscode_options):
         self.link_file = link_file
         self.starts = starts
         self.launch_error = launch_error
+        self.hello_after = hello_after           # seconds VS Code takes to start before its add-on says hello
         self.vscode_options = vscode_options
         self.vscode: FakeVsCode | None = None
         self.launched: list[tuple[Path, Path | None, dict]] = []
@@ -175,7 +177,12 @@ class FakeHost:
         if self.starts:
             self.alive = True
             self.vscode = FakeVsCode(folder, self.link_file, **self.vscode_options)
-            threading.Thread(target=self.vscode.connect, daemon=True).start()
+            vscode = self.vscode
+
+            def start() -> None:
+                time.sleep(self.hello_after)
+                vscode.connect()
+            threading.Thread(target=start, daemon=True).start()
 
     def find_window(self, folder: Path) -> int:
         return WINDOW if self.alive else 0
@@ -251,7 +258,7 @@ def test_open_writes_the_starter_and_waits_for_hello(opened):
     assert snapshots and snapshots[-1] == snap and session.latest() == snap
     folder, open_file, env = host.launched[0]
     assert folder == workdir and open_file == workdir / "hello.py"
-    assert env == {"PROJECTX_VSCODE": str(host.link_file)}
+    assert env == {"MENTORA_VSCODE": str(host.link_file)}
     assert session.hwnd() == WINDOW and not closed and session.close_reason == ""
 
 
@@ -262,6 +269,15 @@ def test_the_lesson_folder_gets_its_editor_settings(opened):
     assert settings["editor.wordWrap"] == "off"
     # The Python add-on's Run button runs the Python it picked, not the first one on PATH; this one has openai.
     assert settings["python.defaultInterpreterPath"] == sys.executable
+    # Runs are seen through VS Code's shell integration, which Command Prompt lacks; PowerShell has it.
+    assert settings["terminal.integrated.defaultProfile.windows"] == "PowerShell"
+    # The add-on's terminal settings reach only terminals made after it starts. In real VS Code the
+    # terminal on show was one brought back from the last lesson ("environment is stale"), the 4th one.
+    assert settings["terminal.integrated.enablePersistentSessions"] is False
+    assert settings["terminal.integrated.hideOnStartup"] == "always"
+    # With Code Runner installed, its "Run Code" took the Run button's place: it runs the program where
+    # input() can't be answered and the run is never seen.
+    assert settings["code-runner.showRunIconInEditorTitleMenu"] is False
     session.read_now().result(timeout=5)
     assert ".vscode/settings.json" not in session.latest().files
 
@@ -306,6 +322,15 @@ def test_no_hello_in_time_is_reported(opened, monkeypatch):
         session.read_now().result(timeout=5)
     time.sleep(0.2)
     assert closed == [1]
+
+
+def test_the_first_read_waits_for_a_slow_start(opened, monkeypatch):
+    # In real VS Code the add-on said hello 10 to 13 s after launch; a read's own time limit starts
+    # only once the add-on is there.
+    monkeypatch.setattr(session_module, "READ_TIMEOUT_S", 0.5)
+    session, *_ = opened(hello_after=1.0)
+    snap = session.read_now().result(timeout=10)
+    assert "hello.py" in snap.files
 
 
 def test_vs_code_missing_is_reported(opened):
