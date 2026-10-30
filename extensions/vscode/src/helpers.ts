@@ -89,6 +89,30 @@ export function isPythonRun(command: string): boolean {
   return PYTHON.test(command);
 }
 
+// The shell the lesson's terminals use. Runs are seen through VS Code's shell integration, which on
+// Windows only PowerShell has (not Command Prompt), and which a Restricted script policy would block.
+// Conda stays off: its base Python would come first on PATH, and its "(base) " prompt, written before
+// VS Code marks a run finished, would end every run's output.
+export const SHELL_ENV = {
+  PSExecutionPolicyPreference: "RemoteSigned",
+  CONDA_AUTO_ACTIVATE_BASE: "false", // conda 26 reads this old name too; setting both makes it complain
+  CONDA_CHANGEPS1: "false",
+};
+
+export function lessonShell(
+  platform: string,
+  env: Record<string, string | undefined>,
+): { shellPath?: string; env?: Record<string, string> } {
+  if (platform !== "win32") {
+    return {};
+  }
+  const windows = env.SystemRoot ?? env.windir ?? "C:\\Windows";
+  return {
+    shellPath: path.win32.join(windows, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+    env: { ...SHELL_ENV },
+  };
+}
+
 // The answers to type into a running program, one per line. A newline at the very end only ends
 // the last answer.
 export function inputLines(text: string): string[] {

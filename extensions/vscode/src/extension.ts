@@ -14,10 +14,12 @@ import * as vscode from "vscode";
 import {
   LineReader,
   OutputClip,
+  SHELL_ENV,
   Throttle,
   inputLines,
   insideFolder,
   isPythonRun,
+  lessonShell,
   lineHeightPx,
   relativeInside,
   sameFolder,
@@ -42,6 +44,7 @@ const STATE_EVERY_MS = 100;
 const RETRY_MS = 1000;
 const RETRIES = 30;
 const SHELL_WAIT_MS = 5000;
+const SHELL_START_MS = 20000; // PowerShell runs the learner's profile first: conda's alone took 3 s
 const OUTPUT_GRACE_MS = 1000;
 const STOP_WAIT_MS = 3000;
 const POLL_MS = 50;
@@ -493,10 +496,7 @@ class Link implements vscode.Disposable {
     if (doc?.isDirty) {
       await doc.save();
     }
-    if (!this.runTerminal || this.runTerminal.exitStatus !== undefined) {
-      this.runTerminal = vscode.window.createTerminal({ name: "Python", cwd: this.folder.uri });
-    }
-    const terminal = this.runTerminal;
+    const terminal = this.runTerminalOf();
     terminal.show(true);
     const shell = terminal.shellIntegration ?? (await this.shellOf(terminal));
     if (!shell) {
@@ -563,12 +563,23 @@ class Link implements vscode.Disposable {
     return true;
   }
 
+  private runTerminalOf(): vscode.Terminal {
+    if (!this.runTerminal || this.runTerminal.exitStatus !== undefined) {
+      this.runTerminal = vscode.window.createTerminal({
+        name: "Python",
+        cwd: this.folder.uri,
+        ...lessonShell(process.platform, process.env),
+      });
+    }
+    return this.runTerminal;
+  }
+
   private shellOf(terminal: vscode.Terminal): Promise<vscode.TerminalShellIntegration | undefined> {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         sub.dispose();
         resolve(terminal.shellIntegration);
-      }, SHELL_WAIT_MS);
+      }, SHELL_START_MS);
       const sub = vscode.window.onDidChangeTerminalShellIntegration((e) => {
         if (e.terminal === terminal) {
           clearTimeout(timer);
@@ -586,6 +597,12 @@ class Link implements vscode.Disposable {
     env.persistent = false;
     env.clear();
     env.description = "Set by Project X for this lesson";
+    if (process.platform === "win32") {
+      // The learner's own terminals and the Run button's: PowerShell reports runs, conda stays off.
+      for (const [name, value] of Object.entries(SHELL_ENV)) {
+        env.replace(name, value);
+      }
+    }
     if (values && typeof values === "object") {
       for (const [name, value] of Object.entries(values)) {
         if (ENV_NAME.test(name) && typeof value === "string") {
@@ -599,6 +616,7 @@ class Link implements vscode.Disposable {
         env.prepend("PATH", dirs.join(path.delimiter) + path.delimiter);
       }
     }
+    this.runTerminalOf(); // start the shell now, with these settings, so the first run need not wait for it
   }
 
   private async closeWindow(): Promise<void> {
