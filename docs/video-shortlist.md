@@ -7,9 +7,9 @@ Made Fri 30 Oct 2026 by the session "The video shortlist", for plan 06 Task 1 (P
 ## In short
 
 - **18 videos ranked. All 18 carry YouTube's Creative Commons Attribution licence.** That licence means anyone may reuse the video as long as they credit the creator.
-- **Top 8 for the lesson library:** ranks 1 to 8.
-- **Demo pair:** rank 1 (a monthly budget sheet) and rank 2 (a household spending chart). Both are Creative Commons.
-- **Demo backups:** rank 3 (shopping list) and rank 9 (pet survey charts).
+- **The library, as Ranvir approved it on Fri 30 Oct:** ranks 1, 2, 5, 6, 7, 8, 9 and 11. That is the top 8 I proposed, minus ranks 3 and 4, which he struck, plus reserves 9 and 11.
+- **Demo pair, approved:** rank 1 (a monthly budget sheet) and rank 2 (a household spending chart). Both are Creative Commons.
+- **Demo backup:** rank 9 (pet survey charts). Rank 3 was a backup too, until it was struck.
 - The list is Excel only. VS Code lessons are written by hand, and the Python videos from the first plan were dropped.
 - No video was downloaded.
 
@@ -47,15 +47,15 @@ Made Fri 30 Oct 2026 by the session "The video shortlist", for plan 06 Task 1 (P
 |---|---|---|---|---|
 | 1 | Excel Practice: Budget Activity | 14:58 | a monthly budget with totals, balance, percentages and a pie chart | **Library + demo** |
 | 2 | Excel - bar graph example | 7:12 | a household spending total, one percentage and a chart | **Library + demo** |
-| 3 | Excel shopping list | 4:30 | a shopping list with line totals and a grand total | Library, demo backup |
-| 4 | Qualitative Frequency Distribution (with COUNTIF) | 9:25 | a frequency table that counts answers with COUNTIF | Library |
+| 3 | Excel shopping list | 4:30 | a shopping list with line totals and a grand total | **Struck by Ranvir** |
+| 4 | Qualitative Frequency Distribution (with COUNTIF) | 9:25 | a frequency table that counts answers with COUNTIF | **Struck by Ranvir** |
 | 5 | How to calculate students grades in Excel | 14:46 | a class grade sheet with totals, grades and remarks | Library |
 | 6 | Pie chart in Excel | 6:09 | a count table and a titled pie chart | Library |
 | 7 | Percentage Discount.avi | 3:55 | ticket prices after discounts, using one locked cell | Library |
 | 8 | How to Create Income and Expenses Accounts in Excel Using Running Balance | 14:08 | an income and spending log with a running balance | Library |
-| 9 | Pie Charts and Bar Charts in Excel 365 - from a frequency table | 4:42 | a pie chart and a bar chart from a small table | Reserve, demo backup |
+| 9 | Pie Charts and Bar Charts in Excel 365 - from a frequency table | 4:42 | a pie chart and a bar chart from a small table | **Library (added by Ranvir)**, demo backup |
 | 10 | How To Make A Payroll System In Excel | 5:44 | a pay sheet with overtime, tax and net pay | Reserve |
-| 11 | Pie Charts and Bar Charts in Excel 365 - from raw categorical data | 6:03 | counts from a raw list, then two charts | Reserve |
+| 11 | Pie Charts and Bar Charts in Excel 365 - from raw categorical data | 6:03 | counts from a raw list, then two charts | **Library (added by Ranvir)** |
 | 12 | How To Create A Concert Tour Budget With Excel | 9:34 | a tour budget with cost lines and a total | Reserve |
 | 13 | How to calculate percentage in excel | 5:29 | a marks sheet with totals and percentages | Reserve |
 | 14 | Excel — Sorting & filtering | 6:07 | a small table, sorted and filtered | Reserve |
@@ -66,7 +66,7 @@ Made Fri 30 Oct 2026 by the session "The video shortlist", for plan 06 Task 1 (P
 
 All 18 have the licence "Creative Commons Attribution license (reuse allowed)". "Captions by a person" means the creator uploaded written captions. "Auto captions" means YouTube's machine-made ones only.
 
-## Top 8: the lesson library
+## The top 8 I proposed (Ranvir struck 3 and 4)
 
 ### 1. Excel Practice: Budget Activity · Library + DEMO
 - **Creator:** Red Rocks Community College Math Department, https://www.youtube.com/@RRCCMath
@@ -98,7 +98,7 @@ All 18 have the licence "Creative Commons Attribution license (reuse allowed)". 
   - The workbook holds four example sheets; the lesson should use one.
 - **Why it ranks second:** short, current Excel, captions by a person, and one clear question with one right answer.
 
-### 3. Excel shopping list · Library, demo backup
+### 3. Excel shopping list · STRUCK by Ranvir
 - **Creator:** Paul Adams, https://www.youtube.com/@pauladams3907
 - **Video:** https://www.youtube.com/watch?v=ru4ygX3XVNo
 - **Licence:** Creative Commons Attribution, from the page data.
@@ -112,7 +112,7 @@ All 18 have the licence "Creative Commons Attribution license (reuse allowed)". 
   - Auto captions only.
   - An advert played before it in the browser.
 
-### 4. Qualitative Frequency Distribution (with COUNTIF) · Library
+### 4. Qualitative Frequency Distribution (with COUNTIF) · STRUCK by Ranvir
 - **Creator:** Paul Miller, https://www.youtube.com/@paulmillermath
 - **Video:** https://www.youtube.com/watch?v=u7LBpmwNQGE
 - **Licence:** Creative Commons Attribution, from the page data.
@@ -181,7 +181,7 @@ All 18 have the licence "Creative Commons Attribution license (reuse allowed)". 
 
 These are spares if a top-8 video gets struck or fails in the factory. All are Creative Commons Attribution, read from the page data.
 
-### 9. Pie Charts and Bar Charts in Excel 365 - from a frequency table · demo backup
+### 9. Pie Charts and Bar Charts in Excel 365 - from a frequency table · Library (added by Ranvir), demo backup
 - Red Rocks Community College Math Department, https://www.youtube.com/@RRCCMath · https://www.youtube.com/watch?v=_DKgAcwTDMw
 - 4:42 · captions by a person · 129 views · 9 Sep 2025 · licence also seen on screen.
 - **Makes:** a pie chart and a bar chart from a small typed table of favourite pets.
@@ -200,7 +200,7 @@ These are spares if a top-8 video gets struck or fails in the factory. All are C
   - Its "Accounting" number format without a money sign may not match any `number_format` kind (not confirmed).
   - The merged title and fill colours cannot be checked.
 
-### 11. Pie Charts and Bar Charts in Excel 365 - from raw categorical data
+### 11. Pie Charts and Bar Charts in Excel 365 - from raw categorical data · Library (added by Ranvir)
 - Red Rocks Community College Math Department, https://www.youtube.com/@RRCCMath · https://www.youtube.com/watch?v=uqDyonD5Bn0
 - 6:03 · captions by a person · 136 views · 9 Sep 2025.
 - **Makes:** counts from a raw list with COUNTIF, then a pie chart and a bar chart.
@@ -317,4 +317,26 @@ The Creative Commons Attribution licence asks for a credit. A line in this shape
 
 ## Ranvir's answers
 
-Waiting for Ranvir.
+Asked and answered in the session "The video shortlist" on Fri 30 Oct 2026.
+
+| Question | Ranvir's answer |
+|---|---|
+| Use ranks 1 and 2 for the demo? | **Yes, use both.** |
+| Picks 1 to 4: which to keep? | **Kept 1 and 2. Struck 3 (shopping list) and 4 (frequency table).** |
+| Picks 5 to 8: which to keep? | **Kept all four: 5, 6, 7 and 8.** |
+| Two library spots are open: fill them? | **Yes, with reserves 9 (pet charts) and 11 (charts from a raw list).** |
+
+**The library to make, in rank order:**
+
+| # | Video | Link |
+|---|---|---|
+| 1 | Excel Practice: Budget Activity (demo) | https://www.youtube.com/watch?v=HQOvZNyEJd0 |
+| 2 | Excel - bar graph example (demo) | https://www.youtube.com/watch?v=TGngItVILCs |
+| 5 | How to calculate students grades in Excel | https://www.youtube.com/watch?v=bbJQ3quLPj4 |
+| 6 | Pie chart in Excel | https://www.youtube.com/watch?v=FnJtqbkx7s0 |
+| 7 | Percentage Discount.avi | https://www.youtube.com/watch?v=ifTW0qeTiSY |
+| 8 | How to Create Income and Expenses Accounts in Excel Using Running Balance | https://www.youtube.com/watch?v=MJq1HBtCOCA |
+| 9 | Pie Charts and Bar Charts in Excel 365 - from a frequency table (demo backup) | https://www.youtube.com/watch?v=_DKgAcwTDMw |
+| 11 | Pie Charts and Bar Charts in Excel 365 - from raw categorical data | https://www.youtube.com/watch?v=uqDyonD5Bn0 |
+
+Ranks 10 and 12 to 18 stay as spares that Ranvir has not approved. Ask him before using any of them.
