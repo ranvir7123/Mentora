@@ -18,7 +18,13 @@ lesson is proven yet.
 - The screens ([app/ui/](app/ui/)): the home screen, the lesson panel and the flying mascot pointer. See
   them with sample data: `python -m app.ui.app --demo first_run`.
 - The Excel plug-in ([app/excel/](app/excel/)): opens its own copy of Excel, reads the sheet after every
-  change, checks each step with fixed rules, and finds cells and ribbon buttons on the screen.
+  change, checks each step with fixed rules, and finds cells and ribbon buttons on the screen. Macros are
+  forced off in every Excel it opens, so no lesson file can run one (checked by tests; the check in real
+  Excel is still to run). When a Meta key is saved, Muse Spark can point at a ribbon button that Windows
+  UI Automation can't find, and the arrow uses that answer only if UI Automation then finds a button of
+  that name there. That has not run against Meta's live service yet.
+- A shortlist of 18 Creative Commons Excel tutorials on YouTube, 8 of them approved for the library
+  ([docs/video-shortlist.md](docs/video-shortlist.md)). No lesson has been made from them yet.
 - The lesson factory ([app/factory/](app/factory/)): `python -m app.factory make <video link>` downloads a
   tutorial, has Meta's models write the lesson, proves each step's check is false before the step and true
   after it, and has Meta's computer-use agent play the lesson as a learner. It has not run against Meta's

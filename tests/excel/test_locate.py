@@ -300,8 +300,24 @@ def test_vision_is_asked_only_when_ui_automation_finds_nothing_and_only_trusted_
     assert got[-1] is None                                           # UI Automation disagreed
 
 
+def test_a_vision_answer_is_read_as_pixels_of_the_picture(rig, monkeypatch):
+    agreed = []
+    monkeypatch.setattr(locate, "background", lambda fn: fn())
+    monkeypatch.setattr(windows, "screenshot_png", lambda rect: b"png")
+    monkeypatch.setattr(windows, "window_rect", lambda hwnd: Rect(300, 200, 1840, 1500))
+    monkeypatch.setattr(locate, "confirm_vision", lambda rect, target: agreed.append(rect) or True)
+    shown(monkeypatch)
+    scripted(monkeypatch, Script(None))
+    r = rig(visible=True)
+    r.session.set_vision_fallback(lambda png, ref: Rect(10, 10, 20, 20))   # 10 px in from the picture's corner
+    got = []
+    r.session.watch(PIE, got.append)
+    r.com.advance(0.25)
+    assert agreed == [Rect(310, 210, 20, 20)] and got[-1] == Spot(Rect(310, 210, 20, 20))
+
+
 def vision_rig(rig, monkeypatch, where: list, asked: list):
-    """A shown Excel whose window is at where[0]; the fallback finds Pie 10 px in from its corner."""
+    """A shown Excel whose window is at where[0]; the fallback finds Pie 10 px in from the picture's corner."""
     monkeypatch.setattr(locate, "background", lambda fn: fn())
     monkeypatch.setattr(windows, "screenshot_png", lambda rect: b"png")
     monkeypatch.setattr(windows, "window_rect", lambda hwnd: where[0])
@@ -309,7 +325,7 @@ def vision_rig(rig, monkeypatch, where: list, asked: list):
     hooks = shown(monkeypatch)
     scripted(monkeypatch, Script(None))
     r = rig(visible=True)
-    r.session.set_vision_fallback(lambda png, ref: asked.append(where[0]) or Rect(where[0].x + 10, 10, 20, 20))
+    r.session.set_vision_fallback(lambda png, ref: asked.append(where[0]) or Rect(10, 10, 20, 20))
     return r, hooks
 
 
