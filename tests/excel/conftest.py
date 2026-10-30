@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from app.core.lesson import load_lesson
+from app.excel import plugin
 from app.win import windows
 from tests.excel.fakes import FakeApp, FakeCom, FakeEvents, FakeReader
 
@@ -11,6 +12,12 @@ from tests.excel.fakes import FakeApp, FakeCom, FakeEvents, FakeReader
 def no_real_program(monkeypatch):
     """A fake Excel's window number could belong to a real program: no test may hold or end one."""
     monkeypatch.setattr(windows, "open_process", lambda pid, named=None: 0)
+
+
+@pytest.fixture(autouse=True)
+def no_meta_key(monkeypatch):
+    """The saved Meta key is never found here, so no test can spend money; a test can give a key itself."""
+    monkeypatch.setattr(plugin, "find_key", lambda: (None, "missing"))
 
 
 @pytest.fixture
