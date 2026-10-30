@@ -3,7 +3,7 @@
   "id": "vscode-meta-ai-app",
   "title": "Your first app with Meta's AI",
   "app": "vscode",
-  "course": "vscode",
+  "course": "meta-ai",
   "source": {
     "url": "https://dev.meta.ai/docs/quickstart",
     "title": "Quickstart, Meta Model API docs",

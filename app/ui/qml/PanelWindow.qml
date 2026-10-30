@@ -23,8 +23,10 @@ Window {
     readonly property bool finished: !!lesson.complete
     readonly property bool appClosed: lesson.appState === "closed"
     readonly property var ask: lesson.ask || ({ "state": "idle", "question": "", "answer": "" })
-    // The app the lesson runs in, by its course; empty when it isn't known.
+    // The app the lesson runs in: as the backend names it, else by its course; empty when it isn't known.
     readonly property string appName: {
+        if (lesson.appName)
+            return lesson.appName
         const courses = bridge.home.courses || []
         for (const course of courses) {
             if ((course.lessons || []).some(l => l.id === lesson.id))
@@ -251,7 +253,7 @@ Window {
                 Text {
                     id: closedHeading
                     width: parent.width
-                    text: (root.appName || "The app") + " was closed"
+                    text: root.lesson.closedReason || ((root.appName || "The app") + " was closed")
                     wrapMode: Text.Wrap
                     color: Theme.text
                     font.family: Theme.fontHeading
@@ -260,7 +262,8 @@ Window {
                 }
                 Text {
                     width: parent.width
-                    text: "Open it again to carry on with step " + (root.lesson.stepIndex + 1) + "."
+                    text: "Open it again to carry on with step "
+                          + ((root.lesson.step ? root.lesson.step.index : root.lesson.stepIndex) + 1) + "."
                     wrapMode: Text.Wrap
                     color: Theme.muted
                     font.family: Theme.fontBody
@@ -289,13 +292,14 @@ Window {
                 onHint: root.bridge.nextHint()
                 onClip: root.toggleClip()
                 onGetVideo: root.bridge.openVideo(clipInfo.videoUrl)
+                onGoTo: (index) => root.bridge.goToStep(index)
                 readonly property int hintCount: root.lesson.step ? root.lesson.step.hints.length : 0
                 onHintCountChanged: if (hintCount > 0) root.reveal(step)
             }
 
             AnswerCard {
                 id: answer
-                visible: (thinking || root.ask.state === "answered") && root.ask.question !== "" && !root.finished
+                visible: root.ask.state !== "idle" && root.ask.question !== "" && !root.finished
                 width: parent.width
                 ask: root.ask
                 onVisibleChanged: if (visible) root.reveal(answer)
@@ -398,11 +402,16 @@ Window {
         kind: root.shownBanner ? root.shownBanner.kind : "right"
         text: root.shownBanner ? root.shownBanner.text : ""
         turn: root.shownBanner ? root.shownBanner.stepIndex : 0
-        actionText: kind === "not_yet" ? "Try again" : ""
+        actionText: kind === "not_yet" ? "Try again" : kind === "changed" ? "Show me where" : ""
         shown: root.bannerUp
         enabled: shown
         Component.onCompleted: if (root.lesson.banner) root.shownBanner = root.lesson.banner
-        onAction: root.putAway = root.bannerKey(root.shownBanner)
+        onAction: {
+            if (kind === "changed")
+                root.bridge.goToStep(root.shownBanner.stepIndex)
+            else
+                root.putAway = root.bannerKey(root.shownBanner)
+        }
     }
 
     // A press anywhere in the panel but the Ask box puts the keyboard back in the app, then goes on to

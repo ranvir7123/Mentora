@@ -151,6 +151,7 @@ Window {
                     courses: root.courses
                     onMake: (url) => root.bridge.makeLesson(url)
                     onOpenLesson: (lessonId) => root.bridge.openLesson(lessonId)
+                    onDismiss: root.bridge.dismissFactory()
                 }
 
                 // Without a Meta key, tips and making lessons wait for one; lessons themselves still work. The

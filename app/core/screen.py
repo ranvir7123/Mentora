@@ -87,6 +87,7 @@ class StepView(TypedDict):
     hints: list[str]
     hintsLeft: int
     clip: ClipView
+    note: str                    # a line under the step, such as "Press Ctrl+S to save"; "" for none
 
 
 class Banner(TypedDict):
@@ -128,6 +129,8 @@ class LessonState(TypedDict):
     complete: Complete | None
     ask: AskView
     appState: Literal["opening", "ready", "closed"]
+    appName: str                 # the app the lesson runs in, such as "Excel"
+    closedReason: str            # why the app closed, when known; "" says "<app> was closed"
     badge: str | None
 
 
@@ -158,7 +161,7 @@ CLOSED_LESSON: LessonState = {
     "open": False, "id": "", "title": "", "goal": {"sentence": "", "picture": None},
     "stepIndex": 0, "stepCount": 0, "step": None, "banner": None, "points": 0, "changed": [],
     "complete": None, "ask": {"state": "idle", "question": "", "answer": ""},
-    "appState": "closed", "badge": None,
+    "appState": "closed", "appName": "", "closedReason": "", "badge": None,
 }
 
 HIDDEN_POINTER: PointerState = {
@@ -187,3 +190,6 @@ class ScreenBackend(Protocol):
     def make_lesson(self, url: str) -> None: ...
     def set_muted(self, on: bool) -> None: ...
     def reopen_app(self) -> None: ...
+    def go_to_step(self, index: int) -> None: ...
+    def dismiss_factory(self) -> None: ...
+    def key_setup_copied(self) -> None: ...

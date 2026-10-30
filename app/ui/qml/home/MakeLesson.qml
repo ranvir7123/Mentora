@@ -12,6 +12,7 @@ Rectangle {
     property var courses: []
     signal make(string url)
     signal openLesson(string lessonId)
+    signal dismiss()                    // the learner is done with the result; the backend clears it
 
     // Put the cursor in the link field, ready to paste.
     function focusLink() {
@@ -206,7 +207,7 @@ Rectangle {
             width: parent.width
             kind: "quiet"
             text: "Try another video"
-            onClicked: root.focusLink()
+            onClicked: { root.focusLink(); root.dismiss() }
         }
 
         Row {
@@ -217,13 +218,13 @@ Rectangle {
                 width: parent.width - another.width - Theme.space8
                 kind: "right"
                 text: "Open the lesson"
-                onClicked: root.openLesson(root.factory.lessonId)
+                onClicked: { root.openLesson(root.factory.lessonId); root.dismiss() }
             }
             ChunkyButton {
                 id: another
                 kind: "quiet"
                 text: "Make another"
-                onClicked: root.focusLink()
+                onClicked: { root.focusLink(); root.dismiss() }
             }
         }
     }

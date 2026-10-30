@@ -24,6 +24,7 @@ STATES: tuple[str, ...] = (
     "factory_running", "factory_not_ready",
     "lesson_goal", "lesson_step", "lesson_right", "lesson_not_yet", "lesson_hints", "lesson_changed",
     "lesson_clip", "lesson_clip_missing", "lesson_ask", "lesson_app_closed", "lesson_complete",
+    "lesson_undone", "lesson_note", "lesson_ask_error", "lesson_app_lost",
     "pointer_flying", "pointer_watching", "pointer_right", "long_text",
 )
 
@@ -144,7 +145,7 @@ def _step_view(index: int, hints_shown: int = 0, clip: str = "none") -> dict:
     step = _lesson_file().steps[index]
     return {"index": index, "instruction": step.instruction, "why": step.why,
             "hints": list(step.hints[:hints_shown]), "hintsLeft": len(step.hints) - hints_shown,
-            "clip": _clip(clip)}
+            "clip": _clip(clip), "note": ""}
 
 
 def _goal_picture() -> str | None:
@@ -252,6 +253,18 @@ def _build(state: str) -> tuple[dict, dict, dict, str | None, dict]:
         lesson = _lesson(len(budget.steps), points=90,
                          complete={"points": 90, "seconds": 372.0, "firstTry": 7, "steps": 9, "streak": 5})
         cue = "complete"
+    elif state == "lesson_undone":
+        lesson = _lesson(len(budget.steps), step=_step_view(1), changed=[1], banner=_banner(
+            "changed", "Every step is done, but step 2 changed. Fix it in Excel to finish.", 1))
+        pointer = _pointer(1, "watching")
+    elif state == "lesson_note":
+        lesson = _lesson(1, step={**_step_view(1), "note": "Press Ctrl+S to save, then your work gets checked."})
+    elif state == "lesson_ask_error":
+        lesson = _lesson(1, ask={"state": "error", "question": "Why can't I type 23000 in B8?",
+                                 "answer": "The Ask box can't answer right now. Your lesson still works: "
+                                           "try Hint or Show me."})
+    elif state == "lesson_app_lost":
+        lesson = _lesson(3, appState="closed", closedReason="Lost touch with Excel")
     elif state == "pointer_flying":
         lesson, pointer = _lesson(1), _pointer(1, "flying")
     elif state == "pointer_watching":
@@ -453,3 +466,18 @@ class DemoBackend:
         lesson = self.lesson()
         lesson["appState"] = "ready"
         self._publish(lesson=lesson)
+
+    def go_to_step(self, index: int) -> None:
+        self._record("go_to_step", index)
+        lesson = self.lesson()
+        if lesson["open"] and 0 <= index < lesson["stepCount"]:
+            self._publish(pointer=_pointer(index, "flying"), cue="hop")
+
+    def dismiss_factory(self) -> None:
+        self._record("dismiss_factory")
+        home = self.home()
+        home["factory"] = copy.deepcopy(EMPTY_HOME["factory"])
+        self._publish(home=home)
+
+    def key_setup_copied(self) -> None:
+        self._record("key_setup_copied")

@@ -387,3 +387,61 @@ def test_close_and_mute_ask_the_backend(panel, qapp):
     assert ("set_muted", (True,)) in backend.actions
     _click(qapp, root, buttons["Close the lesson"])
     assert ("close_lesson", ()) in backend.actions
+
+
+def test_the_app_says_why_it_closed_when_it_knows(panel, qapp):
+    from app.ui.demo_backend import _lesson
+    backend, _, root = panel("lesson_app_closed")
+    backend._publish(lesson=_lesson(3, appState="closed", appName="VS Code",
+                                    closedReason="Lost touch with VS Code"))
+    _settle(qapp, 0.2)
+    texts = _texts(root)
+    assert "Lost touch with VS Code" in texts and "Excel was closed" not in texts
+    _click(qapp, root, _button(root, "Reopen VS Code"))
+    assert ("reopen_app", ()) in backend.actions
+
+
+def test_unsaved_code_is_asked_to_be_saved(panel, qapp):
+    from app.ui.demo_backend import _lesson, _step_view
+    backend, _, root = panel("lesson_step")
+    backend._publish(lesson=_lesson(1, step={**_step_view(1), "note": "Press Ctrl+S to save, then your work gets checked."}))
+    _settle(qapp, 0.2)
+    assert "Press Ctrl+S to save, then your work gets checked." in _texts(root)
+
+
+def test_a_step_that_came_undone_can_be_pointed_at(panel, qapp):
+    backend, _, root = panel("lesson_changed")
+    _click(qapp, root, _text_item(root, "Show me where"))
+    assert ("go_to_step", (1,)) in backend.actions
+
+
+def test_the_lesson_waits_for_an_undone_step_and_shows_where_it_is(panel, qapp):
+    from app.ui.demo_backend import _banner, _lesson, _step_view
+    backend, _, root = panel("lesson_step")
+    line = "Every step is done, but step 2 changed. Fix it in Excel to finish."
+    backend._publish(lesson=_lesson(1, changed=[1], banner=_banner("changed", line, 1)))
+    _settle(qapp, 0.4)
+    texts = _texts(root)
+    assert line in texts
+    assert not any(t.startswith("Step 2 changed.") for t in texts)   # the step on screen is that step
+    backend._publish(lesson=_lesson(9, step=_step_view(1), changed=[1], appState="closed",
+                                    banner=_banner("changed", line, 1)))
+    _settle(qapp, 0.2)
+    assert "Open it again to carry on with step 2." in _texts(root)
+    backend._publish(lesson=_lesson(9, step=_step_view(1), changed=[1], banner=_banner("changed", line, 1)))
+    _settle(qapp, 0.2)
+    shown = [i for i in _items(root.contentItem())
+             if i.metaObject().className() == "QQuickText" and i.property("text") == "Show me where" and _shown(i)]
+    assert len(shown) == 1
+    _click(qapp, root, shown[0])
+    assert ("go_to_step", (1,)) in backend.actions
+
+
+def test_a_question_the_coach_cannot_answer_gets_its_calm_line(panel, qapp):
+    from app.ui.demo_backend import _lesson
+    backend, _, root = panel("lesson_step")
+    line = "The Ask box can't answer right now. Your lesson still works: try Hint or Show me."
+    backend._publish(lesson=_lesson(1, ask={"state": "error", "question": "Why B8?", "answer": line}))
+    _settle(qapp, 0.2)
+    texts = _texts(root)
+    assert "Why B8?" in texts and line in texts

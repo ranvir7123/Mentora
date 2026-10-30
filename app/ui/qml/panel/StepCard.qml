@@ -2,8 +2,9 @@ import QtQuick
 import Theme
 import "../components"
 
-// The step you are on: one short instruction, why it matters in a quieter line, a calm note when an
-// earlier step came undone, then the help for it (Show me, Hint, the clip) and the hints asked for so far.
+// The step you are on: one short instruction, why it matters in a quieter line, a note from the app (such
+// as "save first"), a calm note when an earlier step came undone with a link that points at it, then the
+// help for it (Show me, Hint, the clip) and the hints asked for so far.
 Card {
     id: root
     property var step: null
@@ -16,11 +17,14 @@ Card {
     signal hint()
     signal clip()
     signal getVideo()
+    signal goTo(int index)              // point at an earlier step that came undone
 
     readonly property var clipInfo: step && step.clip ? step.clip : ({ "state": "none", "file": "", "start": 0,
                                                                          "end": 0, "videoUrl": "" })
+    // The step on screen is left out: it is the one being done.
+    readonly property var undone: changed.filter(i => !step || i !== step.index)
     readonly property string changedLine: {
-        const n = changed.map(i => i + 1)
+        const n = undone.map(i => i + 1)
         if (n.length === 0)
             return ""
         const where = appName !== "" ? " in " + appName + "." : "."
@@ -59,25 +63,79 @@ Card {
     }
 
     Rectangle {
-        visible: root.changedLine !== ""
+        visible: noteWords.text !== ""
         width: parent.width
-        height: changedWords.implicitHeight + 2 * Theme.space12
+        height: noteWords.implicitHeight + 2 * Theme.space12
         radius: Theme.radiusMedium
         color: Theme.surface2
         Accessible.role: Accessible.StaticText
-        Accessible.name: changedWords.text
+        Accessible.name: noteWords.text
 
         Text {
-            id: changedWords
+            id: noteWords
             x: Theme.space12
             y: Theme.space12
             width: parent.width - 2 * Theme.space12
-            text: root.changedLine
+            text: root.step ? (root.step.note || "") : ""
             wrapMode: Text.Wrap
             color: Theme.text
             font.family: Theme.fontBody
             font.weight: Font.Bold
             font.pixelSize: Theme.size14
+        }
+    }
+
+    Rectangle {
+        visible: root.changedLine !== ""
+        width: parent.width
+        height: changedColumn.implicitHeight + 2 * Theme.space12
+        radius: Theme.radiusMedium
+        color: Theme.surface2
+        Accessible.role: Accessible.Grouping
+        Accessible.name: changedWords.text
+
+        Column {
+            id: changedColumn
+            x: Theme.space12
+            y: Theme.space12
+            width: parent.width - 2 * Theme.space12
+            spacing: Theme.space8
+
+            Text {
+                id: changedWords
+                width: parent.width
+                text: root.changedLine
+                wrapMode: Text.Wrap
+                color: Theme.text
+                font.family: Theme.fontBody
+                font.weight: Font.Bold
+                font.pixelSize: Theme.size14
+            }
+
+            Text {
+                id: where
+                text: "Show me where"
+                color: Theme.accent
+                font.family: Theme.fontBody
+                font.weight: Font.ExtraBold
+                font.pixelSize: Theme.size14
+                font.underline: whereArea.containsMouse || where.activeFocus
+                activeFocusOnTab: true
+                Accessible.role: Accessible.Link
+                Accessible.name: text
+                Accessible.onPressAction: root.goTo(root.undone[0])
+                Keys.onSpacePressed: root.goTo(root.undone[0])
+                Keys.onReturnPressed: root.goTo(root.undone[0])
+
+                MouseArea {
+                    id: whereArea
+                    anchors.fill: parent
+                    anchors.margins: -Theme.space8
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.goTo(root.undone[0])
+                }
+            }
         }
     }
 
