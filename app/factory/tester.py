@@ -6,8 +6,15 @@ app's window only, taken only while the app is in front, still where it was put,
 window is over it, so nothing else on the screen reaches Meta. Every action it asks for is checked first:
 it must be well formed, the pointer stays inside the app and over the app's own windows, keys that Windows
 itself acts on (leaving or closing the app) and keys that open the app's macros, add a link or open a new
-workbook are refused, text it types keeps the rules a lesson's own text keeps, and in keyboard mode the mouse
-is not used at all.
+workbook are refused, the keys that open the ribbon's shortcuts (a bare Alt or F10, or an Alt chord) are
+refused, text it enters keeps the rules a lesson's own text keeps (what it puts in a cell is checked as a
+whole, whether typed at once or a key press at a time, so a link or a forbidden formula cannot be split over
+several actions; once a value is half-typed, anything but more text or a key that finishes it (Enter, Escape
+or Tab) is refused, so the caret cannot move to slip text in where the record cannot see, and Tab while a
+formula is open is refused too so Excel's AutoComplete cannot finish a function name; and because the record
+only follows a cell typed from empty, re-opening a cell's edit on what it already holds, or pasting into it,
+is refused so the agent cannot extend an earlier value where the record cannot see),
+and in keyboard mode the mouse is not used at all.
 Once the run has looked at the app, another window coming to the front means a person took over, and the test stops. Only the lesson's own checks decide when a step is done.
 A test passes when at least 4 runs in 5 reach the end; it stops early once that can no longer happen.
 """
@@ -28,7 +35,7 @@ from app.core.runner import LessonRun, NotYet, StepChanged
 from app.core.types import Rect
 from app.factory.input import POINTER_ACTIONS, UserTookOver, WindowsHands, vk_for
 from app.factory.prove import ProveError, app_trouble
-from app.factory.writer import _reaches
+from app.factory.writer import FORMULA_START, NEXT_CELL, _reaches
 from app.meta.client import MetaError, NoKey, SpendLimitReached
 
 MODEL = "muse-wonder-1.0"
@@ -53,9 +60,38 @@ TEXT_NOTE = "Give the text to type."
 MACROS_NOTE = "That key opens the app's macros, which a lesson never needs."
 LINK_KEY_NOTE = "That key adds a link, which would reach outside the app."
 NEW_WORKBOOK_NOTE = "That key opens a new workbook outside the lesson. Stay in this one."
+TAB_NOTE = "Type the whole formula yourself; Tab here would let Excel finish a function name for you."
+ALT_NOTE = "That key opens the ribbon's shortcuts, which a lesson never needs."
+FORMULA_NOTE = "Type the formula straight through, without moving the cursor or clicking inside it."
+EDIT_NOTE = "Type the whole value into the cell yourself, rather than re-opening its edit or pasting into it."
+EDITING_NOTE = "Finish typing the value and press Enter; don't move the cursor while a cell is half-typed."
 
 Mode = Literal["mouse", "keyboard"]
 _BUTTONS = {"left", "right", "wheel", "middle"}
+# Keys that end or move a cell's edit, so what was typed into it starts over. Tab is here too: Tab is only
+# ever allowed when no formula is being typed (see `allowed`), and then it moves to the next cell.
+_ENDS_EDIT = {vk_for(k) for k in ("enter", "return", "esc", "escape", "tab")}
+_ARROWS = {vk_for(k) for k in ("left", "right", "up", "down")}
+_TAB, _ALT, _ENTER, _ESC, _F10, _F2, _SHIFT = (vk_for(k)
+                                               for k in ("tab", "alt", "enter", "esc", "f10", "f2", "shift"))
+_MODS = {vk_for(k) for k in ("ctrl", "alt", "win")}       # a key with one of these held is a shortcut, not text
+# Re-opening a cell's edit on what it already holds (F2 or a double-click), or pasting into it (Ctrl+V,
+# Shift+Insert), would put text into the cell the running record never saw: the record only follows a cell
+# typed from empty. So these are refused outright and the agent types the whole value in instead.
+_PASTE = ({vk_for("ctrl"), vk_for("v")}, {_SHIFT, vk_for("insert")})
+# The Alt chords Excel needs inside a cell (a new line, opening a list); every other Alt chord opens the
+# ribbon, as a bare Alt or F10 does, so those are refused.
+_ALT_OK = ({_ALT, _ENTER}, {_ALT, vk_for("down")})
+# Pointer actions that put the edit in another, empty-to-the-record cell (a left click or a drag lands
+# somewhere new on the sheet; a double-click re-opens an edit and is refused before it reaches here).
+_MOVES_CELL = {"click", "drag"}
+# The character each printable key types on its own, and the one it types with Shift held, so a formula
+# built one key press at a time is tracked and checked just like one typed with a `type` action.
+_SHIFTED = {"1": "!", "2": "@", "3": "#", "4": "$", "5": "%", "6": "^", "7": "&", "8": "*", "9": "(",
+            "0": ")", ";": ":", "=": "+", ",": "<", "-": "_", ".": ">", "/": "?", "`": "~", "[": "{",
+            "\\": "|", "]": "}", "'": '"'}
+_PRINTABLE = {vk_for("space" if ch == " " else ch): ch
+              for ch in "abcdefghijklmnopqrstuvwxyz0123456789;=,-./`[]'\\ "}
 # Combinations Windows itself acts on: they switch, close or cover the app, or open the security screen.
 # Only keys input.py knows can be sent at all, so Print Screen, media and browser keys never are.
 # Keys that act inside the app stay allowed (alt+enter is a new line in an Excel cell, shift+f10 its menu).
@@ -150,10 +186,13 @@ def _number(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
 
-def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin | None = None) -> tuple[bool, str]:
+def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin | None = None,
+            typed: str = "") -> tuple[bool, str]:
     """Whether to do this well-formed action (in screen pixels); when not, the note the agent is told.
-    `refused` lists the app's own key combinations to refuse, each with its note (APP_REFUSED). Text to type
-    is held to the rules of `plugin`'s lessons, since it lands in the app just as a lesson's text would."""
+    `refused` lists the app's own key combinations to refuse, each with its note (APP_REFUSED). `typed` is
+    what the agent has already typed into the cell it is editing: text to type is held to the rules of
+    `plugin`'s lessons together with `typed`, since the cell ends up holding the whole of it, so a link or
+    a forbidden formula split over several actions is caught as one."""
     kind = action.get("type")
     ok, note = _keys_allowed(action.get("keys") or [])       # any action may carry keys; all are checked
     if not ok:
@@ -162,9 +201,30 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin |
     for combo, note in refused:
         if combo <= codes:
             return False, note
+    # Checks on the keys and clicks any action carries, so a held key or a double-click is no way round them.
+    if _F2 in codes or kind == "double_click" or any(combo <= codes for combo in _PASTE):
+        return False, EDIT_NOTE                              # re-opening a cell's edit, or pasting into it
+    in_formula = typed.lstrip().startswith(FORMULA_START)
+    if _TAB in codes and in_formula:                         # Tab mid-formula: AutoComplete would finish it
+        return False, TAB_NOTE
+    if codes == {_ALT} or codes == {_F10} or (_ALT in codes and codes not in _ALT_OK):
+        return False, ALT_NOTE                               # a bare Alt or F10, or an Alt chord: the ribbon
+    if kind == "keypress":
+        text = _key_text(action.get("keys") or [])
+        if text:                                             # keys that type characters go into the cell
+            what = _reaches(typed + text, plugin) if plugin is not None else ""
+            return (False, f"That text {what}.") if what else (True, "")
+        if text is None and typed and codes - {_SHIFT} not in ({_ENTER}, {_ESC}, {_TAB}):
+            # Once a value is half-typed, moving the caret would let text slip in where the record can't see
+            # (out of a formula too: a typed web address Excel turns into a live link). Only more text, or
+            # Enter/Escape/Tab to finish or cancel, may follow. (Tab mid-formula is already refused above.)
+            return False, FORMULA_NOTE if in_formula else EDITING_NOTE
     if kind in POINTER_ACTIONS:
         if mode == "keyboard":
             return False, KEYBOARD_NOTE
+        if typed:                                            # a value is half-typed: a click mid-formula would
+            return False, FORMULA_NOTE if in_formula else EDITING_NOTE   # add a cell reference, and either way
+            #                                                 it lands ambiguously; finish with Enter first
         if action.get("button", "left") not in _BUTTONS:
             return False, BUTTON_NOTE
         points = action.get("path") if kind == "drag" else [action]
@@ -172,12 +232,59 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin |
             return False, OUTSIDE_NOTE
         return True, ""
     if kind == "type" and plugin is not None:
-        what = _reaches(action["text"], plugin)
+        if _tab_autocompletes(typed, action["text"]):
+            return False, TAB_NOTE
+        what = _reaches(typed + action["text"], plugin)
         if what:
             return False, f"That text {what}."
     if kind in ("keypress", "type", "wait", "screenshot"):
         return True, ""
     return False, f"{kind} is not something this test can do."
+
+
+def _key_text(keys: list) -> str | None:
+    """The characters a key press types into a cell, in the order the keys are given, or None when it is not
+    plain text entry: it holds a Ctrl/Alt/Win modifier, or includes a key that types no character (Enter,
+    Tab, an arrow, a function key). A press of Shift on its own gives "". The keys are read in the order the
+    hands press them down (input.py sends them in list order), so Shift changes only the keys that come after
+    it, exactly as Windows types them; several character keys in one press spell out the text they type and
+    are checked as a whole."""
+    codes = [vk_for(str(k)) for k in keys]
+    if any(c in _MODS for c in codes):
+        return None
+    shift = False
+    out = []
+    for c in codes:
+        if c == _SHIFT:
+            shift = True                             # held from here on, as the hands press Shift in turn
+            continue
+        base = _PRINTABLE.get(c)
+        if base is None:
+            return None
+        out.append(_SHIFTED.get(base, base) if shift else base)
+    return "".join(out)
+
+
+def _tab_autocompletes(typed: str, text: str) -> bool:
+    """True when `text`, typed on top of `typed`, sends a Tab while a formula is open — the moment Excel's
+    AutoComplete could finish a function name the agent never spelled out in full."""
+    pending = typed
+    for ch in text:
+        if ch in "\r\n":
+            pending = ""
+        elif ch == "\t":
+            if pending.lstrip().startswith(FORMULA_START):
+                return True
+            pending = ""                                 # Tab in a plain cell just moves to the next one
+        else:
+            pending += ch
+    return False
+
+
+def _pending(typed: str, text: str) -> str:
+    """What is left pending in the current cell after `text` is typed on top of `typed`: everything after
+    the last Enter, Tab or new line, since each of those moves the edit to another cell."""
+    return NEXT_CELL.split(typed + text)[-1]
 
 
 def _inside(p: Any, app: Rect) -> bool:
@@ -251,6 +358,7 @@ class _Run:
         self.runner = LessonRun(lesson, plugin.checks)
         self.looked = False                          # once the agent has seen the app, it is never taken back
         self.refused = APP_REFUSED.get(plugin.app_id, ())
+        self.typed = ""                              # what the agent has typed into the cell it is editing
 
     def go(self) -> str | None:
         """None when the run reached the end of the lesson, else why it failed."""
@@ -342,7 +450,7 @@ class _Run:
                 note = well_formed(action)
                 if not note:
                     action = to_screen(action, self.app, self.shot)
-                    ok, note = allowed(action, self.app, self.mode, self.refused, self.plugin)
+                    ok, note = allowed(action, self.app, self.mode, self.refused, self.plugin, self.typed)
                 if not note:
                     self._ready()
                     if not self._over_app(action):
@@ -352,7 +460,30 @@ class _Run:
                     notes.append(note)
                     return used                          # the rest of the batch waits for a new look
                 self.hands.do(action)
+                self._track(action)
         return used
+
+    def _track(self, action: dict) -> None:
+        """Keep `self.typed`, what the agent has typed into the cell it is editing, so a link or a forbidden
+        formula split over several actions is caught as a whole. Text comes from `type` actions and from
+        single key presses alike. It starts over when the edit ends or moves: Enter, Escape or Tab, an arrow
+        key when no formula is being typed, or a click on another cell. While a formula is being typed, keys
+        and clicks that would move inside it are refused before they get here, so the record cannot drift."""
+        kind = action["type"]
+        if kind == "type":
+            self.typed = _pending(self.typed, action["text"])
+            return
+        in_formula = self.typed.lstrip().startswith(FORMULA_START)
+        if kind == "keypress":
+            text = _key_text(action.get("keys") or [])
+            if text:
+                self.typed = _pending(self.typed, text)
+                return
+            codes = {vk_for(str(k)) for k in action.get("keys") or []}
+            if codes & _ENDS_EDIT or (codes & _ARROWS and not in_formula):
+                self.typed = ""
+        elif kind in _MOVES_CELL and not in_formula:
+            self.typed = ""
 
     def _over_app(self, action: dict) -> bool:
         """True when every point of a pointer action is over the app's own windows, not one showing through."""
