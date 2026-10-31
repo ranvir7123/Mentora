@@ -5,6 +5,10 @@ parts, a JSON schema); it is turned into one Claude Messages call, and the reply
 Answer, with Claude's errors turned into the same MetaError kinds, so neither caller changes. The Meta
 model name they pass is ignored: every call goes to CLAUDE_MODEL.
 
+Claude takes still pictures, not a video file, so upload() is refused with MetaRefused: the lesson writer
+then sends the video's still frames, as it does when Meta refuses a video. There is no transcribe(): a
+video without captions is written from its frames alone.
+
 Every call is appended to its own call log (model, label, tokens, cost, time, ok), and at the limit the
 next call is refused with SpendLimitReached. The key is read with app.meta.key.find_key, so a key saved
 in the user's Windows settings counts without a restart; it is never printed, logged or saved.
@@ -43,9 +47,10 @@ class ClaudeClient:
     name = NAME
 
     def __init__(self, *, api: Any | None = None, timeout_s: float = 30.0, log_path: Path | None = None,
-                 limit_usd: float = 20.0, find_key: Callable[[str], tuple[str | None, str]] = _find_key):
+                 limit_usd: float = 20.0, max_tokens: int = MAX_TOKENS, effort: str = EFFORT, thinking: bool = False,
+                 find_key: Callable[[str], tuple[str | None, str]] = _find_key):
         self._api = api
-        self._timeout_s = timeout_s
+        self.timeout_s, self.max_tokens, self.effort, self.thinking = timeout_s, max_tokens, effort, thinking
         self.log_path = Path(log_path) if log_path is not None else default_log_path()
         self.limit_usd = limit_usd
         self._find_key = find_key
@@ -57,11 +62,13 @@ class ClaudeClient:
         if self.spent() >= self.limit_usd:
             raise SpendLimitReached(f"Claude spending reached the ${self.limit_usd:.0f} limit")
         system, messages = _messages(input)
-        output_config: dict[str, Any] = {"effort": EFFORT}
+        output_config: dict[str, Any] = {"effort": self.effort}
         if schema is not None:
             output_config["format"] = {"type": "json_schema", "schema": _plain_schema(schema)}
-        request: dict[str, Any] = {"model": CLAUDE_MODEL, "max_tokens": MAX_TOKENS, "messages": messages,
+        request: dict[str, Any] = {"model": CLAUDE_MODEL, "max_tokens": self.max_tokens, "messages": messages,
                                    "output_config": output_config}
+        if self.thinking:
+            request["thinking"] = {"type": "adaptive"}
         if system:
             request["system"] = system
         started = time.monotonic()
@@ -91,6 +98,10 @@ class ClaudeClient:
         return Answer(text=text, data=data, output=list(reply.content), usage=usage,
                       response_id=str(getattr(reply, "id", "")), cost=cost, refusal=refusal)
 
+    def upload(self, path: Path, *, label: str) -> str:
+        """Refused: Claude takes still pictures, not a video file."""
+        raise MetaRefused(400, "Claude takes still pictures, not a video file")
+
     def spent(self) -> float:
         """Dollars spent so far, from the call log, across every run of the program."""
         try:
@@ -110,7 +121,7 @@ class ClaudeClient:
             key, _where = self._find_key(KEY_NAME)
             if not key:
                 raise NoKey(f"{KEY_NAME} is not set")
-            self._api = anthropic.Anthropic(api_key=key, timeout=self._timeout_s, max_retries=RETRIES)
+            self._api = anthropic.Anthropic(api_key=key, timeout=self.timeout_s, max_retries=RETRIES)
         return self._api
 
     def _log(self, label: str, usage: Usage, cost: float, started: float, *, ok: bool, error: str = "") -> None:
