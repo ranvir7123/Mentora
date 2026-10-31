@@ -532,6 +532,25 @@ def test_typed_text_is_checked_together_with_what_came_before():
         == (False, "That text uses WEBSERVICE, which a lesson may not use.")
 
 
+def test_a_bare_alt_press_is_refused_so_the_ribbon_key_tips_never_open():
+    assert tester.allowed({"type": "keypress", "keys": ["alt"]}, APP, "mouse") == (False, tester.ALT_NOTE)
+    assert tester.allowed({"type": "keypress", "keys": ["ALT"]}, APP, "mouse") == (False, tester.ALT_NOTE)
+    # Alt held with another key still acts inside the cell (Alt+Enter is a new line), so it stays allowed.
+    assert tester.allowed({"type": "keypress", "keys": ["alt", "enter"]}, APP, "mouse") == (True, "")
+
+
+def test_the_agent_may_not_open_the_ribbon_key_tips_with_a_bare_alt(tmp_path):
+    bare_alt = {"type": "keypress", "keys": ["alt"]}
+    script = Script(act(bare_alt), act(typed("k0", 1)), act(typed("k1", 2)), act(typed("k2", 3)))
+    plugin = Excel()
+
+    result, hands, lines = run(script, plugin=plugin, hands=TypingHands(plugin), workdir=tmp_path)
+
+    assert result.passed
+    assert bare_alt not in hands.done
+    assert any(line.startswith("refused keypress alt") and line.endswith(tester.ALT_NOTE) for line in lines)
+
+
 def test_tab_is_refused_while_a_formula_is_being_typed():
     excel = Excel()
     # As a keypress, mid-formula: Excel's AutoComplete would finish a function name the agent never spelled out.

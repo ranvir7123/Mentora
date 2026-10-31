@@ -6,10 +6,10 @@ app's window only, taken only while the app is in front, still where it was put,
 window is over it, so nothing else on the screen reaches Meta. Every action it asks for is checked first:
 it must be well formed, the pointer stays inside the app and over the app's own windows, keys that Windows
 itself acts on (leaving or closing the app) and keys that open the app's macros, add a link or open a new
-workbook are refused, text it types keeps the rules a lesson's own text keeps (what it types into a cell is
-checked as a whole, so a link or a forbidden formula cannot be split over several actions, and Tab is refused
-while a formula is being typed so Excel's AutoComplete cannot finish a function name for it), and in keyboard
-mode the mouse is not used at all.
+workbook are refused, a bare Alt that opens the ribbon's key tips is refused, text it types keeps the rules a
+lesson's own text keeps (what it types into a cell is checked as a whole, so a link or a forbidden formula
+cannot be split over several actions, and Tab is refused while a formula is being typed so Excel's
+AutoComplete cannot finish a function name for it), and in keyboard mode the mouse is not used at all.
 Once the run has looked at the app, another window coming to the front means a person took over, and the test stops. Only the lesson's own checks decide when a step is done.
 A test passes when at least 4 runs in 5 reach the end; it stops early once that can no longer happen.
 """
@@ -56,6 +56,7 @@ MACROS_NOTE = "That key opens the app's macros, which a lesson never needs."
 LINK_KEY_NOTE = "That key adds a link, which would reach outside the app."
 NEW_WORKBOOK_NOTE = "That key opens a new workbook outside the lesson. Stay in this one."
 TAB_NOTE = "Type the whole formula yourself; Tab here would let Excel finish a function name for you."
+ALT_NOTE = "That key opens the ribbon's shortcuts, which a lesson never needs."
 
 Mode = Literal["mouse", "keyboard"]
 _BUTTONS = {"left", "right", "wheel", "middle"}
@@ -64,6 +65,7 @@ _BUTTONS = {"left", "right", "wheel", "middle"}
 _ENDS_EDIT = {vk_for(k) for k in ("enter", "return", "esc", "escape", "tab")}
 _ARROWS = {vk_for(k) for k in ("left", "right", "up", "down")}
 _TAB = vk_for("tab")
+_ALT = vk_for("alt")
 # Pointer actions that put the edit in another cell (a button press lands somewhere new on the sheet).
 _MOVES_CELL = {"click", "double_click", "drag"}
 # Combinations Windows itself acts on: they switch, close or cover the app, or open the security screen.
@@ -175,6 +177,8 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin |
     for combo, note in refused:
         if combo <= codes:
             return False, note
+    if kind == "keypress" and codes == {_ALT}:
+        return False, ALT_NOTE
     if kind == "keypress" and _TAB in codes and typed.lstrip().startswith(FORMULA_START):
         return False, TAB_NOTE
     if kind in POINTER_ACTIONS:
