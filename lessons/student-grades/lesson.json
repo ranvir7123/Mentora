@@ -81,7 +81,7 @@
             }
           },
           "not_yet": "Not yet: E1 needs bold too.",
-          "code": ""
+          "code": "partial:E1"
         }
       ],
       "clip": null
@@ -125,7 +125,7 @@
             }
           },
           "not_yet": "Not yet: SUM gives the total. Use AVERAGE here.",
-          "code": ""
+          "code": "uses_missing:AVERAGE"
         },
         {
           "replay": {
@@ -136,7 +136,7 @@
             }
           },
           "not_yet": "Not yet: include the Science mark in C2 too.",
-          "code": ""
+          "code": "covers_missing:C2"
         }
       ],
       "clip": null
@@ -178,7 +178,7 @@
             }
           },
           "not_yet": "Not yet: fill all the way down to D6.",
-          "code": ""
+          "code": "gap:D6"
         }
       ],
       "clip": null
@@ -222,7 +222,7 @@
             }
           },
           "not_yet": "Not yet: Pass and Fail are swapped. Pass comes first.",
-          "code": ""
+          "code": "value:Fail"
         },
         {
           "replay": {
@@ -233,7 +233,7 @@
             }
           },
           "not_yet": "Not yet: that's typed text. Start with =IF( instead.",
-          "code": ""
+          "code": "typed_value"
         }
       ],
       "clip": null
@@ -275,7 +275,7 @@
             }
           },
           "not_yet": "Not yet: fill all the way down to E6.",
-          "code": ""
+          "code": "gap:E6"
         }
       ],
       "clip": null
@@ -322,7 +322,7 @@
             }
           },
           "not_yet": "Not yet: that's lowest first. Flip it.",
-          "code": ""
+          "code": "order"
         }
       ],
       "clip": null
@@ -330,6 +330,17 @@
   ],
   "made_by": "hand",
   "edited_by_hand": false,
-  "proof": null,
-  "test": null
+  "proof": {
+    "passed": true,
+    "at": "2026-10-31T08:38:02+00:00",
+    "dropped": [],
+    "notes": []
+  },
+  "test": {
+    "passed": false,
+    "at": "2026-10-31T08:38:02+00:00",
+    "mode": "skipped",
+    "runs": 0,
+    "passes": 0
+  }
 }

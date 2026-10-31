@@ -72,7 +72,7 @@
             }
           },
           "not_yet": "Not yet: Votes in B1 needs bold too.",
-          "code": ""
+          "code": "partial:B1"
         }
       ],
       "clip": null
@@ -115,7 +115,7 @@
             }
           },
           "not_yet": "Not yet: your total skips B6. Include Rabbit too.",
-          "code": ""
+          "code": "covers_missing:B6"
         },
         {
           "replay": {
@@ -126,7 +126,7 @@
             }
           },
           "not_yet": "Not yet: that's a typed number. Start with = instead.",
-          "code": ""
+          "code": "typed_value"
         }
       ],
       "clip": null
@@ -170,7 +170,7 @@
             }
           },
           "not_yet": "Not yet: leave out the total in B7. Use B2 to B6.",
-          "code": ""
+          "code": "refers_extra:B7"
         },
         {
           "replay": {
@@ -181,7 +181,7 @@
             }
           },
           "not_yet": "Not yet: MIN finds the smallest. Use MAX here.",
-          "code": ""
+          "code": "uses_missing:MAX"
         }
       ],
       "clip": null
@@ -228,7 +228,7 @@
             }
           },
           "not_yet": "Not yet: that's fewest first. Flip it.",
-          "code": ""
+          "code": "order"
         }
       ],
       "clip": null
@@ -270,7 +270,7 @@
             }
           },
           "not_yet": "Not yet: that's a pie chart. Pick the column.",
-          "code": ""
+          "code": "type:pie"
         }
       ],
       "clip": null
@@ -278,6 +278,17 @@
   ],
   "made_by": "hand",
   "edited_by_hand": false,
-  "proof": null,
-  "test": null
+  "proof": {
+    "passed": true,
+    "at": "2026-10-31T08:37:50+00:00",
+    "dropped": [],
+    "notes": []
+  },
+  "test": {
+    "passed": false,
+    "at": "2026-10-31T08:37:50+00:00",
+    "mode": "skipped",
+    "runs": 0,
+    "passes": 0
+  }
 }

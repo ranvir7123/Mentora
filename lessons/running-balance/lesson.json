@@ -76,7 +76,7 @@
             }
           },
           "not_yet": "Not yet: D1 needs bold too.",
-          "code": ""
+          "code": "partial:D1"
         }
       ],
       "clip": null
@@ -119,7 +119,7 @@
             }
           },
           "not_yet": "Not yet: take away the Out amount in C2 too.",
-          "code": ""
+          "code": "covers_missing:C2"
         },
         {
           "replay": {
@@ -130,7 +130,7 @@
             }
           },
           "not_yet": "Not yet: that's a typed number. Start with = instead.",
-          "code": ""
+          "code": "typed_value"
         }
       ],
       "clip": null
@@ -172,7 +172,7 @@
             }
           },
           "not_yet": "Not yet: money out should be taken away, not added.",
-          "code": ""
+          "code": "value:3,450"
         },
         {
           "replay": {
@@ -183,7 +183,7 @@
             }
           },
           "not_yet": "Not yet: start from the balance above, in D2.",
-          "code": ""
+          "code": "value:-450"
         }
       ],
       "clip": null
@@ -225,7 +225,7 @@
             }
           },
           "not_yet": "Not yet: fill all the way down to D7.",
-          "code": ""
+          "code": "gap:D7"
         }
       ],
       "clip": null
@@ -267,7 +267,7 @@
             }
           },
           "not_yet": "Not yet: that's percent. Pick Currency instead.",
-          "code": ""
+          "code": "kind:percent"
         }
       ],
       "clip": null
@@ -309,7 +309,7 @@
             }
           },
           "not_yet": "Not yet: that's a column chart. Pick the line.",
-          "code": ""
+          "code": "type:column"
         }
       ],
       "clip": null
@@ -317,6 +317,17 @@
   ],
   "made_by": "hand",
   "edited_by_hand": false,
-  "proof": null,
-  "test": null
+  "proof": {
+    "passed": true,
+    "at": "2026-10-31T08:38:13+00:00",
+    "dropped": [],
+    "notes": []
+  },
+  "test": {
+    "passed": false,
+    "at": "2026-10-31T08:38:13+00:00",
+    "mode": "skipped",
+    "runs": 0,
+    "passes": 0
+  }
 }
