@@ -334,7 +334,8 @@ class DemoBackend:
         for listener in list(self._listeners):
             listener(name, copy.deepcopy(payload))
 
-    def _publish(self, *, home=None, lesson=None, pointer=None, cue=None) -> None:
+    def _publish(self, *, home=None, lesson=None, pointer=None, cue=None, earned=10) -> None:
+        """`earned` is the points a right step earned, sent with its sound."""
         with self._lock:
             if home is not None:
                 self._home = home
@@ -346,7 +347,7 @@ class DemoBackend:
             if shape is not None:
                 self._send(name, shape)
         if cue:
-            self._send("cue", {"name": cue})
+            self._send("cue", {"name": cue, "points": earned if cue == "right" else 0})
 
     # Demo controls.
 

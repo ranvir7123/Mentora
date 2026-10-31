@@ -309,9 +309,9 @@ class Backend:
             self._pointer_shape = copy.deepcopy(o.pointer if o is not None else HIDDEN_POINTER)
             self._send("pointer", self._pointer_shape)
 
-    def _cue(self, name: str) -> None:
+    def _cue(self, name: str, points: int = 0) -> None:
         with self._lock:
-            self._send("cue", {"name": name})
+            self._send("cue", {"name": name, "points": points})
 
     # Work off the screens' thread.
 
@@ -674,11 +674,14 @@ class Backend:
                 o.banner = None
         o.cheer += 1
         cues: list[str] = []
+        earned = 0                               # the points the right steps here earned, sent with their cue
         passed: int | None = None
         done: LessonDone | None = None
         for event in events:
             if isinstance(event, StepPassed):
-                o.points += self._progress.step_passed(o.lesson.id, event.index, event.points)
+                points = self._progress.step_passed(o.lesson.id, event.index, event.points)
+                o.points += points
+                earned += points
                 o.ask = {"state": "idle", "question": "", "answer": ""}
                 o.asked += 1                     # the Ask box was about this step: an answer on its way is dropped
                 o.banner = {"kind": "right", "text": "", "stepIndex": event.index}
@@ -698,7 +701,7 @@ class Backend:
         if o.goto is not None and o.goto not in run.changed:
             o.goto = None
         for cue in cues:
-            self._cue(cue)
+            self._cue(cue, earned if cue == "right" else 0)
 
         if done is not None:
             self._finish(o, done)

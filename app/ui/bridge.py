@@ -28,10 +28,11 @@ _STATES = ("home", "lesson", "pointer")
 PANEL_WIDTH = 360          # logical px; the panel docks on the right edge of the screen
 
 
-def _cue_name(payload: Any) -> str:
+def _cue(payload: Any) -> tuple[str, int]:
+    """(name, points): the sound, and the points a right step earned, 0 for any other sound."""
     if isinstance(payload, Mapping):
-        return str(payload.get("name", ""))
-    return str(payload)
+        return str(payload.get("name", "")), int(payload.get("points", 0) or 0)
+    return str(payload), 0
 
 
 _VIDEO_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}
@@ -59,7 +60,7 @@ class Bridge(QObject):
     mascotHomeChanged = Signal()
     mascotAwayChanged = Signal()
     workAreaChanged = Signal()
-    cue = Signal(str)
+    cue = Signal(str, int)          # the sound's name, and the points a right step earned
     _wake = Signal()
 
     def __init__(self, backend: ScreenBackend, parent: QObject | None = None):
@@ -73,7 +74,7 @@ class Bridge(QObject):
         self._muted = bool(self._state["home"].get("muted", False))
         self._lock = threading.Lock()
         self._pending: dict[str, dict] = {}
-        self._cues: list[str] = []
+        self._cues: list[tuple[str, int]] = []
         self._scheduled = False
         self._panel: QWindow | None = None
         self._panel_hwnd: int | None = None
@@ -93,7 +94,7 @@ class Bridge(QObject):
     def _receive(self, name: str, payload: Any) -> None:
         with self._lock:
             if name == "cue":
-                self._cues.append(_cue_name(payload))
+                self._cues.append(_cue(payload))
             elif name in _STATES:
                 self._pending[name] = copy.deepcopy(dict(payload))
             else:
@@ -119,8 +120,8 @@ class Bridge(QObject):
             if name == "home" and bool(shape.get("muted", False)) != self._muted:
                 self._muted = bool(shape.get("muted", False))
                 self.mutedChanged.emit()
-        for name in cues:
-            self.cue.emit(name)
+        for name, points in cues:
+            self.cue.emit(name, points)
 
     def _get_home(self) -> dict:
         return self._state["home"]

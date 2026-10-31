@@ -2,7 +2,8 @@
 
 The screens (QML) only draw these shapes; the backend decides what is in them. Keys are camelCase
 because QML reads them. The backend sends a whole new shape on every change, under the names `home`,
-`lesson` and `pointer`, and short sounds under `cue`.
+`lesson` and `pointer`, and short sounds under `cue`, as {"name", "points"}: the points a "right" step
+earned (0 when it was passed before), and 0 for every other sound.
 
 The defaults below are what every screen starts from. Never change them in place: copy them first.
 """

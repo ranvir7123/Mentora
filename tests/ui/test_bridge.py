@@ -59,19 +59,19 @@ def test_updates_from_other_threads_arrive_in_order(qapp):
     bridge = Bridge(backend)
     seen, cues = [], []
     bridge.lessonChanged.connect(lambda: seen.append(bridge.lesson["stepIndex"]))
-    bridge.cue.connect(cues.append)
+    bridge.cue.connect(lambda name, points: cues.append((name, points)))
 
     def burst():
         for i in range(200):
             backend.listener("lesson", {**CLOSED_LESSON, "open": True, "stepIndex": i})
-        backend.listener("cue", {"name": "right"})
+        backend.listener("cue", {"name": "right", "points": 10})
 
     worker = threading.Thread(target=burst)
     worker.start()
     worker.join()
     assert _pump(qapp, lambda: bridge.lesson["stepIndex"] == 199 and cues)
     assert seen and seen == sorted(seen) and seen[-1] == 199
-    assert cues == ["right"]
+    assert cues == [("right", 10)]
 
 
 def test_every_demo_state_has_every_key():

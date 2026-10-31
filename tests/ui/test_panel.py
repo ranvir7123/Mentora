@@ -295,6 +295,16 @@ def test_the_ten_points_ride_up_with_the_banner_not_ahead_of_it(panel, qapp):
     assert middle >= sheet_top, f"+10 floats at {middle}, above the banner's top at {sheet_top}"
 
 
+def test_a_right_try_that_earned_nothing_floats_no_points(panel, qapp):
+    from app.ui.demo_backend import _banner, _lesson
+    backend, _, root = panel("lesson_step")
+    backend._publish(lesson=_lesson(1, banner=_banner("right", "", 1)), cue="right", earned=0)
+    _settle(qapp, 0.1)                                                # a step passed again: no points
+    texts = _texts(root)
+    assert not any(t.startswith("+") for t in texts), f"points float up for nothing: {texts}"
+    assert any(word in texts for word in ("Nailed it!", "That's it!", "Spot on!", "You got it!"))
+
+
 def test_not_yet_is_gentle_and_can_be_put_away(panel, qapp):
     _, _, root = panel("lesson_not_yet")
     texts = _texts(root)

@@ -127,10 +127,13 @@ Window {
 
     Connections {
         target: root.bridge
-        function onCue(name) {
+        function onCue(name, points) {
             sfx.play(name)
             if (name === "right") {
-                floating.restart()
+                if (points > 0) {           // a step passed again earns nothing, so nothing floats up
+                    plusPoints.text = "+" + points
+                    floating.restart()
+                }
                 root.cheering = true
                 cheer.restart()
             }
@@ -426,14 +429,14 @@ Window {
         }
     }
 
-    // +10 in gold, floating up from the right banner and fading, all within 400 ms. It rides on the banner
-    // as it slides up, so it never shows over the Ask box ahead of it.
+    // The points earned (+10) in gold, floating up from the right banner and fading, all within 400 ms. It
+    // rides on the banner as it slides up, so it never shows over the Ask box ahead of it.
     Text {
-        id: plusTen
+        id: plusPoints
         x: root.width - Theme.space16 - width
         y: root.height - banner.reach + banner.headingCentre - height / 2
         opacity: 0
-        text: "+10"
+        text: ""
         color: Theme.reward
         font.family: Theme.fontBody
         font.weight: Font.ExtraBold
@@ -444,9 +447,9 @@ Window {
         id: floating
         NumberAnimation { target: rise; property: "y"; from: 0; to: -24; duration: 400; easing.type: Easing.OutCubic }
         SequentialAnimation {
-            PropertyAction { target: plusTen; property: "opacity"; value: 1 }
+            PropertyAction { target: plusPoints; property: "opacity"; value: 1 }
             PauseAnimation { duration: 150 }
-            NumberAnimation { target: plusTen; property: "opacity"; to: 0; duration: 250; easing.type: Easing.InQuad }
+            NumberAnimation { target: plusPoints; property: "opacity"; to: 0; duration: 250; easing.type: Easing.InQuad }
         }
     }
 

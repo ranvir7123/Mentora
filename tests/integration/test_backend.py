@@ -224,7 +224,7 @@ def test_a_right_step_updates_banner_points_cue_and_pointer(world):
     lesson = world.backend.lesson()
     assert lesson["banner"] == {"kind": "right", "text": "", "stepIndex": 0}
     assert lesson["points"] == 10 and lesson["stepIndex"] == 0      # the cheer stays on the step just done
-    assert world.cues()[-1] == "right"
+    assert world.last("cue") == {"name": "right", "points": 10}       # the points the step earned float up
     assert world.progress.points_today() == 10
     pointer = world.backend.pointer()
     assert (pointer["mascot"], pointer["ring"]) == ("cheering", "right")
@@ -237,6 +237,14 @@ def test_a_right_step_updates_banner_points_cue_and_pointer(world):
     pointer = world.backend.pointer()
     assert (pointer["x"], pointer["y"], pointer["bubble"], pointer["mascot"]) == (300, 400, "Type it here", "flying")
     assert world.backend.home()["learner"]["pointsToday"] == 10
+
+
+def test_a_step_passed_again_cues_no_points(world):
+    world.progress.step_passed("two-keys", 0, 10)       # passed before, but the work copy lost it
+    world.open()
+    world.learner_sets("k0", 1)
+    assert world.last("cue") == {"name": "right", "points": 0}        # so no "+10" floats up
+    assert world.backend.lesson()["points"] == 0 and world.progress.points_today() == 10
 
 
 def test_not_yet_shows_the_line_and_takes_nothing_away(world):
