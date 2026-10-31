@@ -1,7 +1,7 @@
 from dataclasses import replace
 
 from app.core.fake_plugin import FakePlugin
-from app.core.lesson import Proof, TestResult, load_lesson, save_lesson
+from app.core.lesson import Proof, TestResult, load_lesson, save_lesson, shelf_badge
 from app.core.services import MakeResult
 from app.factory import __main__ as cli
 from app.factory import tester
@@ -131,7 +131,11 @@ def test_a_vs_code_lesson_is_refused_before_the_countdown(tmp_path, monkeypatch,
     assert main(["test", str(folder)]) == 1
 
     assert waited == [] and played == []
-    assert load_lesson(folder).test is None
+    # The agent never tests VS Code, so the refusal saves "not tested" (mode skipped): the shelf hides a lesson
+    # with no test result at all, and without this a proven VS Code lesson could never reach it.
+    saved = load_lesson(folder)
+    assert saved.test.mode == "skipped" and saved.test.runs == 0
+    assert shelf_badge(saved) == "proven"
     out = capsys.readouterr()
     assert "Hands off" not in out.out
     assert ("Meta's agent does not test VS Code lessons: its terminal would let the agent run any command on this "

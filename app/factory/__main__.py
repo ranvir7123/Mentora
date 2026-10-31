@@ -22,7 +22,7 @@ from pathlib import Path
 from app.core.lesson import Lesson, LessonError, load_lesson, save_lesson
 from app.core.plugin import AppPlugin
 from app.factory.input import UserTookOver
-from app.factory.pipeline import HANDS_OFF_S, LessonFactory, run_test
+from app.factory.pipeline import HANDS_OFF_S, LessonFactory, not_tested, run_test
 from app.factory.prove import ProveError, prove
 from app.factory.tester import agent_refusal
 from app.factory.video import VideoError
@@ -104,6 +104,7 @@ def _test(args: argparse.Namespace) -> int:
     plugin = plugin_for(lesson.app)
     refusal = agent_refusal(plugin)
     if refusal:
+        save_lesson(replace(lesson, test=not_tested()))     # the shelf needs a test result; this one says "proven"
         raise _Refused(f"{refusal} The lesson keeps its proven badge.")
     _say(f"Hands off the mouse and keyboard: Meta's agent takes over in {HANDS_OFF_S:g} s. "
          "Moving the mouse stops the test.")
