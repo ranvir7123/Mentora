@@ -349,6 +349,16 @@ def test_a_video_that_cannot_become_a_lesson_says_why_and_offers_another(home, q
     assert ("dismiss_factory", ()) in backend.actions
 
 
+def test_a_reason_that_is_already_under_its_stage_is_not_said_twice(home, qapp):
+    backend, _, root = home("factory_not_ready")
+    state = copy.deepcopy(backend.home())
+    [failed] = [s for s in state["factory"]["stages"] if s["state"] == "failed"]
+    failed["detail"] = state["factory"]["reason"] = "This video is private."
+    backend._publish(home=state)
+    _settle(qapp)
+    assert _texts(root).count("This video is private.") == 1
+
+
 def test_a_ready_lesson_lands_on_the_shelf_with_a_short_highlight(home, qapp):
     backend, _, root = home("factory_running")
     state = copy.deepcopy(backend.home())

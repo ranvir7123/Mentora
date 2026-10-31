@@ -123,8 +123,10 @@ Rectangle {
             stages: (root.factory.stages || []).filter(st => root.showing === "running" || st.state !== "waiting")
         }
 
+        // Why it stopped, unless the stage that failed already says it in the same words.
         Text {
             visible: root.showing === "not_ready" && text !== ""
+                     && !(root.factory.stages || []).some(st => st.state === "failed" && st.detail === text)
             width: parent.width
             text: root.factory.reason || ""
             wrapMode: Text.Wrap
