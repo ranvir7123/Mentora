@@ -35,7 +35,7 @@ Rectangle {
                 text: "Your common mistakes"
                 color: Theme.text
                 font.family: Theme.fontHeading
-                font.weight: Font.Bold
+                font.weight: Font.ExtraBold
                 font.pixelSize: Theme.size20
             }
             Text {
@@ -98,7 +98,7 @@ Rectangle {
                             anchors.verticalCenter: parent.verticalCenter
                             width: Theme.space8
                             height: Theme.space8
-                            radius: width / 2
+                            radius: Theme.radiusSmall
                             color: Theme.course(slip.modelData.colour || "")
                         }
                         Text {

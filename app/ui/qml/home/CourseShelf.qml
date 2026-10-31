@@ -2,7 +2,7 @@ import QtQuick
 import Theme
 import "../components"
 
-// The courses, each a card with its colour down its left edge like a book's spine, a progress bar and who
+// The courses, each a card with its name run over in the course's own highlighter, a progress bar and who
 // made the videos. The course you are in stands large on the left; the others stack beside it. A course
 // that isn't ready says "Coming soon" and is drawn as an empty outline, never as made-up content.
 Item {
@@ -44,7 +44,6 @@ Item {
         // false with the foot's and would keep a hidden foot hidden for good.
         readonly property bool showsNext: big && ready && next !== null
         readonly property bool showsCredits: credits.length > 0
-        readonly property real spine: 10
         readonly property real pad: big ? Theme.space24 : Theme.space16
         readonly property bool down: area.pressed && ready
 
@@ -76,21 +75,9 @@ Item {
             height: parent.height - (card.ready ? Theme.edge : 0)
             Behavior on y { NumberAnimation { duration: Theme.durFast; easing.type: Easing.OutCubic } }
 
-            // The spine: the course colour under the face, showing down the left edge.
             Rectangle {
                 anchors.fill: parent
                 radius: Theme.radiusLarge
-                color: Theme.course(card.course.colour)
-                opacity: card.ready ? 1 : 0.35
-            }
-            Rectangle {
-                x: card.spine
-                width: parent.width - card.spine
-                height: parent.height
-                topLeftRadius: Theme.radiusLarge - card.spine
-                bottomLeftRadius: Theme.radiusLarge - card.spine
-                topRightRadius: Theme.radiusLarge
-                bottomRightRadius: Theme.radiusLarge
                 color: card.ready ? Theme.surface1 : Theme.bg
                 border.width: card.ready ? (card.activeFocus ? 2 : 0) : 2
                 border.color: card.ready ? Theme.text : Theme.border
@@ -98,27 +85,40 @@ Item {
 
             Column {
                 id: words
-                x: card.spine + card.pad
+                x: card.pad
                 y: card.pad
                 width: parent.width - x - card.pad
                 spacing: card.big ? Theme.space12 : Theme.space8
 
+                // A ready course's name is marked in its colour; one still to come is plain grey words.
+                Mark {
+                    visible: card.ready
+                    width: Math.min(implicitWidth, parent.width)
+                    text: card.course.title || ""
+                    colour: Theme.course(card.course.colour)
+                    family: Theme.fontDisplay
+                    pixelSize: card.big ? Theme.size24 : Theme.size20
+                    spacing: Theme.tightDisplay
+                }
                 Text {
+                    visible: !card.ready
                     width: parent.width
                     text: card.course.title || ""
                     wrapMode: Text.Wrap
                     maximumLineCount: 2
                     elide: Text.ElideRight
-                    color: card.ready ? Theme.text : Theme.muted
-                    font.family: Theme.fontHeading
-                    font.weight: Font.Bold
-                    font.pixelSize: card.big ? Theme.size24 : Theme.size20
+                    color: Theme.muted
+                    font.family: Theme.fontDisplay
+                    font.weight: Font.ExtraBold
+                    font.letterSpacing: Theme.tightDisplay
+                    font.pixelSize: Theme.size20
                 }
                 ProgressBar {
                     visible: (!card.big || !mini.fits) && card.ready && card.lessons.length > 0
                     width: parent.width
                     value: card.lessons.length > 0 ? card.done / card.lessons.length : 0
                     label: card.done + " of " + card.lessons.length
+                    segments: card.lessons.length
                 }
                 // The big card shows the course's lessons in miniature instead of a bar, while they fit.
                 Row {
@@ -205,7 +205,7 @@ Item {
             }
         }
 
-        // A short mint ring round a course a new lesson has just landed in.
+        // A short green ring round a course a new lesson has just landed in.
         Rectangle {
             id: ring
             objectName: "highlight"

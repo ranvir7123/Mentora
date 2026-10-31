@@ -2,9 +2,9 @@ import QtQuick
 import Theme
 import "../components"
 
-// A course's lessons in miniature, the way its path draws them: ticked coral dots for the lessons you have
-// done, a ringed one for the lesson you are on, then quiet ones, all on one line. With many lessons the
-// dots draw closer and smaller; `fits` turns false once they would crowd each other, for a plain bar instead.
+// A course's lessons in miniature, the way its path draws them: ticked yellow boxes for the lessons you
+// have done, an outlined one for the lesson you are on, then quiet ones, all on one line. With many lessons
+// the boxes draw closer and smaller; `fits` turns false once they would crowd each other, for a plain bar instead.
 Item {
     id: root
     property var lessons: []
@@ -31,14 +31,14 @@ Item {
         return room + i * step
     }
 
-    // The line: coral up to the last lesson you can open, quiet after it.
+    // The line: yellow up to the last lesson you can open, quiet after it.
     Rectangle {
         visible: root.count > 1
         x: root.middle(0)
         width: root.middle(root.count - 1) - x
         anchors.verticalCenter: parent.verticalCenter
         height: 4
-        radius: 2
+        radius: Theme.radiusSmall
         color: Theme.surface2
     }
     Rectangle {
@@ -47,7 +47,7 @@ Item {
         width: root.middle(root.reached) - x
         anchors.verticalCenter: parent.verticalCenter
         height: 4
-        radius: 2
+        radius: Theme.radiusSmall
         color: Theme.accent
     }
 
@@ -60,7 +60,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: root.dot
             height: width
-            radius: width / 2
+            radius: Theme.radiusMedium
             color: index <= root.reached ? Theme.accent : Theme.surface2
             Glyph {
                 visible: parent.kind === "done" && root.dot >= 14
@@ -80,7 +80,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: root.dot + 8
         height: width
-        radius: width / 2
+        radius: Theme.radiusMedium + 2
         color: Theme.clear
         border.width: 2
         border.color: Theme.accent

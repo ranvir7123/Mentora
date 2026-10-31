@@ -86,7 +86,7 @@ def _sheet_backdrop(width: int, height: int, panel_w: int) -> QImage:
         p.drawText(QRectF(xs[i] + 8, 470 + (row - 1) * 40, xs[i + 1] - xs[i] - 16, 40),
                    Qt.AlignmentFlag.AlignVCenter | (Qt.AlignmentFlag.AlignRight if col == "B" else Qt.AlignmentFlag.AlignLeft),
                    text)
-    p.fillRect(width - panel_w, 0, panel_w, height, QColor("#151A2E"))
+    p.fillRect(width - panel_w, 0, panel_w, height, QColor("#1C1B19"))
     p.end()
     return img
 
@@ -130,7 +130,7 @@ def contact_sheet(paths: list[Path], out: Path, columns: int = 5, cell: tuple[in
     rows = -(-len(paths) // columns)
     sheet = QImage(gap + columns * (cell[0] + gap), gap + rows * (cell[1] + label + gap),
                    QImage.Format.Format_RGB32)
-    sheet.fill(QColor("#151A2E"))
+    sheet.fill(QColor("#1C1B19"))
     painter = QPainter(sheet)
     font = QFont("Segoe UI")
     font.setPixelSize(22)
@@ -142,9 +142,9 @@ def contact_sheet(paths: list[Path], out: Path, columns: int = 5, cell: tuple[in
                                          Qt.TransformationMode.SmoothTransformation)
         left, top = x + (cell[0] - thumb.width()) // 2, y + (cell[1] - thumb.height()) // 2
         painter.drawImage(left, top, thumb)
-        painter.setPen(QPen(QColor("#363E66"), 2))      # an edge, since most shots share the sheet's background
+        painter.setPen(QPen(QColor("#433F39"), 2))      # an edge, since most shots share the sheet's background
         painter.drawRect(left - 1, top - 1, thumb.width() + 1, thumb.height() + 1)
-        painter.setPen(QColor("#9AA3C0"))
+        painter.setPen(QColor("#ABA69C"))
         painter.drawText(QRectF(x, y + cell[1] + 8, cell[0], label - 8),
                          int(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop), path.stem)
     painter.end()

@@ -28,6 +28,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: -Theme.edge / 2      // level with the buttons' faces, not their edges
         value: root.stepCount > 0 ? Math.min(root.stepIndex, root.stepCount) / root.stepCount : 0
+        segments: root.stepCount
         label: root.stepCount > 0 ? Math.min(root.stepIndex + 1, root.stepCount) + " of " + root.stepCount : ""
     }
 

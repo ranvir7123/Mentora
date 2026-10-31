@@ -116,6 +116,9 @@ def _scroll_to(qapp, root, item):
         wheel = QWheelEvent(centre, root.mapToGlobal(centre), QPoint(0, 0), QPoint(0, -120),
                             Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase,
                             False)
+        # A real wheel stamps each turn with its time; turns that all say 0 look like one turn, and the page
+        # moves only once.
+        wheel.setTimestamp(int(time.monotonic() * 1000))
         QGuiApplication.sendEvent(root, wheel)
         _settle(qapp, 0.05)
     raise AssertionError("could not scroll the item into view")

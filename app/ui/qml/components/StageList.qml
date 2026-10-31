@@ -3,7 +3,7 @@ import QtQuick.Shapes
 import Theme
 
 // The lesson maker's live stages, top to bottom, each with a mark (waiting, working, done or failed),
-// its name in plain words and a detail line. A line joins the marks; it turns mint once a stage is done.
+// its name in plain words and a detail line. A line joins the marks; it turns green once a stage is done.
 Column {
     id: root
     property var stages: []
@@ -45,32 +45,33 @@ Column {
                 color: row.stage === "done" ? Theme.right : Theme.border
             }
 
-            // Waiting: an empty ring.
+            // Waiting: an empty box.
             Rectangle {
                 visible: row.stage === "waiting"
                 width: root.mark
                 height: root.mark
-                radius: width / 2
+                radius: Theme.radiusMedium
                 color: Theme.clear
                 border.width: 2
                 border.color: Theme.border
             }
 
-            // Working: a coral arc going round a quiet ring.
+            // Working: a yellow box with a short arc going round inside it.
             Item {
                 visible: row.stage === "running"
                 width: root.mark
                 height: root.mark
                 Rectangle {
                     anchors.fill: parent
-                    radius: width / 2
+                    radius: Theme.radiusMedium
                     color: Theme.clear
-                    border.width: 3
-                    border.color: Theme.surface2
+                    border.width: 2
+                    border.color: Theme.accent
                 }
                 Shape {
                     id: spinner
                     anchors.fill: parent
+                    anchors.margins: 5
                     preferredRendererType: Shape.CurveRenderer
                     ShapePath {
                         strokeColor: Theme.accent
@@ -78,12 +79,12 @@ Column {
                         fillColor: Theme.clear
                         capStyle: ShapePath.RoundCap
                         PathAngleArc {
-                            centerX: root.mark / 2
-                            centerY: root.mark / 2
-                            radiusX: root.mark / 2 - 1.5
-                            radiusY: root.mark / 2 - 1.5
+                            centerX: spinner.width / 2
+                            centerY: spinner.height / 2
+                            radiusX: spinner.width / 2 - 1.5
+                            radiusY: spinner.height / 2 - 1.5
                             startAngle: -90
-                            sweepAngle: 100
+                            sweepAngle: 240
                         }
                     }
                     RotationAnimator on rotation {
@@ -96,12 +97,12 @@ Column {
                 }
             }
 
-            // Done and failed: a filled circle with a tick or a cross.
+            // Done and failed: a filled box with a tick or a cross.
             Rectangle {
                 visible: row.stage === "done" || row.stage === "failed"
                 width: root.mark
                 height: root.mark
-                radius: width / 2
+                radius: Theme.radiusMedium
                 color: row.stage === "done" ? Theme.right : Theme.notYet
                 Glyph {
                     anchors.centerIn: parent

@@ -1,8 +1,8 @@
 import QtQuick
 import Theme
 
-// One lesson on a course's path: a chunky circle with its title and badge under it.
-// state "done" shows a tick, "current" its number with a soft pulsing halo, "locked" a dim lock.
+// One lesson on a course's path: a square key with its title and badge under it.
+// state "done" shows a tick, "current" its number with a pulsing outline, "locked" a dim lock.
 Item {
     id: root
     property string title: ""
@@ -15,7 +15,7 @@ Item {
 
     readonly property bool open: state !== "locked"
     readonly property real circle: 72
-    readonly property real lift: 6
+    readonly property real lift: Theme.edge + 2
     readonly property bool down: area.pressed && open
 
     implicitWidth: 136
@@ -33,7 +33,7 @@ Item {
         height: root.circle + root.lift
         anchors.horizontalCenter: parent.horizontalCenter
 
-        // The halo: a thin steady ring 8 px clear of the circle and its edge, and a copy that swells
+        // The halo: a thin steady outline 8 px clear of the key and its edge, and a copy that swells
         // and fades now and then.
         Rectangle {
             id: halo
@@ -41,7 +41,7 @@ Item {
             anchors.centerIn: parent
             width: root.circle + root.lift + 2 * (Theme.space8 + 3)
             height: width
-            radius: width / 2
+            radius: Theme.radiusLarge + Theme.space8
             color: Theme.clear
             border.width: 3
             border.color: Theme.accent
@@ -52,7 +52,7 @@ Item {
             anchors.centerIn: parent
             width: halo.width
             height: width
-            radius: width / 2
+            radius: Theme.radiusLarge + Theme.space8
             color: Theme.clear
             border.width: 3
             border.color: Theme.accent
@@ -72,7 +72,7 @@ Item {
             y: root.lift
             width: root.circle
             height: root.circle
-            radius: width / 2
+            radius: Theme.radiusLarge
             color: root.open ? Theme.accentEdge : Theme.border
         }
 
@@ -81,7 +81,7 @@ Item {
             y: root.down ? root.lift : 0
             width: root.circle
             height: root.circle
-            radius: width / 2
+            radius: Theme.radiusLarge
             color: root.open ? Theme.accent : Theme.surface2
             border.width: root.activeFocus ? 2 : 0
             border.color: Theme.text

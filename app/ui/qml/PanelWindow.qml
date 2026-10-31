@@ -203,14 +203,25 @@ Window {
                         width: parent.width
                         spacing: Theme.space4
 
+                        // Done, it is run over in yellow highlighter: the one celebration mark in a lesson.
+                        Mark {
+                            visible: root.finished
+                            width: Math.min(implicitWidth, parent.width)
+                            text: "Lesson done!"
+                            family: Theme.fontDisplay
+                            pixelSize: Theme.size24
+                            spacing: Theme.tightDisplay
+                            Accessible.role: Accessible.Heading
+                        }
                         Text {
+                            visible: !root.finished
                             width: parent.width
-                            text: root.finished ? "Lesson done!" : root.lesson.title
+                            text: root.lesson.title
                             wrapMode: Text.Wrap
                             color: Theme.text
                             font.family: Theme.fontHeading
-                            font.weight: Font.Bold
-                            font.pixelSize: root.finished ? Theme.size32 : Theme.size24
+                            font.weight: Font.ExtraBold
+                            font.pixelSize: Theme.size24
                             Accessible.role: Accessible.Heading
                         }
                         Text {
@@ -260,7 +271,7 @@ Window {
                     wrapMode: Text.Wrap
                     color: Theme.text
                     font.family: Theme.fontHeading
-                    font.weight: Font.Bold
+                    font.weight: Font.ExtraBold
                     font.pixelSize: Theme.size24
                 }
                 Text {
