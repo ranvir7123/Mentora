@@ -252,6 +252,22 @@ def test_a_clip_with_a_strange_link_offers_no_button(panel, qapp):
                                    if b.metaObject().className().startswith("ChunkyButton") and _shown(b)]
 
 
+def test_a_saved_clip_that_will_not_play_says_so_not_that_it_is_missing(panel, qapp, tmp_path):
+    from app.ui.demo_backend import _lesson, _step_view
+    backend, _, root = panel("lesson_clip_missing")
+    step = _step_view(1, clip="missing")
+    step["clip"] = {**step["clip"], "state": "available", "file": str(tmp_path / "clip.mp4")}
+    backend._publish(lesson=_lesson(1, step=step))
+    _settle(qapp, 0.3)
+    player = next(i for i in _items(root.contentItem()) if i.metaObject().className().startswith("ClipPlayer"))
+    player.setProperty("failed", True)          # what the player sets when the saved copy will not play
+    _settle(qapp, 0.1)
+    texts = _texts(root)
+    assert "This step's video won't play\non this computer." in texts
+    assert "This step's video isn't saved\non this computer." not in texts
+    _button(root, "Get the video")
+
+
 def test_the_clip_button_opens_and_hides_the_clip(panel, qapp):
     backend, _, root = panel("lesson_clip_missing")
     _click(qapp, root, _button(root, "Hide the clip"))

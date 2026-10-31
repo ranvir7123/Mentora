@@ -86,7 +86,8 @@ Item {
 
             Text {
                 width: parent.width
-                text: "This step's video isn't saved\non this computer."      // two even lines
+                text: root.failed ? "This step's video won't play\non this computer."  // saved, but broken
+                                  : "This step's video isn't saved\non this computer."  // two even lines
                 wrapMode: Text.Wrap
                 horizontalAlignment: Text.AlignHCenter
                 color: Theme.text
