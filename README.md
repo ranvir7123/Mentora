@@ -48,6 +48,11 @@ mascot on empty cells beside the first step's cells. No lesson is proven yet.
   ([tools/secret_scan.py](tools/secret_scan.py), wired in by `git config core.hooksPath tools/hooks`).
 - The Meta key is read from the `META_API_KEY` environment variable, or from the user's saved Windows
   settings when the program was started before the key was saved ([app/meta/key.py](app/meta/key.py)).
+- A switch for showing Mentora without a Meta key ([app/ai.py](app/ai.py), [app/claude/](app/claude/)):
+  with `MENTORA_AI=claude`, the Ask box, the tips and the pointing fallback ask Claude (Opus 5.5) instead of
+  Muse Spark, using the `ANTHROPIC_API_KEY` key, with its own call log and a $20 spending stop. Meta stays
+  the default, and the lesson factory always uses Meta. One real Ask box question has been answered by
+  Claude (in 4.4 s); the pointing fallback on Claude has run only in tests.
 
 ## Built during the hackathon (27 Oct - 4 Nov 2026)
 
@@ -90,4 +95,10 @@ Start Mentora:
 
 ```powershell
 .venv\Scripts\python -m app
+```
+
+To have Claude answer the Ask box and tips instead of Meta, save `ANTHROPIC_API_KEY` the same way, then:
+
+```powershell
+$env:MENTORA_AI = "claude"; .venv\Scripts\python -m app
 ```

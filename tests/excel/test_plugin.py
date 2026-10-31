@@ -64,8 +64,8 @@ def test_with_a_meta_key_every_lesson_can_ask_muse_spark_where_a_button_is(monke
     made = []
     meta = FakeMeta(box(250, 100, 300, 200))
     monkeypatch.setattr(plugin, "ExcelSession", FakeSession)
-    monkeypatch.setattr(plugin, "find_key", lambda: ("a key", "environment"))
-    monkeypatch.setattr(plugin, "MetaClient", lambda **kw: made.append(kw) or meta)
+    monkeypatch.setattr(plugin, "find_key", lambda name: ("a key", "environment"))
+    monkeypatch.setattr(plugin, "make_client", lambda **kw: made.append(kw) or meta)
     p = ExcelPlugin()
     first, second = open_budget(p, tmp_path), open_budget(p, tmp_path)
     assert made == [{"timeout_s": VISION_TIMEOUT_S}]                 # one client, shared by every lesson
@@ -78,7 +78,7 @@ def test_with_a_meta_key_every_lesson_can_ask_muse_spark_where_a_button_is(monke
 def test_with_no_meta_key_no_lesson_asks_muse_spark(monkeypatch, tmp_path):
     made = []
     monkeypatch.setattr(plugin, "ExcelSession", FakeSession)
-    monkeypatch.setattr(plugin, "MetaClient", lambda **kw: made.append(kw))
+    monkeypatch.setattr(plugin, "make_client", lambda **kw: made.append(kw))
     assert open_budget(ExcelPlugin(), tmp_path).fallback is None
     assert made == []
 
@@ -86,8 +86,8 @@ def test_with_no_meta_key_no_lesson_asks_muse_spark(monkeypatch, tmp_path):
 def test_a_key_saved_while_the_program_runs_is_used_from_the_next_lesson(monkeypatch, tmp_path):
     keys = iter([(None, "missing"), ("a key", "saved user settings")])
     monkeypatch.setattr(plugin, "ExcelSession", FakeSession)
-    monkeypatch.setattr(plugin, "find_key", lambda: next(keys))
-    monkeypatch.setattr(plugin, "MetaClient", lambda **kw: FakeMeta())
+    monkeypatch.setattr(plugin, "find_key", lambda name: next(keys))
+    monkeypatch.setattr(plugin, "make_client", lambda **kw: FakeMeta())
     p = ExcelPlugin()
     assert open_budget(p, tmp_path).fallback is None
     assert open_budget(p, tmp_path).fallback is not None

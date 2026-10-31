@@ -4,7 +4,8 @@ The core program only sees this object. The check menu (checks.py) and the opera
 are what Muse Spark may write into a lesson; the target kinds are what locate.py can point at.
 
 When a Meta key is saved, every session it opens can ask Muse Spark where a ribbon button is on a
-picture of Excel (vision.py), for the times UI Automation cannot find it. With no key it never asks.
+picture of Excel (vision.py), for the times UI Automation cannot find it; with MENTORA_AI=claude it asks
+Claude instead, when a Claude key is saved (app/ai.py). With no key it never asks.
 The key is looked for at each lesson, so one saved while the program runs counts from the next lesson.
 """
 from __future__ import annotations
@@ -17,8 +18,8 @@ from app.excel.checks import CHECKS
 from app.excel.ops import OPS
 from app.excel.session import ExcelSession
 from app.excel.starter import validate_starter
+from app.ai import key_name, make_client
 from app.excel.vision import point_fallback
-from app.meta.client import MetaClient
 from app.meta.key import find_key
 
 VISION_TIMEOUT_S = 30.0            # an answer about where a button is, later than this, is no use
@@ -47,6 +48,6 @@ class ExcelPlugin:
         return session
 
     def _meta_client(self) -> Any | None:
-        if self._meta is None and find_key()[0] is not None:
-            self._meta = MetaClient(timeout_s=VISION_TIMEOUT_S)
+        if self._meta is None and find_key(key_name())[0] is not None:
+            self._meta = make_client(timeout_s=VISION_TIMEOUT_S)
         return self._meta
