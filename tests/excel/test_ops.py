@@ -80,9 +80,9 @@ def test_chart_sort_filter_rename_and_select():
     assert chart[2:] == [f"{SHEET}.Shapes.AddChart2(-1, 5, 322.0, 20.0, 360, 216).Chart.HasTitle = True",
                          f"{SHEET}.Shapes.AddChart2(-1, 5, 322.0, 20.0, 360, 216).Chart.ChartTitle.Text = 'Spending'"]
     assert log_of("sort", SAMPLES["sort"]) == \
-        [f"{SHEET}.Range('A1:C6').Sort(Key1={SHEET}.Range('B1'), Order1=2, Header=1)"]
+        [f"{SHEET}.Range('A1:C6').Sort(Key1={SHEET}.Range('B1'), Order1=2, Header=1, Orientation=1)"]
     assert log_of("sort", {"range": "A2:C6", "column": "a", "order": "asc", "header": False}) == \
-        ["wb.ActiveSheet.Range('A2:C6').Sort(Key1=wb.ActiveSheet.Range('A2'), Order1=1, Header=2)"]
+        ["wb.ActiveSheet.Range('A2:C6').Sort(Key1=wb.ActiveSheet.Range('A2'), Order1=1, Header=2, Orientation=1)"]
     assert log_of("filter", SAMPLES["filter"]) == [f"{SHEET}.Range('A1:C6').AutoFilter(1, '=Food')"]
     assert log_of("filter", {"range": "B1:C6", "column": "C", "criteria": ">0.1"}) == \
         ["wb.ActiveSheet.Range('B1:C6').AutoFilter(2, '>0.1')"]
