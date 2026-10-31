@@ -215,7 +215,7 @@ def test_keys_held_with_any_action_are_checked():
 def test_the_window_menu_and_the_security_screen_are_refused_but_the_apps_own_keys_are_not():
     for keys in (["alt", "space"], ["ctrl", "alt", "delete"], ["ctrl", "shift", "esc"], ["win", "r"]):
         assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse") == (False, tester.LEAVES_NOTE)
-    for keys in (["alt", "enter"], ["shift", "f10"], ["apps"], ["f2"], ["ctrl", "shift", "enter"]):
+    for keys in (["alt", "enter"], ["shift", "f10"], ["apps"], ["ctrl", "shift", "enter"]):
         assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse") == (True, "")   # Excel's own
 
 
@@ -553,6 +553,45 @@ def test_the_agent_may_not_open_the_ribbon_key_tips_with_a_bare_alt(tmp_path):
     assert any(line.startswith("refused keypress alt") and line.endswith(tester.ALT_NOTE) for line in lines)
 
 
+def test_several_keys_pressed_together_are_checked_as_the_text_they_spell():
+    excel = Excel()
+    # Keys held together type their characters in order; Shift turns "9" into "(", so the call is complete.
+    press = {"type": "keypress", "keys": list("webservice") + ["shift", "9"]}
+    assert tester.allowed(press, APP, "mouse", plugin=excel, typed="=") \
+        == (False, "That text uses WEBSERVICE, which a lesson may not use.")
+    assert tester.allowed({"type": "keypress", "keys": list("sum")}, APP, "mouse", plugin=excel, typed="=") == (True, "")
+
+
+def test_ribbon_keys_held_on_a_pointer_action_are_refused_like_a_bare_press():
+    assert tester.allowed({"type": "click", "x": 5, "y": 5, "keys": ["alt"]}, APP, "mouse") == (False, tester.ALT_NOTE)
+    assert tester.allowed({"type": "click", "x": 5, "y": 5, "keys": ["f10"]}, APP, "mouse") == (False, tester.ALT_NOTE)
+
+
+def test_only_plain_text_or_enter_escape_may_follow_while_a_formula_is_being_typed():
+    excel = Excel()
+    # A control key or a chord mid-formula (undo, toggle $ refs, the function-name box) could edit the formula
+    # where the record cannot see, so none is allowed through; only plain text keys, Enter and Escape are.
+    for keys in (["ctrl", "z"], ["f4"], ["shift", "f3"], ["ctrl", "a"]):
+        assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse", plugin=excel, typed="=SUM(A1") \
+            == (False, tester.FORMULA_NOTE), keys
+    for keys in (["enter"], ["esc"]):          # Enter and Escape still finish or cancel the formula
+        assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse", plugin=excel, typed="=SUM(A1") \
+            == (True, ""), keys
+
+
+def test_reopening_a_cell_edit_or_pasting_into_it_is_refused():
+    excel = Excel()
+    # F2 or a double-click re-opens the edit on whatever the cell already holds; Ctrl+V and Shift+Insert paste
+    # clipboard text in. Either way text the record never saw would reach the cell, so all are refused, whether
+    # or not a formula is open, so a banned value cannot be built by extending an earlier one.
+    for action in ({"type": "keypress", "keys": ["f2"]},
+                   {"type": "keypress", "keys": ["ctrl", "v"]},
+                   {"type": "keypress", "keys": ["shift", "insert"]},
+                   {"type": "double_click", "x": 5, "y": 5}):
+        assert tester.allowed(action, APP, "mouse", plugin=excel) == (False, tester.EDIT_NOTE), action
+        assert tester.allowed(action, APP, "mouse", plugin=excel, typed="=SUM(A1") == (False, tester.EDIT_NOTE), action
+
+
 def test_a_formula_typed_one_key_at_a_time_is_caught(tmp_path):
     # The agent presses letter and symbol keys one by one to build a banned function, dodging type actions.
     letters = [{"type": "keypress", "keys": [k]} for k in "=webservice"]
@@ -577,13 +616,12 @@ def test_keys_that_produce_text_are_checked_together_with_what_came_before():
 
 def test_the_cursor_cannot_move_or_click_inside_a_formula_being_typed():
     excel = Excel()
-    for keys in (["left"], ["right"], ["home"], ["end"], ["backspace"], ["delete"], ["f2"], ["alt", "enter"]):
+    for keys in (["left"], ["right"], ["home"], ["end"], ["backspace"], ["delete"], ["alt", "enter"]):
         assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse", plugin=excel, typed="=SUM(A1") \
             == (False, tester.FORMULA_NOTE), keys
     assert tester.allowed(click(5, 5), APP, "mouse", plugin=excel, typed="=SUM(A1") == (False, tester.FORMULA_NOTE)
     # Out of a formula those same keys just move between cells, so they stay allowed.
     assert tester.allowed({"type": "keypress", "keys": ["left"]}, APP, "mouse", plugin=excel) == (True, "")
-    assert tester.allowed({"type": "keypress", "keys": ["f2"]}, APP, "mouse", plugin=excel) == (True, "")
     assert tester.allowed(click(5, 5), APP, "mouse", plugin=excel) == (True, "")
 
 
