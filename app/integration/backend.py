@@ -851,10 +851,9 @@ class Backend:
             o = self._open
             if o is None or o.run is None or o.cheering is not None:
                 return
-            index = o.run.index
-            if index >= len(o.lesson.steps) and o.shown in o.run.changed:
+            index = self._helped(o)
+            if index != o.run.index:
                 # Every step done, but the one shown came undone: its own hints, after those seen before.
-                index = o.shown
                 seen, hints = o.hints.get(index, []), o.lesson.steps[index].hints
                 hint = hints[len(seen)] if len(seen) < len(hints) else None
             else:
@@ -863,6 +862,14 @@ class Backend:
                 return
             o.hints.setdefault(index, []).append(hint)
             self._publish_lesson()
+
+    @staticmethod
+    def _helped(o: _Open) -> int:
+        """The step a hint or a question is about: the one the run is on, or, with every step done, the one
+        shown that came undone. Called with the lock held."""
+        if o.run.index >= len(o.lesson.steps) and o.shown in o.run.changed:
+            return o.shown
+        return o.run.index
 
     def watch_clip(self) -> None:
         """The learner opened the clip: look again for the video, which may have been saved since."""
@@ -887,7 +894,7 @@ class Backend:
         with self._lock:
             if self._open is not o or o.asked != asked:
                 return
-            index = min(o.run.index, len(o.lesson.steps) - 1)
+            index = min(self._helped(o), len(o.lesson.steps) - 1)
             step = o.lesson.steps[index]
             context = {"instruction": step.instruction, "why": step.why, "hints": list(step.hints),
                        "hints_shown": len(o.hints.get(index, [])), "verdict": o.verdict,

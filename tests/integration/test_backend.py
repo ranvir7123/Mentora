@@ -906,6 +906,21 @@ def test_hint_helps_with_the_step_that_came_undone(world):
     assert (step["hints"], step["hintsLeft"]) == (["Find k0."], 2)
 
 
+def test_ask_is_about_the_step_that_came_undone(world):
+    world.open()
+    world.learner_sets("k0", 1)
+    world.run_later()
+    world.learner_sets("k0", 3)
+    world.learner_sets("k1", 2)
+    assert world.backend.lesson()["step"]["index"] == 0
+    world.backend.next_hint()
+    world.backend.ask("What do I fix?")
+    world.idle()
+    _, context = world.coach.asked[0]
+    assert context["instruction"] == "Set k0 to 1." and context["hints_shown"] == 1
+    assert context["hints"] == ["Find k0.", "k0 needs a value.", "Set k0 to 1."]
+
+
 def test_quitting_does_not_wait_for_an_answer_from_the_coach(world):
     world.coach.gate = threading.Event()
     world.open()
