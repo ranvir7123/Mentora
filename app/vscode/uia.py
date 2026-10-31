@@ -18,6 +18,8 @@ What each kind is (probes/vscode_session.py prints what each one finds in the re
   hidden: where a file still to make is made, as its row only exists once it is made.
 - terminal: the terminal's text area (class "xterm").
 - run_button: the Python add-on's "Run Python File" button, when the learner has it.
+- trust: while the folder is not trusted, the trust dialog's "Trust Folder & Continue" button, or
+  the "Restricted Mode" item in the status bar once that dialog was cancelled.
 """
 from __future__ import annotations
 
@@ -37,6 +39,8 @@ NAME, CLASS_NAME, CONTROL_TYPE, RECT, OFFSCREEN = 30005, 30012, 30003, 30001, 30
 CONTROL_TYPES = {50000: "button", 50004: "edit", 50023: "tree", 50024: "tree_item", 50025: "custom",
                  50026: "group", 50030: "document", 50033: "pane", 50008: "list", 50020: "text"}
 FILES_EXPLORER = "Files Explorer"
+TRUST_BUTTON = "Trust Folder & Continue"         # the "Do you trust the authors" dialog's button
+RESTRICTED_MODE = "Restricted Mode"              # the status bar item left once that dialog is cancelled
 
 
 @dataclass(frozen=True)
@@ -84,6 +88,10 @@ def pick(elements: Iterable[Element], kind: str, ref: str) -> Rect | None:
         buttons = [e for e in shown if e.control == "button" and e.name.startswith("New File")
                    and side.x <= e.rect.x + e.rect.w / 2 <= side.x + side.w]
         return buttons[0].rect if buttons else side
+    if kind == "trust":
+        buttons = [e for e in shown if e.control == "button" and e.name.startswith(TRUST_BUTTON)]
+        status = [e for e in shown if e.control == "button" and e.name.startswith(RESTRICTED_MODE)]
+        return (buttons or status)[0].rect if buttons or status else None
     if kind == "explorer_item":
         trees = [e for e in shown if e.control == "tree" and e.name == FILES_EXPLORER]
         if not trees:

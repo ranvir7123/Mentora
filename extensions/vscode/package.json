@@ -2,7 +2,7 @@
   "name": "mentora",
   "displayName": "Mentora lessons",
   "description": "Lets the Mentora program see your lesson's files, problems and runs, so it can tick your steps.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "mentora",
   "license": "UNLICENSED",
   "private": true,

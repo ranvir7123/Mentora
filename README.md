@@ -14,14 +14,16 @@ and the build plans are in [docs/superpowers/plans/](docs/superpowers/plans/).
 
 Each part below is built and tested, and the program now joins them. In real Excel, clicking the budget
 lesson on the home screen opens it with Excel in front, the lesson panel docked beside it, and the
-mascot on empty cells beside the first step's cells. No lesson is proven yet.
+mascot on empty cells beside the first step's cells. One lesson is proven so far: "Your first Python
+program", in VS Code.
 
 - The program ([app/main.py](app/main.py), [app/integration/](app/integration/)): `python -m app` opens
   the home screen with your streak, points and courses. Opening a lesson hides home, docks the lesson
   panel on the right and puts the app beside it. Your progress stays on your computer, in
-  `%LOCALAPPDATA%\mentora\`. Only lessons that passed their proof and test are on the shelf, so today the
-  shelf is empty unless the developer switch `MENTORA_SHOW_UNPROVEN=1` is set, which shows the others
-  marked "not proven yet". For a cell step, the mascot and its words stay on the sheet's empty cells,
+  `%LOCALAPPDATA%\mentora\`. Only lessons that passed their proof and test are on the shelf (a VS Code
+  lesson skips the test, so its proof is enough), so today the shelf holds only "Your first Python
+  program" unless the developer switch `MENTORA_SHOW_UNPROVEN=1` is set, which shows the others marked
+  "not proven yet". For a cell step, the mascot and its words stay on the sheet's empty cells,
   off Excel's ribbon, formula bar and Name Box, so the button a step needs stays in view; only when the
   visible sheet has no room for them do they go elsewhere on the screen. Tried in real Excel on the
   budget lesson's first step; its other steps are checked by tests only.
@@ -41,7 +43,13 @@ mascot on empty cells beside the first step's cells. No lesson is proven yet.
   live service yet. The agent tests Excel lessons only: in VS Code it could reach the terminal, so it never
   tests VS Code lessons.
 - The VS Code plug-in ([app/vscode/](app/vscode/)) with its add-on inside VS Code
-  ([extensions/vscode/](extensions/vscode/)).
+  ([extensions/vscode/](extensions/vscode/)). Tried in real VS Code on 31 Oct 2026: clicking "Your first
+  Python program" on the home screen opens VS Code beside the lesson panel. Until the lesson's folder is
+  trusted (VS Code asks once per folder), the mascot points at VS Code's "Trust Folder & Continue" button;
+  after that, on step 1, at the Explorer's New File button. Steps 1 to 5 ticked, and a wrong file name
+  showed its "Not yet", when a script did each step through the add-on. Not yet tried in real VS Code:
+  the run step (6) with the folder trusted, steps done by hand, and "Your first app with Meta's AI",
+  which needs a Meta key.
 - Three hand-written lessons ([lessons/](lessons/)): a monthly budget in Excel, and two beginner
   Python lessons in VS Code.
 - A guard that refuses any commit or push holding an API key or a `.env` file

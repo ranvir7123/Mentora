@@ -15,5 +15,5 @@ Build and install (from this folder):
 npm install
 npm test
 npm run package
-code --install-extension mentora-0.1.0.vsix
+code --install-extension mentora-0.1.1.vsix
 ```

@@ -307,6 +307,17 @@
   ],
   "made_by": "hand",
   "edited_by_hand": false,
-  "proof": null,
-  "test": null
+  "proof": {
+    "passed": true,
+    "at": "2026-10-31T07:34:00+00:00",
+    "dropped": [],
+    "notes": []
+  },
+  "test": {
+    "passed": false,
+    "at": "2026-10-31T07:34:37+00:00",
+    "mode": "skipped",
+    "runs": 0,
+    "passes": 0
+  }
 }

@@ -17,7 +17,7 @@ import subprocess
 from pathlib import Path
 
 ADDON = "mentora.mentora"
-ADDON_VERSION = "0.1.0"          # extensions/vscode/package.json's version; a test keeps them in step
+ADDON_VERSION = "0.1.1"          # extensions/vscode/package.json's version; a test keeps them in step
 INSTALL_TIMEOUT_S = 120.0
 NOT_INSTALLED = "VS Code isn't installed. Get it from code.visualstudio.com, then open the lesson again."
 

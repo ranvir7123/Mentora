@@ -62,6 +62,7 @@ SETTINGS = {
     "terminal.integrated.enablePersistentSessions": False,
     "terminal.integrated.hideOnStartup": "always",
     "code-runner.showRunIconInEditorTitleMenu": False,  # its Run Code runs where input() can't be answered
+    "workbench.view.alwaysShowHeaderActions": True,     # else New File shows only while the mouse is over it
 }
 
 _ENDED = ("closed", "stopped")
@@ -479,6 +480,10 @@ class VsCodeSession:
         hwnd = self._window
         if not hwnd or not self._host.is_window(hwnd):
             return None
+        # Until the folder is trusted, VS Code ignores its settings and runs are not seen: trust comes first.
+        trust = self._host.find(hwnd, "trust", "")
+        if trust is not None:
+            return Spot(trust, "Trust this folder first")
         if target.kind == "editor_line":
             return self._locate_line(hwnd, target.ref)
         if target.kind in TARGET_KINDS:
