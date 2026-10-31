@@ -65,7 +65,8 @@ ALT_NOTE = "That key opens the ribbon's shortcuts, which a lesson never needs."
 FORMULA_NOTE = "Type the formula straight through, without moving the cursor or clicking inside it."
 EDIT_NOTE = "Type the whole value into the cell yourself, rather than re-opening its edit or pasting into it."
 EDITING_NOTE = "Finish typing the value and press Enter; don't move the cursor while a cell is half-typed."
-MIXED_NOTE = "Type text on its own, and press a shortcut with its Ctrl or Alt first; don't mix the two in one press."
+HELD_NOTE = "Hold only Ctrl or Shift during a click; type any text, or press other keys, on their own."
+MIXED_NOTE ="Type text on its own, and press a shortcut with its Ctrl or Alt first; don't mix the two in one press."
 
 Mode = Literal["mouse", "keyboard"]
 _BUTTONS = {"left", "right", "wheel", "middle"}
@@ -76,6 +77,7 @@ _ARROWS = {vk_for(k) for k in ("left", "right", "up", "down")}
 _TAB, _ALT, _ENTER, _ESC, _F10, _F2, _SHIFT = (vk_for(k)
                                                for k in ("tab", "alt", "enter", "esc", "f10", "f2", "shift"))
 _MODS = {vk_for(k) for k in ("ctrl", "alt", "win")}       # a key with one of these held is a shortcut, not text
+_HELD_OK = _MODS | {_SHIFT}                                # the only keys a click or drag may hold down
 # Re-opening a cell's edit on what it already holds (F2 or a double-click), or pasting into it (Ctrl+V,
 # Shift+Insert), would put text into the cell the running record never saw: the record only follows a cell
 # typed from empty. So these are refused outright and the agent types the whole value in instead.
@@ -228,6 +230,8 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin |
         if typed:                                            # a value is half-typed: a click mid-formula would
             return False, FORMULA_NOTE if in_formula else EDITING_NOTE   # add a cell reference, and either way
             #                                                 it lands ambiguously; finish with Enter first
+        if not codes <= _HELD_OK:                            # held keys are really pressed: a character would
+            return False, HELD_NOTE                          # type unchecked, Enter or an arrow act mid-click
         if action.get("button", "left") not in _BUTTONS:
             return False, BUTTON_NOTE
         points = action.get("path") if kind == "drag" else [action]

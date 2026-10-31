@@ -576,6 +576,18 @@ def test_a_key_press_may_not_mix_typed_characters_with_other_keys():
         assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse", plugin=excel) == (True, ""), keys
 
 
+def test_only_ctrl_shift_alt_or_win_may_be_held_down_during_a_click():
+    excel = Excel()
+    # Keys held around a click are really pressed, so a character held there types into the cell unchecked,
+    # and Enter or an arrow would act mid-click. A ctrl-click or shift-click needs only the modifier.
+    for keys in (list("www.e"), ["enter"], ["ctrl", "a"], ["down"]):
+        assert tester.allowed({"type": "click", "x": 5, "y": 5, "keys": keys}, APP, "mouse", plugin=excel) \
+            == (False, tester.HELD_NOTE), keys
+    for keys in (["ctrl"], ["shift"], ["ctrl", "shift"]):
+        assert tester.allowed({"type": "click", "x": 5, "y": 5, "keys": keys}, APP, "mouse", plugin=excel) \
+            == (True, ""), keys
+
+
 def test_shift_changes_only_the_keys_pressed_after_it():
     excel = Excel()
     # The hands press keys down in order, so "9" pressed before Shift is held just types "9", not "(". The
