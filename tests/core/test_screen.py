@@ -20,7 +20,7 @@ def test_cue_names_are_fixed():
 
 def test_the_backend_can_point_at_a_changed_step_clear_the_maker_and_look_for_the_key():
     from app.core.screen import ScreenBackend, StepView
-    for action in ("go_to_step", "dismiss_factory", "key_setup_copied"):
+    for action in ("go_to_step", "dismiss_factory", "key_setup_copied", "practise"):
         assert hasattr(ScreenBackend, action), action
     assert {"appName", "closedReason"} <= set(LessonState.__annotations__)
     assert "note" in StepView.__annotations__

@@ -23,6 +23,9 @@ What the learner sees, step by step:
 - The app closed: the panel says so, with the app's own reason when it gives one, and Reopen carries on
   from the saved work copy, ticking the steps already done without a sound.
 - Ask: the coach answers in words only. Only a check ever ticks a step.
+- Practise this again, from "Your common mistakes" on home: the lesson opens on a fresh copy, the program
+  does the steps before that one for the learner (the same operations that proved the lesson), and the
+  lesson carries on from that step. Those steps earn nothing and leave nothing in the attempt log.
 """
 from __future__ import annotations
 
@@ -40,6 +43,7 @@ from urllib.parse import parse_qs, urlsplit
 from app.coach.coach import CoachUnavailable
 from app.core.lesson import Lesson, Step
 from app.core.library import Library
+from app.core.mistakes import common_mistakes
 from app.core.plugin import AppPlugin, AppSession
 from app.core.progress import Progress
 from app.core.runner import LessonDone, LessonRun, NotYet, StepPassed
@@ -55,6 +59,7 @@ CHEER_SECONDS = 1.5              # the mascot cheers on a right step this long b
 FLIGHT_SECONDS = 0.6             # a flight to the target takes this long; then the mascot watches
 KEY_CHECK_SECONDS = 2.0          # after the key's setup line is copied, look for the key this often
 KEY_CHECKS = 300                 # for up to 10 minutes
+SETUP_SECONDS = 30.0             # Practise this again: the most one step done for the learner may take
 
 STAGES = ("download", "read", "write", "prove", "test", "publish")
 _STAGE_STATES = ("waiting", "running", "done", "failed")
@@ -214,6 +219,8 @@ class _Open:
     pointer: dict = field(default_factory=lambda: copy.deepcopy(HIDDEN_POINTER))
     streak_before: int = 0           # the days in a row when the lesson opened, so the celebration ticks
                                      # the streak up only when this lesson made today count
+    practise: int | None = None      # the step to practise: open a fresh copy and do the steps before it
+    held: bool = False               # snapshots are dropped while those steps are being done
 
 
 class Backend:
@@ -403,8 +410,12 @@ class Backend:
 
     def _home_view(self) -> dict:
         courses = []
+        shelf: dict[str, Lesson] = {}
+        colours: dict[str, str] = {}
         for info in self._library.courses():
             lessons = self._library.lessons(info.id)
+            for lesson in lessons:
+                shelf[lesson.id], colours[lesson.id] = lesson, info.colour
             states = self._card_states(lessons)
             credits: list[str] = []
             for lesson in lessons:
@@ -426,6 +437,8 @@ class Backend:
             "continueCard": self._continue_card(),
             "courses": courses,
             "tips": dict(self._tips),
+            "mistakes": [{**card, "colour": colours[card["lessonId"]]}
+                         for card in common_mistakes(self._progress.attempts(), shelf)],
             "factory": copy.deepcopy(self._factory),
             "meta": self._meta,
             "muted": self._muted,
@@ -465,9 +478,16 @@ class Backend:
     # Opening and closing a lesson.
 
     def open_lesson(self, lesson_id: str) -> None:
+        self._open_lesson(lesson_id, None)
+
+    def practise(self, lesson_id: str, step_index: int) -> None:
+        """Opens the lesson afresh at this step, with the steps before it done for the learner."""
+        self._open_lesson(lesson_id, step_index)
+
+    def _open_lesson(self, lesson_id: str, practise: int | None) -> None:
         with self._lock:
             o = self._open
-            if o is not None and o.lesson.id == lesson_id:
+            if o is not None and o.lesson.id == lesson_id and practise is None:
                 if o.app_state == "closed":
                     self.reopen_app()
                 return
@@ -483,10 +503,13 @@ class Backend:
             if self._locked(lesson):
                 log.warning("lesson %s is locked; not opened", lesson_id)
                 return
+            if practise is not None and not 0 <= practise < len(lesson.steps):
+                log.warning("lesson %s has no step %s to practise", lesson_id, practise)
+                return
             old = self._detach(self._open)
             self._gen += 1
             o = self._open = _Open(lesson=lesson, plugin=plugin, gen=self._gen,
-                                   streak_before=self._progress.streak())
+                                   streak_before=self._progress.streak(), practise=practise)
             resume = not self._progress.lesson_state(lesson_id).done
             self._publish_lesson()
             self._publish_pointer()
@@ -561,8 +584,11 @@ class Backend:
             if not self._current(o, gen):
                 return
             o.run = LessonRun(o.lesson, o.plugin.checks)
+            practise = o.practise
+            if practise is not None:             # a fresh copy; the steps before are done for the learner
+                resume = False
             o.logged, o.hints, o.resuming, o.cheering, o.goto, o.pointing = 0, {}, resume, None, None, None
-            o.complete, o.snap = None, None
+            o.complete, o.snap, o.held = None, None, bool(practise)
         self._progress.opened(o.lesson.id)
         try:
             session = o.plugin.open(o.lesson, self._workdir / o.lesson.id, visible=True, resume=resume,
@@ -585,8 +611,39 @@ class Backend:
             self._close_app(session)
             return
         self._place(session, then=lambda: self._from_app(o, gen, self._bring_forward, session))
-        if not resume:                           # a resumed lesson points once its first snapshot says where
+        if practise:
+            self._set_up(o, gen, session, practise)
+        elif not resume:                         # a resumed lesson points once its first snapshot says where
             self._follow(o, gen)
+
+    def _set_up(self, o: _Open, gen: int, session: AppSession, practise: int) -> None:
+        """Does the steps before `practise` in the app, then carries on from the app as it is after them.
+        Snapshots sent while they were being done wait in the queue ahead of that one, and are dropped
+        because `held` is still set."""
+        try:
+            for step in o.lesson.steps[:practise]:
+                session.perform(step.replay).result(timeout=SETUP_SECONDS)
+            snap = session.read_now().result(timeout=SETUP_SECONDS)
+        except Exception:
+            log.exception("%s could not do the steps before step %s of %s", o.plugin.title, practise + 1,
+                          o.lesson.id)
+            with self._lock:
+                if not self._current(o, gen):
+                    return
+                o.session, o.held = None, False
+                o.app_state = "closed"
+                o.closed_reason = f"{o.plugin.title} couldn't set up step {practise + 1}"
+                self._publish_lesson()
+            self._close_app(session)
+            return
+        self._from_app(o, gen, self._practise_ready, snap)
+
+    def _practise_ready(self, o: _Open, gen: int, snap: Any) -> None:
+        with self._lock:
+            if not self._current(o, gen):
+                return
+            o.held, o.resuming, o.practise = False, True, None   # from now on, Reopen uses the saved copy
+        self._on_snapshot(o, gen, snap)
 
     def _place(self, session: AppSession, then: Callable[[], None] | None = None) -> None:
         """Puts the app's window beside the panel; `then()` runs once it is there, or could not be moved."""
@@ -648,7 +705,7 @@ class Backend:
 
     def _on_snapshot(self, o: _Open, gen: int, snap: Any) -> None:
         with self._lock:
-            if not self._current(o, gen) or o.run is None:
+            if not self._current(o, gen) or o.run is None or o.held:
                 return
             o.snap = snap
             if o.resuming:

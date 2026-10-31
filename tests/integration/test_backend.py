@@ -1049,3 +1049,74 @@ def test_the_ask_to_bring_the_app_forward_lapses_when_its_lesson_closes(world):
     assert not still()
     world.open()
     assert not still() and world.stills[1]()
+
+
+# Your common mistakes, and practising one again.
+
+def test_home_lists_a_step_that_took_more_than_one_try_with_a_tip(world):
+    assert world.backend.home()["mistakes"] == []
+    world.open()
+    world.learner_sets("k0", 7)                      # not yet
+    world.learner_sets("k0", 1)
+    [card] = world.backend.home()["mistakes"]
+    assert card == {"lessonId": "two-keys", "lessonTitle": "Two keys", "stepIndex": 0,
+                    "instruction": "Set k0 to 1.", "kind": "", "tries": 2, "times": 1,
+                    "tip": card["tip"], "fixed": False, "colour": "courseExcel"}
+    assert card["tip"]
+
+
+def test_practise_opens_the_lesson_afresh_with_the_steps_before_done_for_you(tmp_path):
+    w = World(tmp_path, lessons={"three": {"title": "Three keys", "steps": 3}})
+    try:
+        w.backend.practise("three", 2)
+        w.idle()
+        assert w.plugin.opens[-1]["resume"] is False             # a fresh copy, not the saved one
+        assert w.plugin.session.read_now().result() == {"k0": 1, "k1": 2}
+        lesson = w.backend.lesson()
+        assert (lesson["open"], lesson["appState"], lesson["stepIndex"]) == (True, "ready", 2)
+        assert lesson["points"] == 0 and lesson["banner"] is None and lesson["changed"] == []
+        assert "right" not in w.cues() and w.progress.attempts() == []   # the steps done for you count nothing
+        assert w.plugin.session.watching.ref == "k2"
+        w.learner_sets("k2", 9)
+        w.learner_sets("k2", 3)
+        assert w.backend.lesson()["complete"] is not None
+        assert [r.step_id for r in w.progress.attempts()] == ["three/s2"]
+    finally:
+        w.backend.shutdown()
+
+
+def test_practising_a_step_of_the_open_lesson_starts_it_again_at_that_step(world):
+    world.open()
+    world.learner_sets("k0", 1)
+    world.run_later()
+    world.backend.practise("two-keys", 0)
+    world.idle()
+    assert len(world.plugin.sessions) == 2 and world.plugin.sessions[0].closed
+    assert world.plugin.opens[-1]["resume"] is False
+    assert world.backend.lesson()["stepIndex"] == 0
+
+
+def test_a_step_that_cannot_be_set_up_says_so_and_can_be_tried_again(world, monkeypatch):
+    from app.core import fake_plugin
+    refused = fake_plugin._done(error=RuntimeError("the fake app refused set"))
+    monkeypatch.setattr(FakeSession, "perform", lambda self, op: refused)
+    world.backend.practise("two-keys", 1)
+    world.idle()
+    lesson = world.backend.lesson()
+    assert (lesson["appState"], lesson["closedReason"]) == ("closed", "Fake app couldn't set up step 2")
+    assert world.plugin.session.closed
+    monkeypatch.undo()
+    world.backend.reopen_app()
+    world.idle()
+    assert (world.backend.lesson()["appState"], world.backend.lesson()["stepIndex"]) == ("ready", 1)
+
+
+def test_practise_never_opens_a_locked_lesson_or_a_step_it_does_not_have(tmp_path):
+    w = World(tmp_path, lessons={"first": {}, "second": {}})
+    try:
+        w.backend.practise("second", 0)
+        w.backend.practise("first", 5)
+        w.idle()
+        assert w.plugin.opens == [] and not w.backend.lesson()["open"]
+    finally:
+        w.backend.shutdown()
