@@ -1,13 +1,14 @@
 """The lesson factory from the command line.
 
     python -m app.factory make <video link> [--app excel] [--no-test] [--runs 5]
-    python -m app.factory prove <lesson folder>
+    python -m app.factory prove <lesson folder> [--no-test]
     python -m app.factory test <lesson folder> [--runs 5]
 
 `make` runs the whole factory and prints each stage as it happens. `prove` proves a lesson in the real app
-again (a hand-made one, say) and saves the proof only when every step passed. `test` plays a proven lesson
-with Meta's agent as the learner. The test moves the real mouse, so leave the computer alone while it runs:
-moving the mouse stops it.
+again (a hand-made one, say) and saves the proof only when every step passed; with `--no-test` it also
+records the agent's test as skipped, as `make --no-test` does, so the lesson shows the proven badge. `test`
+plays a proven lesson with Meta's agent as the learner. The test moves the real mouse, so leave the computer
+alone while it runs: moving the mouse stops it.
 """
 from __future__ import annotations
 
@@ -91,8 +92,11 @@ def _prove(args: argparse.Namespace) -> int:
     if not proved.lesson.proof.passed or proved.dropped:       # never save a lesson with its steps taken out
         raise _Refused(f"Not saved: {kept} of {kept + len(proved.dropped)} steps could be proven, and every step "
                        "must pass. Fix the lesson and prove it again.")
-    save_lesson(proved.lesson)
-    _say(f"Proven: all {kept} steps passed. The proof is saved in {proved.lesson.folder / 'lesson.json'}")
+    proven = replace(proved.lesson, test=not_tested()) if args.no_test else proved.lesson
+    save_lesson(proven)
+    _say(f"Proven: all {kept} steps passed. The proof is saved in {proven.folder / 'lesson.json'}")
+    if args.no_test:
+        _say("The test with Meta's agent was skipped, so the lesson shows the proven badge.")
     return 0
 
 
@@ -155,6 +159,8 @@ def _parser() -> argparse.ArgumentParser:
 
     prove_it = commands.add_parser("prove", help="prove a lesson in the real app again")
     prove_it.add_argument("folder", help="the lesson's folder, such as lessons/monthly-budget")
+    prove_it.add_argument("--no-test", action="store_true",
+                          help="record the test with Meta's agent as skipped; the lesson gets the proven badge")
     prove_it.set_defaults(run=_prove)
 
     test_it = commands.add_parser("test", help="test a proven lesson with Meta's agent as the learner")
