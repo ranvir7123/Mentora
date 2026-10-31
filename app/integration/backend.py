@@ -35,7 +35,7 @@ import os
 import re
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import parse_qs, urlsplit
@@ -47,7 +47,7 @@ from app.core.library import Library
 from app.core.mistakes import common_mistakes
 from app.core.plugin import AppPlugin, AppSession
 from app.core.progress import Progress
-from app.core.runner import LessonDone, LessonRun, NotYet, StepPassed
+from app.core.runner import LessonDone, LessonRun, NotYet, StepPassed, StepRecord
 from app.core.screen import CLOSED_LESSON, EMPTY_HOME, HIDDEN_POINTER, Box
 from app.core.services import Coach, LessonMaker
 from app.core.types import Rect, Spot
@@ -994,7 +994,7 @@ class Backend:
     def _write_tips(self) -> None:
         meta = None
         try:
-            text = self._coach.tips(self._progress.attempts())
+            text = self._coach.tips(self._step_words(self._progress.attempts()))
             meta = "ok"
             if text:
                 self._progress.keep_tips(text)
@@ -1011,6 +1011,23 @@ class Backend:
             if meta is not None:
                 self._meta = meta
             self._publish_home()
+
+    def _step_words(self, records: list[StepRecord]) -> list[StepRecord]:
+        """The records with each "<lesson>/<step>" name turned into the step's own words and where it is, so
+        tips name "Make a new file named hello.py." and not "file". A step no longer on the shelf keeps its
+        code name."""
+        named = []
+        for record in records:
+            lesson_id, _, step_id = record.step_id.partition("/")
+            try:
+                lesson = self._library.lesson(lesson_id)
+                index = next(i for i, step in enumerate(lesson.steps) if step.id == step_id)
+            except (KeyError, StopIteration):
+                named.append(record)
+                continue
+            words = f"{lesson.steps[index].instruction} ({lesson.title}, step {index + 1})"
+            named.append(replace(record, step_id=words))
+        return named
 
     # The Meta key.
 

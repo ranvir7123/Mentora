@@ -14,6 +14,7 @@ from app.core.fake_plugin import FakePlugin, FakeSession
 from app.core.library import Library, LibraryError
 from app.core.lesson import load_lesson
 from app.core.progress import Progress
+from app.core.runner import StepRecord
 from app.core.services import MakeResult
 from app.core.types import Call, Rect, Spot, Target
 from app.excel.snapshot import Cell, Sheet, Snapshot
@@ -561,10 +562,23 @@ def test_finished_lesson_refreshes_tips(world):
     assert world.cues()[-1] == "complete" and not world.backend.pointer()["visible"]
     assert world.progress.lesson_state("two-keys").done
     assert [r.step_id for r in world.progress.attempts()] == ["two-keys/s0", "two-keys/s1"]
-    assert world.coach.tips_asked[-1] == world.progress.attempts()
+    # The coach hears each step by its words, not its code name: Claude's tips said "You got print, name, greet,
+    # ask and run right" after the Python lesson.
+    assert [r.step_id for r in world.coach.tips_asked[-1]] == ["Set k0 to 1. (Two keys, step 1)",
+                                                               "Set k1 to 2. (Two keys, step 2)"]
+    assert [r.tries for r in world.coach.tips_asked[-1]] == [r.tries for r in world.progress.attempts()]
     assert world.backend.home()["tips"] == {"state": "ready", "text": "You finished 2 steps. Try the next lesson."}
     assert world.progress.tips == "You finished 2 steps. Try the next lesson."
     assert not world.plugin.session.waiting
+
+
+def test_tips_keep_the_code_name_of_a_step_no_longer_on_the_shelf(world):
+    world.progress.log_attempt("gone-lesson", StepRecord("old", 2, 0, 9.0, False))
+    world.open()
+    world.learner_sets("k0", 1)
+    world.learner_sets("k1", 2)
+
+    assert [r.step_id for r in world.coach.tips_asked[-1]][0] == "gone-lesson/old"
 
 
 def test_a_second_lesson_on_the_same_day_keeps_the_streak_as_it_was(tmp_path):
