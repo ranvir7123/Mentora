@@ -40,12 +40,16 @@ program", in VS Code.
   UI Automation can't find, and the arrow uses that answer only if UI Automation then finds a button of
   that name there. That has not run against Meta's live service yet.
 - A shortlist of 18 Creative Commons Excel tutorials on YouTube, 8 of them approved for the library
-  ([docs/video-shortlist.md](docs/video-shortlist.md)). No lesson has been made from them yet.
+  ([docs/video-shortlist.md](docs/video-shortlist.md)).
 - The lesson factory ([app/factory/](app/factory/)): `python -m app.factory make <video link>` downloads a
   tutorial, has Meta's models write the lesson, proves each step's check is false before the step and true
   after it, and has Meta's computer-use agent play the lesson as a learner. It has not run against Meta's
   live service yet. The agent tests Excel lessons only: in VS Code it could reach the terminal, so it never
-  tests VS Code lessons.
+  tests VS Code lessons. With `MENTORA_AI=claude`, Claude writes the lesson instead, from the video's still
+  frames and captions (it does not take a video file). Only Meta's agent tests lessons, so a lesson Claude
+  wrote goes on the shelf with the "proven" badge, not "proven and tested". On 31 Oct 2026 Claude made one
+  real lesson this way, "Make a Pie Chart of Skittles Colors", from Jason Lachniet's "Pie chart in Excel"
+  (Creative Commons): 4 steps, all 4 proven in real Excel, in 1.6 minutes, for about $0.29 of Claude.
 - The VS Code plug-in ([app/vscode/](app/vscode/)) with its add-on inside VS Code
   ([extensions/vscode/](extensions/vscode/)). Tried in real VS Code on 31 Oct 2026: clicking "Your first
   Python program" on the home screen opens VS Code beside the lesson panel. Until the lesson's folder is
@@ -55,16 +59,17 @@ program", in VS Code.
   the run step (6) with the folder trusted, steps done by hand, and "Your first app with Meta's AI",
   which needs a Meta key.
 - Three hand-written lessons ([lessons/](lessons/)): a monthly budget in Excel, and two beginner
-  Python lessons in VS Code.
+  Python lessons in VS Code. Lessons made from videos sit after the hand-written ones in a course, so a new
+  one never locks the lesson a learner starts with.
 - A guard that refuses any commit or push holding an API key or a `.env` file
   ([tools/secret_scan.py](tools/secret_scan.py), wired in by `git config core.hooksPath tools/hooks`).
 - The Meta key is read from the `META_API_KEY` environment variable, or from the user's saved Windows
   settings when the program was started before the key was saved ([app/meta/key.py](app/meta/key.py)).
 - A switch for showing Mentora without a Meta key ([app/ai.py](app/ai.py), [app/claude/](app/claude/)):
   with `MENTORA_AI=claude`, the Ask box, the tips and the pointing fallback ask Claude (Opus 5.5) instead of
-  Muse Spark, using the `ANTHROPIC_API_KEY` key, with its own call log and a $20 spending stop. Meta stays
-  the default, and the lesson factory always uses Meta. One real Ask box question has been answered by
-  Claude (in 4.4 s); the pointing fallback on Claude has run only in tests.
+  Muse Spark, using the `ANTHROPIC_API_KEY` key, with its own call log and a $20 spending stop. The lesson
+  factory follows the same switch (see above). Meta stays the default. One real Ask box question has been
+  answered by Claude (in 4.4 s); the pointing fallback on Claude has run only in tests.
 
 ## Built during the hackathon (27 Oct - 4 Nov 2026)
 
@@ -109,7 +114,8 @@ Start Mentora:
 .venv\Scripts\python -m app
 ```
 
-To have Claude answer the Ask box and tips instead of Meta, save `ANTHROPIC_API_KEY` the same way, then:
+To have Claude answer the Ask box and tips, and write lessons from videos, instead of Meta, save
+`ANTHROPIC_API_KEY` the same way, then:
 
 ```powershell
 $env:MENTORA_AI = "claude"; .venv\Scripts\python -m app
