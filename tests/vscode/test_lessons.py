@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from app.core.lesson import Lesson, load_lesson, validate
+from app.core.runner import LessonDone, LessonRun, StepPassed
 from app.core.types import Call
 from app.vscode.checks import CHECKS, MAX_WORDS
 from app.vscode.plugin import VsCodePlugin
@@ -154,6 +155,24 @@ def test_the_first_program_asks_a_name_and_greets_it(walk):
     run = lesson.steps[-1].replay
     assert run == Call("run_file", {"path": "hello.py", "input": "Asha"})
     assert [s.check.kind for s in lesson.steps] == ["file_exists", "calls", "assigns", "prints", "calls", "run_ok"]
+
+
+def test_a_run_from_before_the_run_step_opened_does_not_tick_it(tmp_path):
+    """Running the greet version early, then adding input(), must not tick Run until the learner runs again."""
+    lesson = load_lesson(FIRST)
+    folder = Folder(lesson, tmp_path, tmp_path)
+    for step in lesson.steps[:4]:                   # file, print, name, greet
+        folder.apply(step.replay)
+    folder.apply(Call("run_file", {"path": "hello.py"}))
+    run = LessonRun(lesson, CHECKS, clock=lambda: 0.0)
+    assert [e.index for e in run.on_snapshot(folder.snapshot()) if isinstance(e, StepPassed)] == [0, 1, 2, 3]
+    folder.apply(lesson.steps[4].replay)            # ask: input() is in, the old run is still the last one
+    assert run.on_snapshot(folder.snapshot()) == [StepPassed(4, True, 10)]
+    assert run.index == 5 and not run.done
+    assert run.on_snapshot(folder.snapshot()) == []         # re-read a second later: still waiting
+    folder.apply(lesson.steps[5].replay)            # the learner runs it again
+    events = run.on_snapshot(folder.snapshot())
+    assert events[0] == StepPassed(5, True, 10) and isinstance(events[1], LessonDone) and run.done
 
 
 def test_your_first_app_with_meta_s_ai_walks_through_like_the_prover(walk):

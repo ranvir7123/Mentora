@@ -108,11 +108,15 @@ class Verdict:
 
 @dataclass(frozen=True)
 class CheckKind:
-    """One entry on a plug-in's check menu: a pure function from (snapshot, args) to a Verdict."""
+    """One entry on a plug-in's check menu: a pure function from (snapshot, args) to a Verdict.
+
+    `event`, for a check that judges something that happens, like the last run: what it judges in a
+    snapshot. The step then counts only a new one, not one already there when the step opened."""
     name: str
     params: tuple[Param, ...]
     run: Callable[[Any, Mapping], Verdict]
     summary: str
+    event: Callable[[Any], Any] | None = None
 
 
 @dataclass(frozen=True)

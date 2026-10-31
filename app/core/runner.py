@@ -14,6 +14,7 @@ from app.core.lesson import Lesson, Step
 from app.core.types import CheckKind, Verdict
 
 MAX_ERRORS = 20
+_NONE = object()
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,7 @@ class LessonRun:
         self._records: list[StepRecord] = []
         self._changed: set[int] = set()
         self._points = 0
+        self._before: Any = _NONE        # the open step's event as it was when the step opened
         self.index = 0
         self.done = False
         self.errors: list[str] = []
@@ -101,11 +103,12 @@ class LessonRun:
                 events.append(StepFixed(i))
 
         while not self._finished():
-            verdict = self._judge(self._steps[self.index], snap) or Verdict.waiting()
+            verdict = self._judge_open(snap) or Verdict.waiting()
             if not verdict.ok:
                 self._wrong(verdict, events)
                 return events
             events.append(self._pass())
+            self._before = self._event(snap)
 
         if not self.done and not self._changed:  # no celebration while an earlier step is undone
             self.done = True
@@ -125,6 +128,7 @@ class LessonRun:
             if verdict is None or not verdict.ok:
                 break
             self.index += 1
+        self._before = self._event(snap)
         self.done = self._finished()
         self._started = self._step_started = self._clock()
         return self.index
@@ -148,6 +152,24 @@ class LessonRun:
 
     def _finished(self) -> bool:
         return self.index == len(self._steps)
+
+    def _event(self, snap: Any) -> Any:
+        """What the open step's check judges once, such as the last run, or _NONE when it judges no event."""
+        if self._finished():
+            return _NONE
+        event = self._checks[self._steps[self.index].check.kind].event
+        try:
+            return _NONE if event is None else event(snap)
+        except Exception:
+            return _NONE
+
+    def _judge_open(self, snap: Any) -> Verdict | None:
+        """The open step's verdict. An event from before the step opened waits, until a new one comes."""
+        if self._before is not _NONE:
+            if self._event(snap) == self._before:
+                return Verdict.waiting()
+            self._before = _NONE
+        return self._judge(self._steps[self.index], snap)
 
     def _judge(self, step: Step, snap: Any) -> Verdict | None:
         """The check's verdict, or None when the check crashed (kept in `errors`)."""

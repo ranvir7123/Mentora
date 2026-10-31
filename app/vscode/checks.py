@@ -490,6 +490,11 @@ def _run_ok(snap: VsSnapshot, args: Mapping) -> Verdict:
     return Verdict.right()
 
 
+def _last_run(snap: VsSnapshot) -> Run | None:
+    """A run step counts only a run made after it opened: one from before ran older code."""
+    return snap.run
+
+
 def _run_output(snap: VsSnapshot, args: Mapping) -> Verdict:
     run = snap.run
     if run is None or not run.finished:
@@ -554,9 +559,10 @@ CHECKS: dict[str, CheckKind] = {c.name: c for c in (
     CheckKind("reads_setting", (_PATH, Param("name", "text")), _reads_setting,
               'The file reads that setting, as os.environ["NAME"], os.environ.get or os.getenv do'),
     CheckKind("run_ok",(Param("path", "path", required=False), Param("printed", "bool", required=False)),
-              _run_ok, "The last run (of that file) finished without an error (and printed something)"),
+              _run_ok, "The last run (of that file) finished without an error (and printed something)",
+              _last_run),
     CheckKind("run_output", (Param("contains", "text"),), _run_output,
-              "The last run printed that text, capitals aside"),
+              "The last run printed that text, capitals aside", _last_run),
     CheckKind("no_problems", (_PATH,), _no_problems, "The saved file has no errors in VS Code's problems list"),
     CheckKind("no_key_in_code", (_PATH,), _no_key_in_code, "The file holds nothing that looks like a key"),
 )}
