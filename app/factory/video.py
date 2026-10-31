@@ -35,7 +35,12 @@ T = TypeVar("T")
 
 
 class VideoError(Exception):
-    """The video could not be got or prepared; the message is plain words."""
+    """The video could not be got or prepared; the message is plain words. `detail` is what the tool itself
+    said, for the log only."""
+
+    def __init__(self, message: str, *, detail: str = ""):
+        super().__init__(message)
+        self.detail = detail
 
 
 class VideoRefused(VideoError):
@@ -122,7 +127,7 @@ def _ask(ydl_class: Any, opts: dict, url: str, *, download: bool) -> Any:
         with ydl_class(opts) as ydl:
             return ydl.extract_info(url, download=download)
     except DownloadError as exc:
-        raise VideoRefused(_plain(str(exc))) from None
+        raise VideoRefused(_plain(str(exc)), detail=str(exc)) from None
 
 
 def _info(info: dict, page: str) -> VideoInfo:
@@ -151,8 +156,7 @@ def _plain(message: str) -> str:
     for clue, reason in _REASONS:
         if clue in low:
             return reason
-    detail = re.sub(r"^ERROR:\s*(\[[^\]]*\]\s*[\w-]+:\s*)?", "", message.strip())
-    return f"The video could not be downloaded: {detail[:200]}"
+    return "The video could not be downloaded. Try another video."        # yt-dlp's own words go in the log
 
 
 def pick_captions(info: dict) -> tuple[str, bool] | None:
@@ -267,7 +271,8 @@ def _ffmpeg(args: list[str], what: str) -> str:
                           text=True, encoding="utf-8", errors="replace", creationflags=flags)
     if done.returncode != 0:
         last = (done.stderr.strip().splitlines() or ["no message"])[-1]
-        raise VideoError(f"ffmpeg could not {what}: {last[:200]}")
+        raise VideoError("The video could not be read. Try another video.",
+                         detail=f"ffmpeg could not {what}: {last[:200]}")
     return done.stderr
 
 
@@ -296,7 +301,7 @@ def _transcript(fetched: Fetched, client: MetaClient | None, work: Path) -> list
     try:
         _ffmpeg(ffmpeg_audio_args(fetched.video, audio), "take out the sound")
     except VideoError as exc:
-        if "does not contain any stream" in str(exc) or "matches no streams" in str(exc):
+        if "does not contain any stream" in exc.detail or "matches no streams" in exc.detail:
             return []                            # a silent screen recording has nothing to transcribe
         raise
     return client.transcribe(audio, label=f"transcribe_{fetched.info.id}").segments

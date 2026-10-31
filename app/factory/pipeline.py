@@ -36,12 +36,13 @@ from app.factory.input import UserTookOver
 from app.factory.prove import MIN_STEPS, ProveError, prove
 from app.factory.video import Fetched, Prepared, VideoError, frame_at
 from app.factory.writer import NotReady, unique_id, write_lesson
-from app.meta.client import MetaClient, MetaError
+from app.meta.client import MetaClient, MetaError, MetaRefused, NoKey, SpendLimitReached
 
 STAGES = ("download", "read", "write", "prove", "test", "publish")
 HANDS_OFF_S = 5
 TESTS = {"mouse": "Mouse test", "keyboard": "Keyboard-only test"}
 VIDEO_APPS = {"excel", "fake"}       # apps whose lessons may be made from a video
+UNEXPECTED = "Something unexpected went wrong. Try another video."
 NOT_FROM_VIDEOS = {"vscode": "its steps write and run code, and code taken from a video must not run on this computer"}
 
 Say = Callable[[str], None]
@@ -116,9 +117,9 @@ class LessonFactory:
         if plugin.app_id not in VIDEO_APPS:
             why = NOT_FROM_VIDEOS.get(plugin.app_id, "nobody has checked yet that its lessons are safe to make from "
                                                      "a video")
-            reason = (f"Lessons for {plugin.title} are not made from videos: {why}. Write one by hand and prove "
-                      "it with: python -m app.factory prove <lesson folder>")
-            self._tell("download", "failed", reason)
+            reason = f"Lessons for {plugin.title} are not made from videos: {why}."
+            self._tell("download", "failed", reason,
+                       log="Write one by hand and prove it with: python -m app.factory prove <lesson folder>")
             return MakeResult(None, reason)
         try:
             return MakeResult(self._make(url, plugin), "")
@@ -141,7 +142,7 @@ class LessonFactory:
         with self._stage("write"):
             written = write_lesson(prepared, info, plugin, self.client, lessons_dir=self.lessons_dir)
             if isinstance(written, NotReady):
-                self._fail("write", written.reason)
+                self._fail("write", written.reason, log=written.detail)
             self._done("write", f"{_count(len(written.steps), 'step')} written")
 
         with self._stage("prove"):
@@ -207,18 +208,18 @@ class LessonFactory:
             tested = run_test(lesson, plugin, workdir, self.client, say=lambda line: self._update("test", line),
                               runs=self.runs, hands=self.hands, play=self.tester)
         except UserTookOver as exc:
-            said = str(exc)
+            said, why = str(exc), ""
         except (ProveError, MetaError, OSError) as exc:
-            said = f"The test could not run: {str(exc).rstrip('.')}."
+            said, why = "The test could not run.", f"{str(exc).rstrip('.')}. "
         except Exception as exc:                     # the proof stands; a broken test must not throw it away
             self.on_line(traceback.format_exc().rstrip())
-            said = f"The test could not run: something unexpected went wrong ({str(exc).rstrip('.')})."
+            said, why = "The test could not run.", f"Something unexpected went wrong ({str(exc).rstrip('.')}). "
         else:
             self._done("test", tested.detail)
             return tested.result
         later = (self.lessons_dir / lesson.id).as_posix()
-        self._done("test", f"{said} The lesson goes on the shelf with the proven badge; test it later with: "
-                           f"python -m app.factory test {later}")
+        self._done("test", f"{said} The lesson goes on the shelf with the proven badge.",
+                   log=f"{why}Test it later with: python -m app.factory test {later}")
         return not_tested()
 
     def _publish(self, lesson: Lesson, fetched: Fetched, prepared: Prepared) -> Lesson:
@@ -249,7 +250,7 @@ class LessonFactory:
             try:
                 return frame_at(fetched.video, min(clip.end, fetched.info.length_s - 0.5), goal).name
             except VideoError as exc:
-                self.on_line(f"publish: {exc}, so the goal picture is the last still frame")
+                self.on_line(f"publish: {exc.detail or exc}, so the goal picture is the last still frame")
         if not prepared.frames:
             return None
         shutil.copyfile(prepared.frames[-1][1], goal)
@@ -264,28 +265,44 @@ class LessonFactory:
             yield
         except _Stopped:
             raise
-        except (VideoError, ProveError, MetaError) as exc:      # these already say what happened plainly
-            self._fail(name, str(exc))
+        except (VideoError, ProveError) as exc:      # these already say what happened plainly
+            self._fail(name, str(exc), log=getattr(exc, "detail", ""))
+        except MetaError as exc:                     # Meta's own words can be codes and its answer: log them only
+            self._fail(name, _meta_trouble(exc), log=str(exc))
         except Exception as exc:
             self.on_line(traceback.format_exc().rstrip())
-            self._fail(name, f"Something went wrong in the {name} stage: {exc}")
+            self._fail(name, UNEXPECTED, log=f"Something went wrong in the {name} stage: {exc}")
 
     def _update(self, name: str, detail: str) -> None:
         self._tell(name, "running", detail)
 
-    def _done(self, name: str, detail: str) -> None:
-        self._tell(name, "done", detail)
+    def _done(self, name: str, detail: str, *, log: str = "") -> None:
+        self._tell(name, "done", detail, log=log)
 
-    def _fail(self, name: str, reason: str) -> None:
-        self._tell(name, "failed", reason)
+    def _fail(self, name: str, reason: str, *, log: str = "") -> None:
+        self._tell(name, "failed", reason, log=log)
         raise _Stopped(reason)
 
-    def _tell(self, name: str, state: str, detail: str) -> None:
+    def _tell(self, name: str, state: str, detail: str, *, log: str = "") -> None:
+        """The screen gets `detail`, one plain sentence; the log gets that and then `log`, the exact words."""
         self._on_stage(name, state, detail)
         if state == "running":
             self.on_line(f"{name}: {detail}" if detail else f"{name} started")
         else:
             self.on_line(f"{name} {state}: {detail}")
+        if log and log != detail:
+            self.on_line(f"{name}: {log}")
+
+
+def _meta_trouble(exc: MetaError) -> str:
+    """What stopped a call to Meta, in one plain sentence for the screen."""
+    if isinstance(exc, NoKey):
+        return "Meta's key is missing or was not accepted. Add your Meta key, then try again."
+    if isinstance(exc, SpendLimitReached):
+        return "Meta's spending limit has been reached, so no more lessons can be made for now."
+    if isinstance(exc, MetaRefused):
+        return "Meta would not take this request. Try another video."
+    return "Meta could not be reached or was busy. Try again in a few minutes."
 
 
 def _folder_name(video_id: str) -> str:

@@ -10,7 +10,8 @@ from app.factory.input import UserTookOver
 from app.factory.pipeline import STAGES, LessonFactory, run_test
 from app.factory.prove import ProveError
 from app.factory.video import Fetched, VideoInfo, VideoRefused
-from app.meta.client import SpendLimitReached
+from app.factory.writer import BROKE_RULES
+from app.meta.client import NoKey, SpendLimitReached
 from tests.core.conftest import build_fake_lesson
 
 URL = "https://youtu.be/vid1"
@@ -212,23 +213,25 @@ def test_a_lesson_the_agent_can_play_by_keyboard_is_proven_and_tested(saved, mak
     assert stages.last()["test"] == ("done", "4 of 5 test runs passed, using the keyboard only")
 
 
-@pytest.mark.parametrize("stop, said", [
-    (UserTookOver("You moved the mouse, so the test stopped."), "You moved the mouse, so the test stopped."),
-    (ProveError("Fake app did not answer within 30 s"), "The test could not run: Fake app did not answer within 30 s."),
-    (SpendLimitReached("Meta spending has reached $100.00 of the $100.00 limit."),
-     "The test could not run: Meta spending has reached $100.00 of the $100.00 limit."),
+@pytest.mark.parametrize("stop, said, logged", [
+    (UserTookOver("You moved the mouse, so the test stopped."), "You moved the mouse, so the test stopped.", ""),
+    (ProveError("Fake app did not answer within 30 s"), "The test could not run.",
+     "Fake app did not answer within 30 s. "),
+    (SpendLimitReached("Meta spending has reached $100.00 of the $100.00 limit. Tell Ranvir before spending more."),
+     "The test could not run.", "Meta spending has reached $100.00 of the $100.00 limit. Tell Ranvir before spending "
+     "more. "),
 ])
-def test_a_test_that_cannot_finish_leaves_the_lesson_proven_only(tmp_path, saved, make, stop, said):
+def test_a_test_that_cannot_finish_leaves_the_lesson_proven_only(tmp_path, saved, make, stop, said, logged):
     _written(saved)
     tester = FakeTester(stop)
 
-    result, stages, _, _ = make(tester=tester)
+    result, stages, lines, _ = make(tester=tester)
 
     assert [c["mode"] for c in tester.calls] == ["mouse"]                 # no keyboard test after a stop
     assert shelf_badge(result.lesson) == "proven"
-    folder = (tmp_path / "lessons" / "fill-in-the-keys").as_posix()
-    assert stages.last()["test"] == ("done", f"{said} The lesson goes on the shelf with the proven badge; "
-                                             f"test it later with: python -m app.factory test {folder}")
+    assert stages.last()["test"] == ("done", f"{said} The lesson goes on the shelf with the proven badge.")
+    folder = (tmp_path / "lessons" / "fill-in-the-keys").as_posix()     # the command is for Ranvir, in the log
+    assert f"test: {logged}Test it later with: python -m app.factory test {folder}" in lines
 
 
 def test_switching_the_test_off_gives_the_proven_badge(saved, make):
@@ -268,10 +271,72 @@ def test_something_unexpected_fails_its_stage_plainly_and_is_logged(tmp_path, cl
     result, stages, lines, _ = make(fetch=FakeFetch(clip, error=RuntimeError("the download fell over")))
 
     assert result.lesson is None
-    assert result.reason == "Something went wrong in the download stage: the download fell over"
+    assert result.reason == "Something unexpected went wrong. Try another video."
     assert stages.last()["download"] == ("failed", result.reason)
     assert any("Traceback" in line and "the download fell over" in line for line in lines)
+    assert "download: Something went wrong in the download stage: the download fell over" in lines
     assert not (tmp_path / "lessons").exists()
+
+
+def test_an_answer_from_meta_missing_a_part_is_said_plainly_not_as_its_name(saved, make):
+    saved._write("writer_vid1_upload", {"response": {"object": "file"}})     # the upload's answer has no "id"
+
+    result, stages, lines, _ = make()
+
+    assert result.reason == "Something unexpected went wrong. Try another video."
+    assert stages.last()["write"] == ("failed", result.reason)
+    assert "write: Something went wrong in the write stage: 'id'" in lines
+
+
+@pytest.mark.parametrize("error, said", [
+    (SpendLimitReached("Meta spending has reached $100.00 of the $100.00 limit. Tell Ranvir before spending more."),
+     "Meta's spending limit has been reached, so no more lessons can be made for now."),
+    (NoKey('META_API_KEY is not set. Save it in PowerShell with '
+           '[Environment]::SetEnvironmentVariable("META_API_KEY", "<your key>", "User")'),
+     "Meta's key is missing or was not accepted. Add your Meta key, then try again."),
+    (VideoRefused("The video could not be downloaded. Try another video.",
+                  detail="ERROR: [youtube] vid1: HTTP Error 403: Forbidden"),
+     "The video could not be downloaded. Try another video."),
+])
+def test_trouble_is_said_plainly_on_screen_and_in_full_in_the_log(clip, make, error, said):
+    result, stages, lines, _ = make(fetch=FakeFetch(clip, error=error))
+
+    assert result.reason == said
+    assert stages.last()["download"] == ("failed", said)
+    assert f"download: {getattr(error, 'detail', '') or error}" in lines
+
+
+def test_meta_being_busy_is_said_plainly_and_its_answer_kept_in_the_log(saved, make):
+    saved.error("writer_vid1_upload", type="unavailable", message="Meta is busy right now (503: upstream reset)")
+
+    result, stages, lines, _ = make()
+
+    assert result.reason == "Meta could not be reached or was busy. Try again in a few minutes."
+    assert stages.last()["write"] == ("failed", result.reason)
+    assert "write: Meta is busy right now (503: upstream reset)" in lines
+
+
+def test_meta_refusing_the_video_and_its_frames_is_said_plainly(saved, make):
+    saved.error("writer_vid1_upload", type="refused", status=400, message="video input is not supported")
+    saved.error("writer_vid1_frames", type="refused", status=400, message="too many images")
+
+    result, stages, lines, _ = make()
+
+    assert result.reason == "Meta would not take this video, so the lesson could not be written. Try another video."
+    assert stages.last()["write"] == ("failed", result.reason)
+    assert "write: Meta refused the request (400): too many images" in lines
+
+
+def test_a_lesson_that_broke_the_rules_is_said_plainly_with_the_rules_in_the_log(saved, make):
+    bad = _lesson([_step(1, hints=["one"]), _step(2), _step(3)])
+    _written(saved, lesson=bad)
+    saved.answer("writer_vid1_retry", bad)
+
+    result, stages, lines, _ = make()
+
+    assert result.reason == BROKE_RULES
+    assert stages.last()["write"] == ("failed", BROKE_RULES)
+    assert "write: Muse Spark's lesson broke the rules: step s1: it has 1 hints; it needs exactly 3." in lines
 
 
 def test_something_unexpected_in_the_test_keeps_the_proven_lesson_and_is_logged(tmp_path, saved, make):
@@ -280,11 +345,12 @@ def test_something_unexpected_in_the_test_keeps_the_proven_lesson_and_is_logged(
     result, stages, lines, _ = make(tester=FakeTester(RuntimeError("the tester fell over")))
 
     assert shelf_badge(result.lesson) == "proven"
-    folder = (tmp_path / "lessons" / "fill-in-the-keys").as_posix()
-    assert stages.last()["test"] == ("done", "The test could not run: something unexpected went wrong (the tester "
-                                             "fell over). The lesson goes on the shelf with the proven badge; test it "
-                                             f"later with: python -m app.factory test {folder}")
+    assert stages.last()["test"] == ("done", "The test could not run. The lesson goes on the shelf with the proven "
+                                             "badge.")
     assert any("Traceback" in line and "the tester fell over" in line for line in lines)
+    folder = (tmp_path / "lessons" / "fill-in-the-keys").as_posix()
+    assert ("test: Something unexpected went wrong (the tester fell over). Test it later with: python -m app.factory "
+            f"test {folder}") in lines
 
 
 def test_one_pair_of_hands_plays_both_tests(tmp_path, monkeypatch):
@@ -321,11 +387,11 @@ class NewApp(FakePlugin):
 def test_lessons_are_made_from_videos_only_for_apps_checked_for_it(tmp_path, clip, make, plugin, why):
     fetch = FakeFetch(clip)
 
-    result, stages, _, tester = make(fetch=fetch, plugin=plugin)
+    result, stages, lines, tester = make(fetch=fetch, plugin=plugin)
 
     assert result.lesson is None
-    assert result.reason == (f"Lessons for {plugin.title} are not made from videos: {why}. Write one by hand and "
-                             "prove it with: python -m app.factory prove <lesson folder>")
+    assert result.reason == f"Lessons for {plugin.title} are not made from videos: {why}."
+    assert "download: Write one by hand and prove it with: python -m app.factory prove <lesson folder>" in lines
     assert stages.last()["download"] == ("failed", result.reason)
     assert stages.last()["read"] == ("waiting", "")
     assert fetch.calls == [] and tester.calls == []

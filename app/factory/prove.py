@@ -73,7 +73,7 @@ def prove(lesson: Lesson, plugin: AppPlugin, workdir: Path, *, fix: Fix | None =
                 notes.append(f"{at} went back to Muse Spark: {failed.reason}")
                 current = replace(fixed, steps=tuple(s for s in fixed.steps if s.id not in dropped))
                 continue
-            notes.append(f"{at} went back to Muse Spark, which could not fix it: {fixed.reason}")
+            notes.append(f"{at} went back to Muse Spark, which could not fix it: {fixed.detail or fixed.reason}")
         if failed.step_id not in dropped:
             dropped.append(failed.step_id)
             said[failed.step_id] = next(s.instruction for s in current.steps if s.id == failed.step_id)

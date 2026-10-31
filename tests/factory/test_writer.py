@@ -5,7 +5,7 @@ import pytest
 from app.core.fake_plugin import FakePlugin
 from app.core.lesson import Lesson, Source, lesson_json_schema, validate
 from app.factory.video import Prepared, VideoInfo
-from app.factory.writer import NotReady, write_lesson
+from app.factory.writer import BROKE_RULES, NotReady, write_lesson
 
 INFO = VideoInfo("vid1", "https://youtu.be/vid1", "Fill in the keys", "Key Teacher", "https://youtube.com/@keys",
                  "Creative Commons Attribution license (reuse allowed)", 120)
@@ -111,7 +111,7 @@ def test_an_off_menu_check_is_retried_once_then_not_ready(prepared, saved, spy, 
     got = write_lesson(prepared, INFO, FakePlugin(), spy, lessons_dir=lessons)
 
     assert isinstance(got, NotReady)
-    assert "step s1: check contains is not on the Fake app menu" in got.reason
+    assert "step s1: check contains is not on the Fake app menu" in got.detail
     assert [c["label"] for c in spy.responds] == ["writer_vid1", "writer_vid1_retry"]
     assert "step s1: check contains is not on the Fake app menu" in _sent_text(spy.responds[1]["input"])
 
@@ -144,7 +144,7 @@ def _sent_back_then_not_ready(prepared, saved, spy, lessons, answer, problem):
 
     got = write_lesson(prepared, INFO, FakePlugin(), spy, lessons_dir=lessons)
 
-    assert got == NotReady(f"Muse Spark's lesson broke the rules: {problem}.")
+    assert got == NotReady(BROKE_RULES, detail=f"Muse Spark's lesson broke the rules: {problem}.")
     retry = spy.responds[1]["input"][-1]["content"]
     assert retry == f"That lesson broke these rules:\n- {problem}\nWrite the whole lesson again, fixing every one."
 
@@ -206,7 +206,8 @@ def test_broken_json_is_not_ready_with_a_plain_reason(prepared, saved, spy, less
     got = write_lesson(prepared, INFO, FakePlugin(), spy, lessons_dir=lessons)
 
     assert isinstance(got, NotReady)
-    assert got.reason == "Muse Spark's lesson broke the rules: its answer was not a lesson in JSON."
+    assert got.reason == BROKE_RULES
+    assert got.detail == "Muse Spark's lesson broke the rules: its answer was not a lesson in JSON."
 
 
 @pytest.mark.parametrize("refused_at", ["upload", "answer"])
@@ -253,7 +254,7 @@ def test_a_clip_past_the_end_and_a_step_with_no_mistakes_are_problems(prepared, 
     got = write_lesson(prepared, INFO, FakePlugin(), spy, lessons_dir=lessons)
 
     assert isinstance(got, NotReady)
-    assert got.reason == ("Muse Spark's lesson broke the rules: step s1: the clip ends at 500 s, after the video "
+    assert got.detail == ("Muse Spark's lesson broke the rules: step s1: the clip ends at 500 s, after the video "
                           "ends at 120 s; step s2: it has no predicted mistakes; give 1 or 2.")
 
 
@@ -265,7 +266,7 @@ def test_not_ready_names_only_the_first_three_problems(prepared, saved, spy, les
 
     got = write_lesson(prepared, INFO, FakePlugin(), spy, lessons_dir=lessons)
 
-    assert got.reason == ("Muse Spark's lesson broke the rules: step s1: it has 1 hints; it needs exactly 3; "
+    assert got.detail == ("Muse Spark's lesson broke the rules: step s1: it has 1 hints; it needs exactly 3; "
                           "step s2: it has 1 hints; it needs exactly 3; step s3: it has 1 hints; it needs exactly 3; "
                           "and 2 more.")
 

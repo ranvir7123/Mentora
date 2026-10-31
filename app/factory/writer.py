@@ -27,6 +27,8 @@ from app.meta.client import Answer, MetaClient, MetaRefused
 WRITER_MODEL = "muse-spark-1.3"
 SHOWN_PROBLEMS = 3
 SHORT_TEXT = 60
+BROKE_RULES = "Muse Spark could not write a lesson that keeps the rules from this video. Try another video."
+REFUSED = "Meta would not take this video, so the lesson could not be written. Try another video."
 
 # Text that reaches outside the app anywhere in a lesson: a link of any kind, or a network path.
 LINK = re.compile(r"\w+://|file:/|www\.|mailto:|search-ms:|ms-[a-z-]+:|\\\\[^\\\s]+\\", re.IGNORECASE)
@@ -80,6 +82,7 @@ STARTER_HELP = {
 @dataclass(frozen=True)
 class NotReady:
     reason: str                                  # plain words, shown to the learner
+    detail: str = ""                             # what went wrong exactly, for the log only
 
 
 def write_lesson(prepared: Prepared, info: VideoInfo, plugin: AppPlugin, client: MetaClient, *,
@@ -100,7 +103,7 @@ def write_lesson(prepared: Prepared, info: VideoInfo, plugin: AppPlugin, client:
         try:
             answer = client.respond(WRITER_MODEL, sent, label=label, schema=schema)
         except MetaRefused as exc:
-            return NotReady(str(exc))
+            return NotReady(REFUSED, detail=str(exc))
 
     for retry in (False, True):
         if answer.refusal:
@@ -117,10 +120,11 @@ def write_lesson(prepared: Prepared, info: VideoInfo, plugin: AppPlugin, client:
         try:
             answer = client.respond(WRITER_MODEL, sent, label=f"{label}_retry", schema=schema)
         except MetaRefused as exc:
-            return NotReady(str(exc))
+            return NotReady(REFUSED, detail=str(exc))
     shown = "; ".join(problems[:SHOWN_PROBLEMS])
     more = len(problems) - SHOWN_PROBLEMS
-    return NotReady(f"Muse Spark's lesson broke the rules: {shown}{f'; and {more} more' if more > 0 else ''}.")
+    return NotReady(BROKE_RULES,
+                    detail=f"Muse Spark's lesson broke the rules: {shown}{f'; and {more} more' if more > 0 else ''}.")
 
 
 # The request.

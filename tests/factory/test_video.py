@@ -100,6 +100,23 @@ def test_private_removed_or_blocked_videos_get_a_plain_reason(tmp_path, message,
         fetch("https://youtu.be/abc123", tmp_path, ydl_class=FakeYDL(error=message))
 
 
+def test_a_download_error_with_no_plain_reason_keeps_its_words_for_the_log_only(tmp_path):
+    message = "ERROR: [youtube] abc123: HTTP Error 403: Forbidden"
+    with pytest.raises(VideoRefused) as caught:
+        fetch("https://youtu.be/abc123", tmp_path, ydl_class=FakeYDL(error=message))
+    assert str(caught.value) == "The video could not be downloaded. Try another video."
+    assert caught.value.detail == message
+
+
+def test_ffmpeg_trouble_is_said_plainly_and_its_words_kept_for_the_log(tmp_path):
+    not_a_video = tmp_path / "notes.mp4"
+    not_a_video.write_text("not a video")
+    with pytest.raises(VideoError) as caught:
+        frame_at(not_a_video, 1, tmp_path / "goal.png")
+    assert str(caught.value) == "The video could not be read. Try another video."
+    assert caught.value.detail.startswith("ffmpeg could not take a still picture: ")
+
+
 def test_a_good_video_is_downloaded_with_its_details_and_captions(tmp_path):
     ydl = FakeYDL(_info(), files=("video.mp4", "video.en.vtt"))
     got = fetch("https://youtu.be/abc123", tmp_path, ydl_class=ydl)
