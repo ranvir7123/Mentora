@@ -140,3 +140,30 @@ def test_a_vs_code_lesson_is_refused_before_the_countdown(tmp_path, monkeypatch,
     assert "Hands off" not in out.out
     assert ("Meta's agent does not test VS Code lessons: its terminal would let the agent run any command on this "
             "computer, with your Meta key in reach. The lesson keeps its proven badge.") in out.err
+
+
+class _WontOpen(FakePlugin):
+    def open(self, *args, **kwargs):
+        raise OSError("(-2147352567, 'Exception occurred.', None, None)")
+
+
+def test_an_app_that_will_not_open_is_named_with_its_own_words(tmp_path, monkeypatch, capsys):
+    folder = _saved(tmp_path)
+    monkeypatch.setattr(cli, "plugin_for", lambda app: _WontOpen())
+
+    assert main(["prove", str(folder)]) == 1
+
+    err = capsys.readouterr().err                  # the command line keeps the app's own words, for Ranvir
+    assert "Fake app could not be opened: (-2147352567, 'Exception occurred.', None, None)" in err
+
+
+def test_a_test_whose_app_will_not_open_says_so_with_its_own_words(tmp_path, monkeypatch, capsys):
+    folder = _saved(tmp_path, proof=Proof(True, AT, (), ()))
+    monkeypatch.setattr(cli, "HANDS_OFF_S", 0)
+    monkeypatch.setattr(cli, "plugin_for", lambda app: _WontOpen())
+    monkeypatch.setattr(tester, "WindowsHands", lambda: "the hands")
+
+    assert main(["test", str(folder)]) == 1
+
+    assert ("The test could not run: Fake app could not be opened: (-2147352567, 'Exception occurred.', None, None). "
+            "Nothing was saved.") in capsys.readouterr().err

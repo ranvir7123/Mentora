@@ -232,6 +232,8 @@ def test_a_lesson_the_agent_can_play_by_keyboard_is_proven_and_tested(saved, mak
     (UserTookOver("You moved the mouse, so the test stopped."), "You moved the mouse, so the test stopped.", ""),
     (ProveError("Fake app did not answer within 30 s"), "The test could not run.",
      "Fake app did not answer within 30 s. "),
+    (ProveError("Fake app could not be read.", detail="Fake app could not be read: the workbook is busy"),
+     "The test could not run.", "Fake app could not be read: the workbook is busy. "),
     (SpendLimitReached("Meta spending has reached $100.00 of the $100.00 limit. Tell Ranvir before spending more."),
      "The test could not run.", "Meta spending has reached $100.00 of the $100.00 limit. Tell Ranvir before spending "
      "more. "),
@@ -247,6 +249,30 @@ def test_a_test_that_cannot_finish_leaves_the_lesson_proven_only(tmp_path, saved
     assert stages.last()["test"] == ("done", f"{said} The lesson goes on the shelf with the proven badge.")
     folder = (tmp_path / "lessons" / "fill-in-the-keys").as_posix()     # the command is for Ranvir, in the log
     assert f"test: {logged}Test it later with: python -m app.factory test {folder}" in lines
+
+
+class WontOpen(FakePlugin):
+    def __init__(self, error):
+        super().__init__()
+        self.error = error
+
+    def open(self, *args, **kwargs):
+        raise self.error
+
+
+@pytest.mark.parametrize("error, said", [
+    (OSError("(-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147024891), None)"),
+     "(-2147352567, 'Exception occurred.', (0, None, None, None, 0, -2147024891), None)"),
+    (KeyError(), "KeyError"),
+])
+def test_an_app_that_will_not_open_is_said_plainly_with_its_own_words_in_the_log(saved, make, error, said):
+    _written(saved)
+
+    result, stages, lines, _ = make(plugin=WontOpen(error))
+
+    assert result.reason == "Fake app could not be opened."
+    assert stages.last()["prove"] == ("failed", result.reason)
+    assert f"prove: Fake app could not be opened: {said}" in lines
 
 
 def test_switching_the_test_off_gives_the_proven_badge(saved, make):

@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import Future
 
 import pytest
 
@@ -6,6 +7,7 @@ from app.core.fake_plugin import FakePlugin
 from app.core.types import Rect
 from app.factory import tester
 from app.factory.input import UserTookOver
+from app.factory.prove import ProveError
 from app.meta.client import Answer, MetaRefused, SpendLimitReached
 from app.meta.prices import Usage
 from tests.core.conftest import build_fake_lesson
@@ -489,3 +491,31 @@ def test_the_agent_plays_lessons_only_in_apps_checked_for_it(tmp_path, plugin, w
 
     assert str(refused.value) == f"Meta's agent does not test {plugin.title} lessons: {why}."
     assert not hasattr(plugin, "opened") and script.calls == [] and hands.done == [] and hands.grabs == []
+
+
+def test_an_app_that_will_not_open_stops_the_test_with_its_own_words_kept_apart(tmp_path):
+    class WontOpen(Recording):
+        def open(self, *args, **kwargs):
+            raise OSError("(-2147352567, 'Exception occurred.', None, None)")
+
+    with pytest.raises(ProveError) as caught:
+        run(Script(), plugin=WontOpen(), workdir=tmp_path)
+
+    assert str(caught.value) == "Fake app could not be opened."            # plain, for the screen
+    assert caught.value.detail == "Fake app could not be opened: (-2147352567, 'Exception occurred.', None, None)"
+
+
+def test_an_app_that_cannot_be_read_stops_the_test_with_its_own_words_kept_apart(tmp_path):
+    class Unreadable(Recording):
+        def open(self, *args, **kwargs):
+            session = super().open(*args, **kwargs)
+            broken = Future()
+            broken.set_exception(OSError("the workbook is busy"))
+            session.read_now = lambda: broken
+            return session
+
+    with pytest.raises(ProveError) as caught:
+        run(Script(), plugin=Unreadable(), workdir=tmp_path)
+
+    assert str(caught.value) == "Fake app could not be read."
+    assert caught.value.detail == "Fake app could not be read: the workbook is busy"

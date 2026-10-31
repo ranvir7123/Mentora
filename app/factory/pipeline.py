@@ -213,7 +213,7 @@ class LessonFactory:
         except UserTookOver as exc:
             said, why = str(exc), ""
         except (ProveError, MetaError, OSError) as exc:
-            said, why = "The test could not run.", f"{str(exc).rstrip('.')}. "
+            said, why = "The test could not run.", f"{exact_words(exc).rstrip('.')}. "
         except Exception as exc:                     # the proof stands; a broken test must not throw it away
             self.on_line(traceback.format_exc().rstrip())
             said, why = "The test could not run.", f"Something unexpected went wrong ({str(exc).rstrip('.')}). "
@@ -295,6 +295,11 @@ class LessonFactory:
             self.on_line(f"{name} {state}: {detail}")
         if log and log != detail:
             self.on_line(f"{name}: {log}")
+
+
+def exact_words(exc: BaseException) -> str:
+    """An error's exact words, for the log: what the app or tool itself said, when it says that apart."""
+    return getattr(exc, "detail", "") or str(exc)
 
 
 def _meta_trouble(exc: MetaError) -> str:

@@ -27,7 +27,7 @@ from app.core.plugin import AppPlugin
 from app.core.runner import LessonRun, NotYet, StepChanged
 from app.core.types import Rect
 from app.factory.input import POINTER_ACTIONS, UserTookOver, WindowsHands, vk_for
-from app.factory.prove import ProveError
+from app.factory.prove import ProveError, app_trouble
 from app.factory.writer import _reaches
 from app.meta.client import MetaError, NoKey, SpendLimitReached
 
@@ -255,7 +255,7 @@ class _Run:
             session = self.plugin.open(self.lesson, self.workdir, visible=True, resume=False,
                                        on_snapshot=lambda snap: None, on_closed=self.closed.set)
         except Exception as exc:
-            raise ProveError(f"{title} could not be opened: {_said(exc)}") from exc
+            raise app_trouble(title, "could not be opened", exc) from exc
         try:
             self.session = session
             self.app = layout(self.hands)
@@ -418,7 +418,7 @@ class _Run:
         except TimeoutError:
             raise ProveError(f"{title} did not answer within {TIMEOUT_S:g} s") from None
         except Exception as exc:
-            raise ProveError(f"{title} {failed}: {_said(exc)}") from exc
+            raise app_trouble(title, failed, exc) from exc
 
 
 def _message(text: str, image: str | None = None) -> dict:

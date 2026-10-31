@@ -22,7 +22,7 @@ from pathlib import Path
 from app.core.lesson import Lesson, LessonError, load_lesson, save_lesson
 from app.core.plugin import AppPlugin
 from app.factory.input import UserTookOver
-from app.factory.pipeline import HANDS_OFF_S, LessonFactory, not_tested, run_test
+from app.factory.pipeline import HANDS_OFF_S, LessonFactory, exact_words, not_tested, run_test
 from app.factory.prove import ProveError, prove
 from app.factory.tester import agent_refusal
 from app.factory.video import VideoError
@@ -49,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
         print(stop, file=sys.stderr)
         return stop.code
     except (ProveError, MetaError, VideoError) as exc:
-        print(exc, file=sys.stderr)
+        print(exact_words(exc), file=sys.stderr)
         return 1
 
 
@@ -115,7 +115,7 @@ def _test(args: argparse.Namespace) -> int:
         except UserTookOver as exc:
             raise _Refused(f"{exc} Nothing was saved.") from None
         except (ProveError, MetaError, OSError) as exc:
-            raise _Refused(f"The test could not run: {str(exc).rstrip('.')}. Nothing was saved.") from None
+            raise _Refused(f"The test could not run: {exact_words(exc).rstrip('.')}. Nothing was saved.") from None
     save_lesson(replace(lesson, test=tested.result))
     _say(tested.detail)
     _say(f"Saved in {lesson.folder / 'lesson.json'}")

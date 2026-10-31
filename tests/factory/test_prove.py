@@ -201,8 +201,21 @@ def test_an_app_that_cannot_be_read_stops_the_proof(tmp_path):
             session.read_now = lambda: broken
             return session
 
-    with pytest.raises(ProveError, match="Fake app could not be read: the workbook is busy"):
+    with pytest.raises(ProveError) as caught:
         prove(_lesson(), Unreadable(), tmp_path)
+    assert str(caught.value) == "Fake app could not be read."            # plain, for the screen
+    assert caught.value.detail == "Fake app could not be read: the workbook is busy"
+
+
+def test_an_app_that_will_not_open_stops_the_proof_with_its_own_words_kept_apart(tmp_path):
+    class WontOpen(FakePlugin):
+        def open(self, *args, **kwargs):
+            raise KeyError()
+
+    with pytest.raises(ProveError) as caught:
+        prove(_lesson(), WontOpen(), tmp_path)
+    assert str(caught.value) == "Fake app could not be opened."
+    assert caught.value.detail == "Fake app could not be opened: KeyError"
 
 
 def test_a_rewrite_never_brings_back_a_step_already_dropped(tmp_path):

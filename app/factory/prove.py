@@ -29,7 +29,17 @@ Fix = Callable[[Lesson, str], "Lesson | NotReady"]
 
 
 class ProveError(Exception):
-    """The app itself got in the way (it would not open or stopped answering); no step is to blame."""
+    """The app itself got in the way (it would not open or stopped answering); no step is to blame. The message
+    is plain words; `detail` adds what the app itself said, for the log only."""
+
+    def __init__(self, message: str, *, detail: str = ""):
+        super().__init__(message)
+        self.detail = detail
+
+
+def app_trouble(title: str, what: str, exc: BaseException) -> ProveError:
+    """`title` `what` ("could not be opened", say), plainly, with the app's own words kept apart."""
+    return ProveError(f"{title} {what}.", detail=f"{title} {what}: {_said(exc)}")
 
 
 @dataclass(frozen=True)
@@ -100,7 +110,7 @@ def _run(lesson: Lesson, plugin: AppPlugin, workdir: Path) -> tuple[_Failed | No
         session = plugin.open(lesson, workdir, visible=False, resume=False,
                               on_snapshot=lambda snap: None, on_closed=lambda: None)
     except Exception as exc:
-        raise ProveError(f"{plugin.title} could not be opened: {_said(exc)}") from exc
+        raise app_trouble(plugin.title, "could not be opened", exc) from exc
     codes: dict[tuple[str, int], str] = {}
     try:
         for i, step in enumerate(lesson.steps):
@@ -149,7 +159,7 @@ def _back_to(session: AppSession, plugin: AppPlugin, before: tuple[Step, ...]) -
     except ProveError:
         raise
     except Exception as exc:
-        raise ProveError(f"{plugin.title} could not go back to the start of the step: {_said(exc)}") from exc
+        raise app_trouble(plugin.title, "could not go back to the start of the step", exc) from exc
 
 
 def _perform(session: AppSession, plugin: AppPlugin, op: Call, refused: str) -> None:
@@ -167,7 +177,7 @@ def _snap(session: AppSession, plugin: AppPlugin) -> Any:
     except ProveError:
         raise
     except Exception as exc:
-        raise ProveError(f"{plugin.title} could not be read: {_said(exc)}") from exc
+        raise app_trouble(plugin.title, "could not be read", exc) from exc
 
 
 def _judge(plugin: AppPlugin, step: Step, snap: Any) -> Verdict:
