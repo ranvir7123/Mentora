@@ -93,6 +93,14 @@ def test_lessons_come_in_title_order(shelf):
     assert ids(Library(shelf).lessons("sheets")) == ["z", "m", "a"]
 
 
+def test_lessons_made_from_videos_come_after_the_hand_written_path(shelf):
+    write_lesson(shelf, "budget", title="Monthly budget")
+    write_lesson(shelf, "pie", title="Make a pie chart", made_by="generated")
+    write_lesson(shelf, "grades", title="Student grades")
+    write_lesson(shelf, "chart", title="Add a chart", made_by="generated")
+    assert ids(Library(shelf).lessons("sheets")) == ["budget", "grades", "chart", "pie"]
+
+
 def test_reload_finds_a_newly_published_lesson(shelf):
     library = Library(shelf)
     assert library.lessons("sheets") == []
@@ -106,6 +114,6 @@ def test_the_real_lessons_all_load_into_a_known_course():
     library = Library(REPO / "lessons", show_unproven=True)
     assert library.problems == []
     assert [c.id for c in library.courses()] == ["excel", "python", "meta-ai"]
-    assert ids(library.lessons("excel")) == ["monthly-budget"]
+    assert ids(library.lessons("excel")) == ["monthly-budget", "make-a-pie-chart-of-skittles-colors"]
     assert ids(library.lessons("python")) == ["vscode-first-program"]
     assert ids(library.lessons("meta-ai")) == ["vscode-meta-ai-app"]

@@ -138,7 +138,7 @@ class ExcelSession:
                  reader: Callable[[Any], Any] = read_snapshot,
                  sleep: Callable[[float], None] = time.sleep) -> None:
         self._lesson = lesson
-        self.path = Path(workdir) / f"{lesson.id}.xlsx"
+        self.path = (Path(workdir) / f"{lesson.id}.xlsx").absolute()   # Excel reads a relative path from its own folder
         self._visible = visible
         self._on_snapshot = on_snapshot
         self._on_closed = on_closed

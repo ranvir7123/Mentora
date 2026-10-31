@@ -92,11 +92,12 @@ class Library:
             return list(self._courses)
 
     def lessons(self, course_id: str) -> list[Lesson]:
-        """The lessons on this course's shelf, by title."""
+        """The lessons on this course's shelf: the hand-written path first, then the ones made from videos,
+        each by title, so a lesson made later never jumps ahead and locks the one a learner starts with."""
         with self._lock:
             found = [lesson for lesson in self._lessons.values()
                      if lesson.course == course_id and self.badge(lesson) is not None]
-        return sorted(found, key=lambda lesson: (lesson.title.casefold(), lesson.id))
+        return sorted(found, key=lambda lesson: (lesson.made_by != "hand", lesson.title.casefold(), lesson.id))
 
     def lesson(self, lesson_id: str) -> Lesson:
         """A lesson on the shelf; KeyError for any other, so nothing unproven ever opens."""

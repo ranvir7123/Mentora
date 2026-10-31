@@ -1,4 +1,5 @@
 import threading
+from pathlib import Path
 
 import openpyxl
 import pytest
@@ -220,3 +221,11 @@ def test_close_from_the_com_thread_itself_does_not_hang(budget, tmp_path):
     com.submit(s.close).result(5)                # e.g. a callback on the COM thread closes the session
     com.stop()
     assert app.rec.calls[-1] == "Quit"
+
+
+def test_excel_is_given_the_full_path_when_the_work_folder_is_relative(rig, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)                  # Excel opens a relative path from its own folder, not ours
+    (tmp_path / "prove").mkdir()
+    r = rig(workdir=Path("prove"))
+    assert r.app.opened == [tmp_path / "prove" / "monthly-budget.xlsx"]
+    assert r.app.opened[0].is_absolute()

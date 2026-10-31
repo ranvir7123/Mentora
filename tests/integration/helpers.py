@@ -22,11 +22,11 @@ def fake_step(i, key=None, value=None, **given):
 
 
 def lesson_dict(lesson_id, *, title=None, course="sheets", steps=2, proof=PROVEN, test=TESTED, source=None,
-                starter=None):
+                starter=None, made_by="hand"):
     return {"format": 1, "id": lesson_id, "title": title or lesson_id.title(), "app": "fake", "course": course,
             "source": source, "goal": {"sentence": "Fill in the keys.", "picture": None},
             "starter": starter or {}, "steps": [fake_step(i) for i in range(steps)] if isinstance(steps, int) else steps,
-            "made_by": "hand", "edited_by_hand": False, "proof": proof, "test": test}
+            "made_by": made_by, "edited_by_hand": False, "proof": proof, "test": test}
 
 
 def write_courses(root, courses=COURSES):
