@@ -1008,21 +1008,23 @@ class Backend:
             log.exception("making a lesson from %s failed", url)
             result = None
         lesson_id, reason = None, MAKER_BROKE
-        if result is not None and result.lesson is not None:
-            self._library.reload()
-            try:
-                lesson_id = self._library.lesson(result.lesson.id).id
-                self._progress.lesson_made(lesson_id)
-            except KeyError:
-                reason = NOT_ON_SHELF
-        elif result is not None:
-            reason = result.reason or MAKER_BROKE
-        with self._lock:
-            if lesson_id is not None:
-                self._factory.update(state="ready", lessonId=lesson_id, reason="")
-            else:
-                self._factory.update(state="not_ready", reason=reason)
-            self._publish_home()
+        try:                                         # a shelf that can't be read again must not leave it spinning
+            if result is not None and result.lesson is not None:
+                self._library.reload()
+                try:
+                    lesson_id = self._library.lesson(result.lesson.id).id
+                    self._progress.lesson_made(lesson_id)
+                except KeyError:
+                    reason = NOT_ON_SHELF
+            elif result is not None:
+                reason = result.reason or MAKER_BROKE
+        finally:
+            with self._lock:
+                if lesson_id is not None:
+                    self._factory.update(state="ready", lessonId=lesson_id, reason="")
+                else:
+                    self._factory.update(state="not_ready", reason=reason)
+                self._publish_home()
 
     def dismiss_factory(self) -> None:
         """The learner is done with the lesson maker's result: back to the empty link box."""

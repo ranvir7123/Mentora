@@ -11,13 +11,13 @@ import pytest
 
 from app.coach.coach import CoachUnavailable
 from app.core.fake_plugin import FakePlugin, FakeSession
-from app.core.library import Library
+from app.core.library import Library, LibraryError
 from app.core.lesson import load_lesson
 from app.core.progress import Progress
 from app.core.services import MakeResult
 from app.core.types import Call, Rect, Spot, Target
 from app.excel.snapshot import Cell, Sheet, Snapshot
-from app.integration.backend import SAVE_NOTE, Backend, coach_state, save_note
+from app.integration.backend import MAKER_BROKE, SAVE_NOTE, Backend, coach_state, save_note
 from app.meta.client import NoKey
 from tests.integration.helpers import fake_step, lesson_dict, write_courses, write_lesson
 
@@ -718,6 +718,19 @@ def test_a_video_that_cannot_become_a_lesson_says_why(world):
     factory = world.backend.home()["factory"]
     assert (factory["state"], factory["reason"]) == ("not_ready", "No steps could be found in this video.")
     assert factory["stages"][1] == {"name": "read", "state": "failed", "detail": "No steps found"}
+
+
+def test_a_shelf_that_cannot_be_read_after_a_make_still_ends_the_making(world, monkeypatch):
+    def broken():
+        raise LibraryError("courses.json could not be read (it is being edited)")
+    monkeypatch.setattr(world.library, "reload", broken)
+    world.backend.make_lesson(VIDEO)
+    world.idle()
+    factory = world.backend.home()["factory"]
+    assert (factory["state"], factory["reason"]) == ("not_ready", MAKER_BROKE)
+    world.backend.dismiss_factory()                   # and the learner can try again
+    world.idle()
+    assert world.backend.home()["factory"]["state"] == "idle"
 
 
 def test_muting_is_shown_on_home(world):
