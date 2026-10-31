@@ -198,7 +198,7 @@ class _Open:
     shown: int = 0                   # the step the panel shows; lags the run while the mascot cheers
     banner: dict | None = None
     points: int = 0
-    verdict: str = ""                # the last Not yet line, for the coach
+    verdict: tuple[int, str] | None = None   # the last Not yet: its step and line, for the coach
     hints: dict[int, list[str]] = field(default_factory=dict)
     logged: int = 0                  # the run's records already in the attempt log
     complete: dict | None = None
@@ -693,7 +693,7 @@ class Backend:
                     cues.append("right")
             elif isinstance(event, NotYet):
                 o.banner = {"kind": "not_yet", "text": event.text, "stepIndex": event.index}
-                o.verdict = event.text
+                o.verdict = (event.index, event.text)
                 passed = None
                 cues.append("not_yet")
             elif isinstance(event, LessonDone):
@@ -896,8 +896,9 @@ class Backend:
                 return
             index = min(self._helped(o), len(o.lesson.steps) - 1)
             step = o.lesson.steps[index]
+            verdict = o.verdict[1] if o.verdict is not None and o.verdict[0] == index else ""  # never another step's
             context = {"instruction": step.instruction, "why": step.why, "hints": list(step.hints),
-                       "hints_shown": len(o.hints.get(index, [])), "verdict": o.verdict,
+                       "hints_shown": len(o.hints.get(index, [])), "verdict": verdict,
                        "state": coach_state(o.snap, step)}
         self._submit(self._meta_pool, self._answer, o, asked, text, context)
 

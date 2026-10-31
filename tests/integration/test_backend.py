@@ -921,6 +921,17 @@ def test_ask_is_about_the_step_that_came_undone(world):
     assert context["hints"] == ["Find k0.", "k0 needs a value.", "Set k0 to 1."]
 
 
+def test_the_coach_never_hears_another_steps_not_yet(world):
+    world.open()
+    world.learner_sets("k0", 5)                           # a Not yet on step 1
+    world.learner_sets("k0", 1)
+    world.run_later()
+    world.backend.ask("Where do I start?")                # asked on step 2, which has no Not yet
+    world.idle()
+    _, context = world.coach.asked[0]
+    assert context["instruction"] == "Set k1 to 2." and context["verdict"] == ""
+
+
 def test_quitting_does_not_wait_for_an_answer_from_the_coach(world):
     world.coach.gate = threading.Event()
     world.open()
