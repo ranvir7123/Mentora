@@ -217,6 +217,20 @@ def test_the_course_you_are_in_shows_its_lessons_in_miniature_with_who_made_it_a
     assert card.bottom() - credits.bottom() <= 24 + 4 + 2, "who made the videos is not at the foot of the card"
 
 
+def test_the_course_you_are_in_names_the_lesson_up_next_even_with_no_credits(home, qapp):
+    _, _, root = home("home_progress")
+    card = _holder(_text_item(root, "Excel"), "CourseCard")
+    inside = _scene_rect(card)
+    up_next = _scene_rect(_text_item(root, "Up next"))
+    assert inside.contains(up_next) and inside.contains(_scene_rect(_text_item(root, "Monthly budget")))
+    assert _texts(root).count("Up next") == 1, "a small card names its next lesson too"
+
+    card.setProperty("course", {**_long_course(3, 1), "credits": []})       # a course with no credits
+    _settle(qapp)
+    lesson = _scene_rect(_text_item(root, "Lesson 1"))
+    assert _scene_rect(card).bottom() - lesson.bottom() <= 24 + 4 + 2, "the lesson up next is not at the foot"
+
+
 def _long_course(count, done):
     states = ["done"] * done + ["current"] + ["locked"] * (count - done - 1)
     return {"id": "excel", "title": "Excel", "colour": "courseExcel", "credits": ["Sheet School"], "ready": True,
