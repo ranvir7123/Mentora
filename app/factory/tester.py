@@ -5,8 +5,9 @@ gives the agent one step at a time, each step in a fresh conversation. The agent
 app's window only, taken only while the app is in front, still where it was put, and no other program's
 window is over it, so nothing else on the screen reaches Meta. Every action it asks for is checked first:
 it must be well formed, the pointer stays inside the app and over the app's own windows, keys that Windows
-itself acts on (leaving or closing the app) and keys that open the app's macros or add a link are refused,
-text it types keeps the rules a lesson's own text keeps, and in keyboard mode the mouse is not used at all.
+itself acts on (leaving or closing the app) and keys that open the app's macros, add a link or open a new
+workbook are refused, text it types keeps the rules a lesson's own text keeps, and in keyboard mode the mouse
+is not used at all.
 Once the run has looked at the app, another window coming to the front means a person took over, and the test stops. Only the lesson's own checks decide when a step is done.
 A test passes when at least 4 runs in 5 reach the end; it stops early once that can no longer happen.
 """
@@ -51,6 +52,7 @@ SCROLL_NOTE = "Give scroll_x and scroll_y as numbers."
 TEXT_NOTE = "Give the text to type."
 MACROS_NOTE = "That key opens the app's macros, which a lesson never needs."
 LINK_KEY_NOTE = "That key adds a link, which would reach outside the app."
+NEW_WORKBOOK_NOTE = "That key opens a new workbook outside the lesson. Stay in this one."
 
 Mode = Literal["mouse", "keyboard"]
 _BUTTONS = {"left", "right", "wheel", "middle"}
@@ -61,9 +63,11 @@ _LEAVING = [{vk_for(k) for k in keys} for keys in
             (["win"], ["alt", "tab"], ["alt", "esc"], ["ctrl", "esc"], ["alt", "f4"], ["ctrl", "f4"], ["ctrl", "w"],
              ["alt", "space"], ["ctrl", "alt", "delete"])]
 # An app's own keys a lesson never needs, each with the note the agent is told: those that open its macros,
-# where code runs, and those that add a link to a web page or a file.
+# where code runs, those that add a link to a web page or a file, and the one that opens a new workbook in a
+# window of its own, which would look like a person switching away and stop the whole test.
 APP_REFUSED = {"excel": [({vk_for(k) for k in keys}, note) for keys, note in
-                         ((["alt", "f11"], MACROS_NOTE), (["alt", "f8"], MACROS_NOTE), (["ctrl", "k"], LINK_KEY_NOTE))]}
+                         ((["alt", "f11"], MACROS_NOTE), (["alt", "f8"], MACROS_NOTE), (["ctrl", "k"], LINK_KEY_NOTE),
+                          (["ctrl", "n"], NEW_WORKBOOK_NOTE))]}
 # Apps whose lessons Meta's agent may play. Its keys and clicks land on this computer, so an app is added only
 # once nothing the agent can reach in it would let it run commands of its own.
 AGENT_APPS = {"excel", "fake"}

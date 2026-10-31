@@ -447,6 +447,28 @@ def test_text_the_agent_types_is_held_to_the_lessons_own_rules(tmp_path):
     assert tester.allowed({"type": "type", "text": "=SUM(B2:B6)"}, APP, "mouse", plugin=Excel()) == (True, "")
 
 
+class NewWorkbookHands(FakeHands):
+    """Ctrl+N opens a new workbook, a window of its own, in front of the lesson's."""
+
+    def do(self, action):
+        if action["type"] == "keypress" and {k.lower() for k in action["keys"]} == {"ctrl", "n"}:
+            self.done.append(action)
+            self.front_ok = False
+        else:
+            super().do(action)
+
+
+def test_the_agent_may_not_open_a_new_workbook_and_no_person_is_blamed(tmp_path):
+    plugin = Excel()
+    script = Script(act({"type": "keypress", "keys": ["ctrl", "n"]}), act(typed("k0", 1)), act(typed("k1", 2)),
+                    act(typed("k2", 3)))
+
+    result, hands, lines = run(script, plugin=plugin, hands=NewWorkbookHands(plugin), workdir=tmp_path)
+
+    assert result.passed and [a["type"] for a in hands.done] == ["type", "type", "type"]
+    assert "refused keypress ctrl+n: That key opens a new workbook outside the lesson. Stay in this one." in lines
+
+
 class VsCode(Recording):
     app_id, title = "vscode", "VS Code"
 
