@@ -1,0 +1,275 @@
+{
+  "format": 1,
+  "id": "make-a-pie-chart-of-skittles-colors",
+  "title": "Make a Pie Chart of Skittles Colors",
+  "app": "excel",
+  "course": "excel",
+  "source": {
+    "url": "https://www.youtube.com/watch?v=FnJtqbkx7s0",
+    "title": "Pie chart in Excel",
+    "creator": "Jason Lachniet",
+    "channel_url": "https://www.youtube.com/channel/UCO56dQeJxajrgNaPcq1B_bg",
+    "licence": "Creative Commons Attribution license (reuse allowed)",
+    "length_s": 369
+  },
+  "goal": {
+    "sentence": "You will have a titled pie chart that shows each Skittles color's share of the total.",
+    "picture": "goal.png"
+  },
+  "starter": {
+    "sheets": [
+      {
+        "name": "Sheet2",
+        "cells": {
+          "B1": "Category",
+          "C1": "Count",
+          "B2": "Green",
+          "C2": 85,
+          "B3": "Orange",
+          "C3": 72,
+          "B4": "Purple",
+          "C4": 100,
+          "B5": "Red",
+          "C5": 95,
+          "B6": "Yellow",
+          "C6": 72
+        },
+        "widths": {
+          "B": 12
+        }
+      }
+    ],
+    "active": "Sheet2"
+  },
+  "steps": [
+    {
+      "id": "total",
+      "instruction": "In C7, add up the five counts.",
+      "why": "The total shows the whole sample that the pie slices divide up.",
+      "target": {
+        "kind": "cell",
+        "ref": "C7"
+      },
+      "check": {
+        "kind": "formula",
+        "args": {
+          "cell": "C7",
+          "value": 424,
+          "covers": "C2:C6",
+          "uses": "SUM"
+        }
+      },
+      "replay": {
+        "kind": "set_formula",
+        "args": {
+          "cell": "C7",
+          "formula": "=SUM(C2:C6)"
+        }
+      },
+      "hints": [
+        "Use the SUM function in the cell under the counts.",
+        "Add up cells C2 through C6.",
+        "Type =SUM(C2:C6) in C7 and press Enter."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "C7",
+              "formula": "=SUM(C1:C6)"
+            }
+          },
+          "not_yet": "Start the range at C2, not the heading.",
+          "code": "refers_extra:C1"
+        },
+        {
+          "replay": {
+            "kind": "set_value",
+            "args": {
+              "cell": "C7",
+              "value": 424
+            }
+          },
+          "not_yet": "Use a SUM formula instead of typing the number.",
+          "code": "typed_value"
+        }
+      ],
+      "clip": {
+        "start": 45.28,
+        "end": 62.0
+      }
+    },
+    {
+      "id": "select",
+      "instruction": "Select only the counts, C2 to C6.",
+      "why": "A chart plots whatever you highlight, so leave out the heading and total.",
+      "target": {
+        "kind": "range",
+        "ref": "C2:C6"
+      },
+      "check": {
+        "kind": "selected",
+        "args": {
+          "range": "C2:C6"
+        }
+      },
+      "replay": {
+        "kind": "select",
+        "args": {
+          "range": "C2:C6"
+        }
+      },
+      "hints": [
+        "Highlight only the numbers you want in the pie.",
+        "Skip the Count heading and the total in C7.",
+        "Drag from C2 down to C6."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "select",
+            "args": {
+              "range": "C2:C7"
+            }
+          },
+          "not_yet": "Leave out the total in C7.",
+          "code": "selected:C2:C7"
+        },
+        {
+          "replay": {
+            "kind": "select",
+            "args": {
+              "range": "C1:C6"
+            }
+          },
+          "not_yet": "Leave out the Count heading in C1.",
+          "code": "selected:C1:C6"
+        }
+      ],
+      "clip": {
+        "start": 28.96,
+        "end": 60.56
+      }
+    },
+    {
+      "id": "pie",
+      "instruction": "Insert a simple 2-D pie chart of the counts.",
+      "why": "A pie chart shows how much each color adds to the whole.",
+      "target": {
+        "kind": "control",
+        "ref": "Insert > Pie Chart"
+      },
+      "check": {
+        "kind": "chart",
+        "args": {
+          "chart_type": "pie",
+          "over": "C2:C6"
+        }
+      },
+      "replay": {
+        "kind": "add_chart",
+        "args": {
+          "chart_type": "pie",
+          "source": "C2:C6"
+        }
+      },
+      "hints": [
+        "Look on the Insert tab in the Charts group.",
+        "Open the pie chart button with C2:C6 selected.",
+        "Choose the first 2-D Pie option."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "add_chart",
+            "args": {
+              "chart_type": "column",
+              "source": "C2:C6"
+            }
+          },
+          "not_yet": "Pick a pie chart, not a column chart.",
+          "code": "type:column"
+        },
+        {
+          "replay": {
+            "kind": "add_chart",
+            "args": {
+              "chart_type": "pie",
+              "source": "C2:C7"
+            }
+          },
+          "not_yet": "Don't include the total; plot only C2:C6.",
+          "code": "over"
+        }
+      ],
+      "clip": {
+        "start": 60.56,
+        "end": 79.6
+      }
+    },
+    {
+      "id": "title",
+      "instruction": "Change the chart title to Skittles Color Distribution.",
+      "why": "A clear title tells readers what the chart shows instead of a placeholder.",
+      "target": {
+        "kind": "control",
+        "ref": "Chart Title"
+      },
+      "check": {
+        "kind": "chart",
+        "args": {
+          "chart_type": "pie",
+          "over": "C2:C6",
+          "title": "Skittles Color Distribution"
+        }
+      },
+      "replay": {
+        "kind": "add_chart",
+        "args": {
+          "chart_type": "pie",
+          "source": "C2:C6",
+          "title": "Skittles Color Distribution"
+        }
+      },
+      "hints": [
+        "Click the words Chart Title at the top of the chart.",
+        "Select the placeholder text and type over it.",
+        "Type Skittles Color Distribution as the title."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "add_chart",
+            "args": {
+              "chart_type": "pie",
+              "source": "C2:C6",
+              "title": "Chart Title"
+            }
+          },
+          "not_yet": "Replace the placeholder with Skittles Color Distribution.",
+          "code": "title"
+        }
+      ],
+      "clip": {
+        "start": 216.64,
+        "end": 253.36
+      }
+    }
+  ],
+  "made_by": "generated",
+  "edited_by_hand": false,
+  "proof": {
+    "passed": true,
+    "at": "2026-10-31T08:49:56+00:00",
+    "dropped": [],
+    "notes": []
+  },
+  "test": {
+    "passed": false,
+    "at": "2026-10-31T08:49:56+00:00",
+    "mode": "skipped",
+    "runs": 0,
+    "passes": 0
+  }
+}

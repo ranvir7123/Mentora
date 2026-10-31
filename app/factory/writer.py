@@ -1,4 +1,4 @@
-"""Muse Spark writes a lesson from a prepared tutorial video.
+"""Muse Spark (or Claude, with MENTORA_AI=claude) writes a lesson from a prepared tutorial video.
 
 It is sent the small MP4 (or, when Meta refuses the video, the still frames), the transcript with its
 times, the plug-in's menus and the lesson rules, and asked for JSON matching `lesson_json_schema`. The
@@ -27,8 +27,9 @@ from app.meta.client import Answer, MetaClient, MetaRefused
 WRITER_MODEL = "muse-spark-1.3"
 SHOWN_PROBLEMS = 3
 SHORT_TEXT = 60
-BROKE_RULES = "Muse Spark could not write a lesson that keeps the rules from this video. Try another video."
-REFUSED = "Meta would not take this video, so the lesson could not be written. Try another video."
+_BROKE = "{writer} could not write a lesson that keeps the rules from this video. Try another video."
+_REFUSED = "{company} would not take this video, so the lesson could not be written. Try another video."
+BROKE_RULES, REFUSED = _BROKE.format(writer="Muse Spark"), _REFUSED.format(company="Meta")
 
 # Text that reaches outside the app anywhere in a lesson: a link of any kind, or a network path.
 LINK = re.compile(r"\w+://|file:/|www\.|mailto:|search-ms:|ms-[a-z-]+:|\\\\[^\\\s]+\\", re.IGNORECASE)
@@ -90,6 +91,8 @@ def write_lesson(prepared: Prepared, info: VideoInfo, plugin: AppPlugin, client:
                  ) -> Lesson | NotReady:
     """One lesson from the video, or why there is none. `feedback` is the prover's reason on a retry."""
     label = label or f"writer_{info.id}" + ("_fix" if feedback else "")
+    writer, company = names(client)
+    refused = _REFUSED.format(company=company)
     schema = lesson_json_schema(plugin)
     messages = [{"role": "system", "content": _rules(plugin)}]
     try:
@@ -103,11 +106,11 @@ def write_lesson(prepared: Prepared, info: VideoInfo, plugin: AppPlugin, client:
         try:
             answer = client.respond(WRITER_MODEL, sent, label=label, schema=schema)
         except MetaRefused as exc:
-            return NotReady(REFUSED, detail=str(exc))
+            return NotReady(refused, detail=str(exc))
 
     for retry in (False, True):
         if answer.refusal:
-            return NotReady(f"Muse Spark would not write this lesson: {answer.refusal}")
+            return NotReady(f"{writer} would not write this lesson: {answer.refusal}")
         lesson, problems = _read(answer, info, plugin, lessons_dir)
         if not problems:
             return lesson
@@ -120,11 +123,16 @@ def write_lesson(prepared: Prepared, info: VideoInfo, plugin: AppPlugin, client:
         try:
             answer = client.respond(WRITER_MODEL, sent, label=f"{label}_retry", schema=schema)
         except MetaRefused as exc:
-            return NotReady(REFUSED, detail=str(exc))
+            return NotReady(refused, detail=str(exc))
     shown = "; ".join(problems[:SHOWN_PROBLEMS])
     more = len(problems) - SHOWN_PROBLEMS
-    return NotReady(BROKE_RULES,
-                    detail=f"Muse Spark's lesson broke the rules: {shown}{f'; and {more} more' if more > 0 else ''}.")
+    return NotReady(_BROKE.format(writer=writer),
+                    detail=f"{writer}'s lesson broke the rules: {shown}{f'; and {more} more' if more > 0 else ''}.")
+
+
+def names(client) -> tuple[str, str]:
+    """(the AI that writes, the company that runs it), for the words on the screen."""
+    return ("Claude", "Claude") if getattr(client, "name", "") == "Claude" else ("Muse Spark", "Meta")
 
 
 # The request.
