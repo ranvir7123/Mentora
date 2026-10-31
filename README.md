@@ -74,15 +74,20 @@ record: this repository was started on 29 Oct 2026.
 
 ## Brought in from before the hackathon
 
-Some plain helpers (reading Excel without freezing it, finding buttons with Windows UI Automation, window
-and screen helpers) are adapted from my earlier private project, Project X. Each one was reshaped to fit
-here and landed in its own commit whose message starts with `Adapted from Project X :`.
+Some plain helpers (reading Excel without freezing it, finding a cell's place on screen, window and
+screen helpers) are adapted from my earlier private project, Project X, and reshaped to fit here. The
+first three landed in their own commits whose messages start with `Adapted from Project X :`. The last
+two came in inside larger commits with ordinary messages, so the table names those commits. Finding
+buttons with Windows UI Automation was written new here.
 
 | Piece here | Adapted from (old path) | Commit |
 |---|---|---|
 | `app/excel/busy.py`: Excel's busy signals | `sidecar/checks/excel_reader.py` (`is_busy`, `RETRYABLE_HRESULTS`) | 357f98b |
 | `app/excel/formula.py`: formula reading | `sidecar/checks/formula.py` | ea0dc53 |
 | `app/excel/com_thread.py`: the COM thread's sleeping message pump | `sidecar/adapters/excel.py` (`_pump`, `submit`, `_drain_work`) | dde4410 |
+| `app/win/windows.py`: screen scaling, the visible window frame, placing a window without focusing it (`dpi_aware_thread`, `dpi_scale`, `window_rect`, `outer_rect_for`, `place_window`) | `sidecar/pointer/winapi.py` (`dpi_aware_thread`, `dpi_scale`, `visible_frame`, `rect_to_fill`, `place_beside_dock`) | d74de6e |
+| `app/win/windows.py`: the screenshot and its PNG encoder (`screenshot_png`, `png_bytes`) | `sidecar/pointer/capture.py` (`grab`, `encode_png`) | 48b9119 |
+| `app/excel/locate.py`: a cell's box on screen from Excel's panes (`cell_spot`, `_pane_info`, `cell_rect`, `spot_rect`, `split_area`) | `sidecar/checks/excel_reader.py` (`cell_region`) | 48b9119 |
 
 ## Which Meta model does which job
 
