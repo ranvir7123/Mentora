@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import parse_qs, urlsplit
 
+from app.ai import ai_name
 from app.coach.coach import CoachUnavailable
 from app.core.lesson import Lesson, Step
 from app.core.library import Library
@@ -260,6 +261,7 @@ class Backend:
         self._tips = {"state": "ready", "text": progress.tips} if progress.tips else {"state": "none", "text": ""}
         self._factory = copy.deepcopy(EMPTY_HOME["factory"])
         self._key_hunt = 0
+        self._ai = ai_name()
         try:
             self._meta = "ok" if self._find_key()[0] else "no_key"
         except Exception:
@@ -441,6 +443,7 @@ class Backend:
                          for card in common_mistakes(self._progress.attempts(), shelf)],
             "factory": copy.deepcopy(self._factory),
             "meta": self._meta,
+            "ai": self._ai,
             "muted": self._muted,
         }
 

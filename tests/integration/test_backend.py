@@ -503,6 +503,21 @@ def test_a_coach_that_cannot_answer_says_its_calm_line(world):
     assert world.backend.home()["meta"] == "unreachable"
 
 
+def test_home_names_the_ai_the_switch_chose(tmp_path, monkeypatch):
+    monkeypatch.delenv("MENTORA_AI", raising=False)
+    w = World(tmp_path / "meta")
+    try:
+        assert w.backend.home()["ai"] == "meta"
+    finally:
+        w.backend.shutdown()
+    monkeypatch.setenv("MENTORA_AI", "claude")
+    w = World(tmp_path / "claude")
+    try:
+        assert w.backend.home()["ai"] == "claude"
+    finally:
+        w.backend.shutdown()
+
+
 def test_a_missing_key_shows_on_home(tmp_path):
     w = World(tmp_path, key=None)
     try:

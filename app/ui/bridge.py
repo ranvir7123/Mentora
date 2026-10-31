@@ -21,7 +21,7 @@ from PySide6.QtGui import QDesktopServices, QGuiApplication, QWindow
 
 from app.core.screen import ScreenBackend
 from app.core.types import Rect
-from app.meta.key import NAME as KEY_NAME
+from app.ai import SWITCH, key_name
 from app.ui import landing, winstyle
 
 _STATES = ("home", "lesson", "pointer")
@@ -345,11 +345,13 @@ class Bridge(QObject):
 
     @Slot()
     def copyKeySetup(self) -> None:
-        """Puts the PowerShell line that saves a Meta key on the clipboard, with a gap where the key goes.
+        """Puts the PowerShell line that saves the key of the AI home names (Meta's or Claude's) on the
+        clipboard, with a gap where the key goes.
         The key itself is never read here. The backend then looks for the key for a while, so the card
         clears once the learner has saved it."""
         QGuiApplication.clipboard().setText(
-            f'[Environment]::SetEnvironmentVariable("{KEY_NAME}", "<your key>", "User")')
+            f'[Environment]::SetEnvironmentVariable("{key_name({SWITCH: self._state["home"].get("ai", "meta")})}", '
+            '"<your key>", "User")')
         self._backend.key_setup_copied()
 
     @Slot()

@@ -311,6 +311,38 @@ def test_tips_show_what_meta_wrote_from_your_tries(home):
     assert "Formulas: fast. Charts took 3 tries. Try the chart review next." in _texts(root)
 
 
+def _with_claude(qapp, backend, **over):
+    state = {**backend.home(), "ai": "claude", **over}
+    backend._publish(home=state)
+    _settle(qapp, 0.1)
+
+
+def test_tips_name_the_ai_that_wrote_them(home, qapp):
+    backend, _, root = home("home_progress")
+    assert "From Meta's AI" in _texts(root)
+    _with_claude(qapp, backend)
+    texts = _texts(root)
+    assert "From Claude" in texts and "From Meta's AI" not in texts
+
+
+def test_with_claude_unreachable_tips_name_claude(home, qapp):
+    backend, _, root = home("home_offline")
+    _with_claude(qapp, backend)
+    assert "Claude can't be reached right now. Lessons still work." in _texts(root)
+
+
+def test_with_claude_and_no_key_the_card_asks_for_the_claude_key_and_copies_its_line(home, qapp):
+    backend, _, root = home("home_no_key")
+    _with_claude(qapp, backend)
+    texts = _texts(root)
+    assert "Add your Claude key" in texts and "Add your Meta key" not in texts
+    assert "Tips and the Ask box need it." in texts
+    QGuiApplication.clipboard().clear()
+    _click(qapp, root, _button(root, "Copy the setup line"))
+    assert QGuiApplication.clipboard().text() == \
+        '[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "<your key>", "User")'
+
+
 def test_with_no_finished_lesson_tips_say_how_to_get_them(home):
     _, _, root = home("first_run")
     assert "Finish a lesson to get tips" in _texts(root)

@@ -86,6 +86,7 @@ class HomeState(TypedDict):
     mistakes: list[MistakeCard]
     factory: Factory
     meta: Literal["ok", "no_key", "unreachable"]
+    ai: Literal["meta", "claude"]      # which AI writes the tips and answers the Ask box
     muted: bool
 
 
@@ -184,6 +185,7 @@ EMPTY_HOME: HomeState = {
     "mistakes": [],
     "factory": {"state": "idle", "url": "", "stages": [], "reason": "", "lessonId": None},
     "meta": "ok",
+    "ai": "meta",
     "muted": False,
 }
 

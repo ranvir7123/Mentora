@@ -1,12 +1,13 @@
 import QtQuick
 import Theme
 
-// Two or three plain sentences Meta's AI wrote from how your lessons went. While they are being written,
+// Two or three plain sentences Meta's AI (or Claude, when `ai` says so) wrote from how your lessons went. While they are being written,
 // a calm placeholder shows, but only after 200 ms, so a quick answer never flickers. With no finished
-// lesson it says how to get tips; when Meta can't be reached it says lessons still work.
+// lesson it says how to get tips; when the AI can't be reached it says lessons still work.
 Rectangle {
     id: root
     property var tips: ({})
+    property string ai: "meta"          // or "claude", when MENTORA_AI=claude
 
     readonly property string kind: tips.state || "none"
     readonly property real pad: Theme.space24
@@ -51,7 +52,7 @@ Rectangle {
                 anchors.leftMargin: Theme.space12
                 anchors.baseline: heading.baseline
                 horizontalAlignment: Text.AlignRight
-                text: "From Meta's AI"
+                text: root.ai === "claude" ? "From Claude" : "From Meta's AI"
                 elide: Text.ElideRight
                 color: Theme.muted
                 font.family: Theme.fontBody
@@ -63,7 +64,7 @@ Rectangle {
             visible: root.kind !== "loading"
             width: parent.width
             text: root.kind === "ready" ? root.tips.text || ""
-                  : root.kind === "error" ? "Meta can't be reached right now. Lessons still work."
+                  : root.kind === "error" ? (root.ai === "claude" ? "Claude" : "Meta") + " can't be reached right now. Lessons still work."
                   : "Finish a lesson to get tips"
             wrapMode: Text.Wrap
             lineHeight: 1.15
