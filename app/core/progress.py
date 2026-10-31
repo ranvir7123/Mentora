@@ -10,8 +10,9 @@ counted but never saved, so the file is left as it was.
 A step's points are earned once: passing it again after reopening a lesson gives none. A finished lesson
 played again earns them again.
 
-`attempts.jsonl` is the attempt log the coach reads: one line per finished step, added as it happens. A
-half-written last line is skipped.
+`attempts.jsonl` is the attempt log the coach and "Your common mistakes" read: one line per finished step,
+added as it happens, with the code of each "Not yet" the step's check said. A half-written last line is
+skipped.
 
 The streak counts days in a row with at least one step passed, up to today or yesterday. A missed day
 resets it quietly: nothing is said and nothing is taken away.
@@ -235,7 +236,7 @@ class Progress:
     def log_attempt(self, lesson_id: str, record: StepRecord) -> None:
         line = json.dumps({"lesson": lesson_id, "step_id": record.step_id, "tries": record.tries,
                            "hints": record.hints, "seconds": record.seconds, "first_try": record.first_try,
-                           "at": datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False)
+                           "mistakes": list(record.mistakes), "at": datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False)
         with self._lock:
             try:
                 self._root.mkdir(parents=True, exist_ok=True)
@@ -271,9 +272,11 @@ class Progress:
         for line in lines:
             try:
                 d = json.loads(line)
+                slips = d.get("mistakes", [])            # lines from before the kinds of slip were kept have none
                 records.append(StepRecord(step_id=f"{d['lesson']}/{d['step_id']}", tries=int(d["tries"]),
                                           hints=int(d["hints"]), seconds=float(d["seconds"]),
-                                          first_try=bool(d["first_try"])))
-            except (ValueError, TypeError, KeyError):
+                                          first_try=bool(d["first_try"]),
+                                          mistakes=tuple(str(code) for code in slips)))
+            except (ValueError, TypeError, KeyError, AttributeError):
                 continue
         return records

@@ -44,6 +44,21 @@ class Course(TypedDict):
     lessons: list[LessonCard]
 
 
+class MistakeCard(TypedDict):
+    """A step that took more than one try (see app/core/mistakes.py)."""
+    lessonId: str
+    lessonTitle: str
+    stepIndex: int
+    instruction: str
+    kind: str                    # the kind of slip a check named most, such as "Typed the answer instead of a
+                                 # formula"; "" when the attempt log doesn't say
+    tries: int                   # the most tries it took
+    times: int                   # how many goes at it took more than one try
+    tip: str                     # fixed words, never the AI's
+    fixed: bool                  # done right first time since
+    colour: str                  # the lesson's course colour, a theme token name
+
+
 class Tips(TypedDict):
     state: Literal["none", "loading", "ready", "error"]
     text: str
@@ -68,8 +83,10 @@ class HomeState(TypedDict):
     continueCard: ContinueCard | None
     courses: list[Course]
     tips: Tips
+    mistakes: list[MistakeCard]
     factory: Factory
     meta: Literal["ok", "no_key", "unreachable"]
+    ai: Literal["meta", "claude"]      # which AI writes the tips and answers the Ask box
     muted: bool
 
 
@@ -165,8 +182,10 @@ EMPTY_HOME: HomeState = {
     "continueCard": None,
     "courses": [],
     "tips": {"state": "none", "text": ""},
+    "mistakes": [],
     "factory": {"state": "idle", "url": "", "stages": [], "reason": "", "lessonId": None},
     "meta": "ok",
+    "ai": "meta",
     "muted": False,
 }
 
@@ -205,5 +224,6 @@ class ScreenBackend(Protocol):
     def set_muted(self, on: bool) -> None: ...
     def reopen_app(self) -> None: ...
     def go_to_step(self, index: int) -> None: ...
+    def practise(self, lesson_id: str, step_index: int) -> None: ...
     def dismiss_factory(self) -> None: ...
     def key_setup_copied(self) -> None: ...

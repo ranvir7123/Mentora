@@ -18,7 +18,11 @@ mascot on empty cells beside the first step's cells. One lesson is proven so far
 program", in VS Code.
 
 - The program ([app/main.py](app/main.py), [app/integration/](app/integration/)): `python -m app` opens
-  the home screen with your streak, points and courses. Opening a lesson hides home, docks the lesson
+  the home screen with your streak, points and courses, and "Your common mistakes": the steps that took
+  you more than one try, read from your attempt record, each with the kind of slip its check named, a tip
+  in fixed words (no AI key needed) and a "Practise this again" button. That button opens the lesson
+  on a fresh copy and does the steps before that one for you; it is checked by tests only and has not
+  run in real Excel yet. Opening a lesson hides home, docks the lesson
   panel on the right and puts the app beside it. Your progress stays on your computer, in
   `%LOCALAPPDATA%\mentora\`. Only lessons that passed their proof and test are on the shelf (a VS Code
   lesson skips the test, so its proof is enough), so today the shelf holds only "Your first Python

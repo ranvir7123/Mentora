@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 
 from app.core.lesson import Lesson, Step
@@ -56,6 +56,7 @@ class StepRecord:
     hints: int
     seconds: float
     first_try: bool
+    mistakes: tuple[str, ...] = ()   # the code of each Not yet the check said on this step, in order
 
 
 @dataclass
@@ -65,6 +66,7 @@ class _Progress:
     hints: int = 0
     said_not_yet: bool = False
     last_wrong: tuple[str, str] | None = None    # the (code, text) of the last Not yet said
+    codes: list[str] = field(default_factory=list)
 
 
 class LessonRun:
@@ -188,6 +190,7 @@ class LessonRun:
             progress.last_wrong = (verdict.code, verdict.text)
             progress.tries += 1
             progress.said_not_yet = True
+            progress.codes.append(verdict.code)
             events.append(NotYet(self.index, self._not_yet_line(verdict), verdict.code))
 
     def _not_yet_line(self, verdict: Verdict) -> str:
@@ -201,7 +204,7 @@ class LessonRun:
         now, step, progress = self._clock(), self._steps[self.index], self._progress[self.index]
         first_try = not progress.said_not_yet
         self._records.append(StepRecord(step.id, progress.tries + 1, progress.hints,
-                                        now - self._step_started, first_try))
+                                        now - self._step_started, first_try, tuple(progress.codes)))
         self._points += self._points_per_step
         self._step_started = now
         self.index += 1

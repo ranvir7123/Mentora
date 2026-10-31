@@ -5,8 +5,8 @@ import "components"
 import "home"
 
 // The app's main window. At the top, hello, your streak and today's points. Below, the lesson you are
-// part way through (or your first one), your courses, tips from Meta's AI and making a lesson from a
-// video. Opening a course shows its path instead, until you go back to all courses.
+// part way through (or your first one), your courses, your common mistakes, tips from Meta's AI and making
+// a lesson from a video. Opening a course shows its path instead, until you go back to all courses.
 Window {
     id: root
     required property var bridge
@@ -20,6 +20,7 @@ Window {
     readonly property real margin: wide ? Theme.space32 : Theme.space24
     readonly property real sideWidth: 352
     readonly property bool keyMissing: home.meta === "no_key"
+    readonly property bool claude: home.ai === "claude"     // MENTORA_AI=claude: Claude writes the tips
 
     // Read from `home` itself: inside onHomeChanged, `courses` may not have caught up yet.
     function courseOf(lessonId) {
@@ -127,6 +128,12 @@ Window {
                         onOpen: (id) => root.courseId = id
                     }
                 }
+
+                MistakesCard {
+                    width: parent.width
+                    mistakes: root.home.mistakes || []
+                    onPractise: (lessonId, stepIndex) => root.bridge.practise(lessonId, stepIndex)
+                }
             }
 
             Column {
@@ -141,6 +148,7 @@ Window {
                     visible: !root.keyMissing
                     width: parent.width
                     tips: root.home.tips || ({})
+                    ai: root.home.ai || "meta"
                 }
 
                 MakeLesson {
@@ -177,7 +185,7 @@ Window {
                             spacing: Theme.space4
                             Text {
                                 width: parent.width
-                                text: "Add your Meta key"
+                                text: root.claude ? "Add your Claude key" : "Add your Meta key"
                                 wrapMode: Text.Wrap
                                 color: Theme.text
                                 font.family: Theme.fontHeading
@@ -186,7 +194,7 @@ Window {
                             }
                             Text {
                                 width: parent.width
-                                text: "Lessons from videos and tips need it."
+                                text: root.claude ? "Tips and the Ask box need it." : "Lessons from videos and tips need it."
                                 wrapMode: Text.Wrap
                                 color: Theme.muted
                                 font.family: Theme.fontBody

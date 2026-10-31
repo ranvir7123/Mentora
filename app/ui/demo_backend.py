@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from app.core.lesson import Lesson, load_lesson
+from app.core.mistakes import common_mistakes
+from app.core.runner import StepRecord
 from app.core.screen import CLOSED_LESSON, EMPTY_HOME, HIDDEN_POINTER
 
 STATES: tuple[str, ...] = (
@@ -110,9 +112,20 @@ def _courses(excel_current: int = 0, python_lessons: bool = True) -> list[dict]:
     ]
 
 
+def _mistakes() -> list[dict]:
+    """Made-up tries on the budget lesson, worked out by the real code: two steps still to practise and one
+    got right since."""
+    log = [StepRecord("monthly-budget/total", 3, 0, 41.0, False, ("typed_value", "typed_value")),
+           StepRecord("monthly-budget/chart", 3, 0, 52.0, False, ("type:column", "type:bar")),
+           StepRecord("monthly-budget/share", 2, 0, 33.0, False, ("not_absolute:B8",)),
+           StepRecord("monthly-budget/chart", 1, 0, 12.0, True)]
+    budget = _lesson_file()
+    return [{**card, "colour": "courseExcel"} for card in common_mistakes(log, {budget.id: budget})]
+
+
 def _home(**over: Any) -> dict:
     home = copy.deepcopy(EMPTY_HOME)
-    home.update(learner=dict(_LEARNER), courses=_courses(1),
+    home.update(learner=dict(_LEARNER), courses=_courses(1), mistakes=_mistakes(),
                 continueCard={"lessonId": "monthly-budget", "title": "Monthly budget", "step": 4, "of": 9},
                 tips={"state": "ready",
                       "text": "Formulas: fast. Charts took 3 tries. Try the chart review next."})
@@ -196,15 +209,19 @@ def _build(state: str) -> tuple[dict, dict, dict, str | None, dict]:
 
     if state == "first_run":
         home = _home(learner={**_LEARNER, "streak": 0, "pointsToday": 0}, continueCard=None,
-                     courses=_courses(0), tips={"state": "none", "text": ""})
+                     courses=_courses(0), tips={"state": "none", "text": ""}, mistakes=[])
     elif state == "home_long_text":
         courses = _courses(1)
         courses[0]["title"] = "Excel for people who have never opened a spreadsheet before"
         courses[0]["credits"] = [_LONG_CREATOR, "Priya Makes Spreadsheets", "Sheet School"]
         courses[0]["lessons"][1]["title"] = _LONG_TITLE
+        mistakes = _mistakes()
+        mistakes[0].update(lessonTitle=_LONG_TITLE, times=12, tries=14,
+                           instruction="Work out what share of the whole monthly total your rent takes up in C2",
+                           kind="Wrote a name with different capitals or spelling, again and again")
         home = _home(learner={**_LEARNER, "name": _LONG_NAME, "streak": 128, "pointsToday": 1240},
                      continueCard={"lessonId": "monthly-budget", "title": _LONG_TITLE, "step": 4, "of": 9},
-                     courses=courses,
+                     courses=courses, mistakes=mistakes,
                      tips={"state": "ready", "text": (
                          "Formulas: fast, and you fixed the total on your own. Charts took 3 tries, mostly "
                          "picking the range. Try the chart review next, then the lookup lesson when you "
@@ -479,6 +496,11 @@ class DemoBackend:
         lesson = self.lesson()
         lesson["appState"] = "ready"
         self._publish(lesson=lesson)
+
+    def practise(self, lesson_id: str, step_index: int) -> None:
+        self._record("practise", lesson_id, step_index)
+        if lesson_id == _lesson_file().id and 0 <= step_index < len(_lesson_file().steps):
+            self._publish(lesson=_lesson(step_index), pointer=copy.deepcopy(HIDDEN_POINTER))
 
     def go_to_step(self, index: int) -> None:
         self._record("go_to_step", index)

@@ -3,13 +3,13 @@ other keys, all the way down."""
 import typing
 
 from app.core.screen import (AskView, Banner, ClipView, Complete, ContinueCard, Course, Factory, FactoryStage,
-                             GoalView, Learner, LessonCard, StepView, Tips)
+                             GoalView, Learner, LessonCard, MistakeCard, StepView, Tips)
 
 _NESTED = {
     "learner": Learner, "continueCard": ContinueCard, "tips": Tips, "factory": Factory, "goal": GoalView,
     "step": StepView, "banner": Banner, "ask": AskView, "complete": Complete, "clip": ClipView,
 }
-_LISTS = {"courses": Course, "lessons": LessonCard, "stages": FactoryStage}
+_LISTS = {"courses": Course, "lessons": LessonCard, "stages": FactoryStage, "mistakes": MistakeCard}
 
 
 def shape_problems(value, shape, where):

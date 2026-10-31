@@ -39,13 +39,14 @@ Item {
         readonly property var lessons: course.lessons || []
         readonly property int done: lessons.filter(l => l.state === "done").length
         readonly property var credits: course.credits || []
+        readonly property var next: lessons.find(l => l.state === "current") || null
         readonly property real spine: 10
         readonly property real pad: big ? Theme.space24 : Theme.space16
         readonly property bool down: area.pressed && ready
 
         function flash() { glow.restart() }
 
-        implicitHeight: words.implicitHeight + (madeBy.visible ? words.spacing + madeBy.height : 0)
+        implicitHeight: words.implicitHeight + (foot.visible ? words.spacing + foot.implicitHeight : 0)
                         + 2 * pad + (ready ? Theme.edge : 0)
         activeFocusOnTab: ready
         Accessible.role: Accessible.Button
@@ -146,25 +147,57 @@ Item {
                 }
             }
 
-            // Who made the videos, at the foot of the card like an author's name on a cover.
-            Text {
-                id: madeBy
-                visible: card.credits.length > 0
+            // At the foot of the card: on the big card, the lesson up next; then who made the videos, like an
+            // author's name on a cover.
+            Column {
+                id: foot
+                visible: upNext.visible || madeBy.visible
                 x: words.x
                 y: Math.max(words.y + words.height + words.spacing, parent.height - card.pad - height)
                 width: words.width
-                text: {
-                    const names = card.credits
-                    const list = names.length < 2 ? names.join("")
-                               : names.slice(0, -1).join(", ") + " and " + names[names.length - 1]
-                    return "From videos by " + list
+                spacing: Theme.space16
+
+                Column {
+                    id: upNext
+                    visible: card.big && card.ready && card.next !== null
+                    width: parent.width
+                    spacing: Theme.space4
+                    Text {
+                        text: "Up next"
+                        color: Theme.muted
+                        font.family: Theme.fontBody
+                        font.pixelSize: Theme.size12
+                    }
+                    Text {
+                        width: parent.width
+                        text: card.next ? card.next.title : ""
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        color: Theme.text
+                        font.family: Theme.fontBody
+                        font.weight: Font.Bold
+                        font.pixelSize: Theme.size16
+                    }
                 }
-                wrapMode: Text.Wrap
-                maximumLineCount: 2
-                elide: Text.ElideRight
-                color: Theme.muted
-                font.family: Theme.fontBody
-                font.pixelSize: Theme.size14
+
+                Text {
+                    id: madeBy
+                    visible: card.credits.length > 0
+                    width: parent.width
+                    text: {
+                        const names = card.credits
+                        const list = names.length < 2 ? names.join("")
+                                   : names.slice(0, -1).join(", ") + " and " + names[names.length - 1]
+                        return "From videos by " + list
+                    }
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                    color: Theme.muted
+                    font.family: Theme.fontBody
+                    font.pixelSize: Theme.size14
+                }
             }
         }
 

@@ -227,3 +227,14 @@ def test_a_step_earns_its_points_once(tmp_path):
     assert p.points_today() == 20
     p.lesson_done("budget", None)
     assert p.step_passed("budget", 0, 10) == 10          # a finished lesson played again earns again
+
+
+def test_each_attempt_keeps_the_kinds_of_slip_and_older_lines_without_them_still_read(tmp_path):
+    p = Progress(tmp_path, today=Clock())
+    with open(tmp_path / "attempts.jsonl", "w", encoding="utf-8") as f:   # a line from before slips were kept
+        f.write('{"lesson": "monthly-budget", "step_id": "bold", "tries": 3, "hints": 0, "seconds": 29.3, '
+                '"first_try": false, "at": "2026-10-31T12:23:25"}\n')
+    p.log_attempt("monthly-budget", StepRecord("total", 3, 0, 40.0, False, ("typed_value", "covers_missing:B6")))
+    assert Progress(tmp_path, today=Clock()).attempts() == [
+        StepRecord("monthly-budget/bold", 3, 0, 29.3, False),
+        StepRecord("monthly-budget/total", 3, 0, 40.0, False, ("typed_value", "covers_missing:B6"))]
