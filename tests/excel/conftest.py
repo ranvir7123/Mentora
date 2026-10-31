@@ -17,7 +17,7 @@ def no_real_program(monkeypatch):
 @pytest.fixture(autouse=True)
 def no_meta_key(monkeypatch):
     """The saved Meta key is never found here, so no test can spend money; a test can give a key itself."""
-    monkeypatch.setattr(plugin, "find_key", lambda: (None, "missing"))
+    monkeypatch.setattr(plugin, "find_key", lambda name=None: (None, "missing"))
 
 
 @pytest.fixture
