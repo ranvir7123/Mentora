@@ -5,11 +5,11 @@ import anthropic
 import httpx2
 import pytest
 
-from app.ai import ai_name, key_name, make_client
+from app.ai import ai_name, key_name, make_client, make_maker_client
 from app.claude.client import CLAUDE_MODEL, ClaudeClient
 from app.coach.coach import CoachUnavailable, MetaCoach
 from app.excel.vision import point_fallback
-from app.meta.client import MetaClient, MetaUnavailable, NoKey, SpendLimitReached
+from app.meta.client import MetaClient, MetaRefused, MetaUnavailable, NoKey, SpendLimitReached
 
 
 def _reply(*blocks, stop="end_turn", input_tokens=100, output_tokens=20):
@@ -141,3 +141,52 @@ def test_meta_stays_the_default_and_claude_needs_the_switch():
     assert ai_name(on) == "claude" and key_name(on) == "ANTHROPIC_API_KEY"
     assert isinstance(make_client(timeout_s=30.0, environ=on), ClaudeClient)
     assert ai_name({"MENTORA_AI": "something else"}) == "meta"
+
+
+def test_the_lesson_maker_uses_claude_only_with_the_switch():
+    assert isinstance(make_maker_client(environ={}), MetaClient)
+    maker = make_maker_client(environ={"MENTORA_AI": "claude"})
+    assert isinstance(maker, ClaudeClient)
+    assert maker.max_tokens >= 16000 and maker.timeout_s >= 300      # a whole lesson is a long answer
+
+
+def test_claude_takes_still_frames_not_a_video_file(tmp_path):
+    client, api = _client(tmp_path)
+    with pytest.raises(MetaRefused):
+        client.upload(tmp_path / "small.mp4", label="writer_vid1_upload")
+    assert api.sent == []
+
+
+def test_the_writer_names_claude_when_its_lesson_breaks_the_rules(tmp_path):
+    from app.core.fake_plugin import FakePlugin
+    from app.factory.video import Prepared, VideoInfo
+    from app.factory.writer import NotReady, write_lesson
+
+    frame = tmp_path / "frame_0001.png"
+    frame.write_bytes(b"\x89PNG fake picture")
+    prepared = Prepared(tmp_path / "small.mp4", [(0.0, frame)], [(0.5, 4.0, "set k1 to one")])
+    info = VideoInfo("vid1", "https://youtu.be/vid1", "Fill in the keys", "Key Teacher", "https://youtube.com/@keys",
+                     "Creative Commons Attribution license (reuse allowed)", 120)
+    client, api = _client(tmp_path, _reply(_text("not json")), _reply(_text("still not json")))
+
+    got = write_lesson(prepared, info, FakePlugin(), client, lessons_dir=tmp_path / "lessons")
+
+    assert isinstance(got, NotReady)
+    assert got.reason == "Claude could not write a lesson that keeps the rules from this video. Try another video."
+    assert got.detail == "Claude's lesson broke the rules: its answer was not a lesson in JSON."
+    images = [b for b in api.sent[0]["messages"][0]["content"] if b["type"] == "image"]
+    assert len(images) == 1                                          # the frames went, not the video
+
+
+def test_the_lesson_maker_asks_claude_to_think_with_room_for_a_whole_lesson(tmp_path):
+    client, api = _client(tmp_path, _reply(_text("{}")), max_tokens=32000, effort="medium", thinking=True)
+    client.respond("muse-spark-1.3", "Write the lesson.", label="writer_vid1", schema={"type": "object"})
+    [sent] = api.sent
+    assert sent["max_tokens"] == 32000 and sent["thinking"] == {"type": "adaptive"}
+    assert sent["output_config"]["effort"] == "medium"
+
+
+def test_the_ask_box_does_not_ask_claude_to_think(tmp_path):
+    client, api = _client(tmp_path, _reply(_text("Select A1 first.")))
+    client.respond("muse-spark-1.3", "How?", label="coach_answer")
+    assert "thinking" not in api.sent[0] and api.sent[0]["max_tokens"] == 4000

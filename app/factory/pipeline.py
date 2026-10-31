@@ -1,8 +1,9 @@
 """The lesson factory: a tutorial link goes in, a proven (and, when it can be, tested) lesson comes out.
 
 Six stages run in order and the screen is told about each as it goes, with `on_stage(name, state, detail)`:
-download the video, read it (a small copy, still frames, a transcript), write the lesson with Muse Spark,
-prove it in the real app, test it with Meta's agent playing the learner, and publish it to the shelf. A stage
+download the video, read it (a small copy, still frames, a transcript), write the lesson with Muse Spark (or
+Claude, with MENTORA_AI=claude), prove it in the real app, test it with Meta's agent playing the learner, and
+publish it to the shelf. Only Meta's agent tests lessons, so a lesson Claude writes is proven, not tested. A stage
 that fails stops the factory with its reason in plain words, and nothing is written to `lessons/`. `on_line`
 gets the same story as a log, one line at a time, for the command line and for Ranvir.
 
@@ -35,7 +36,7 @@ from app.factory import tester, video
 from app.factory.input import UserTookOver
 from app.factory.prove import MIN_STEPS, ProveError, prove
 from app.factory.video import Fetched, Prepared, VideoError, frame_at
-from app.factory.writer import NotReady, unique_id, write_lesson
+from app.factory.writer import NotReady, names, unique_id, write_lesson
 from app.meta.client import MetaClient, MetaError, MetaRefused, NoKey, SpendLimitReached
 
 STAGES = ("download", "read", "write", "prove", "test", "publish")
@@ -139,7 +140,8 @@ class LessonFactory:
         work = fetched.video.parent
 
         with self._stage("read"):
-            prepared = video.prepare(fetched, self.client)
+            listener = self.client if hasattr(self.client, "transcribe") else None    # Claude cannot listen
+            prepared = video.prepare(fetched, listener)
             lines = len(prepared.transcript)
             heard = f"{_count(lines, 'line')} of transcript" if lines else "no transcript (no captions or speech)"
             self._done("read", f"{_count(len(prepared.frames), 'still frame')}, {heard}")
@@ -177,8 +179,9 @@ class LessonFactory:
         def fix(current: Lesson, reason: str) -> Lesson | NotReady:
             nonlocal fixes
             fixes += 1
-            self._update("prove", "A step did not pass its proof, so it goes back to Muse Spark to be fixed",
-                         log=f"{reason[:1].upper()}{reason[1:]}; it goes back to Muse Spark")
+            writer = names(self.client)[0]
+            self._update("prove", f"A step did not pass its proof, so it goes back to {writer} to be fixed",
+                         log=f"{reason[:1].upper()}{reason[1:]}; it goes back to {writer}")
             return write_lesson(prepared, fetched.info, plugin, self.client, feedback=reason,
                                 lessons_dir=self.lessons_dir, label=f"writer_{fetched.info.id}_fix{fixes}")
 
@@ -205,6 +208,10 @@ class LessonFactory:
         return proved.lesson
 
     def _test(self, lesson: Lesson, plugin: AppPlugin, workdir: Path) -> TestResult:
+        if names(self.client)[0] == "Claude":
+            self._done("test", "Not tested: only Meta's agent tests lessons, and Claude wrote this one, so it goes "
+                               "on the shelf with the proven badge")
+            return not_tested()
         if not self.test:
             self._done("test", "Not tested: the test was switched off, so the lesson goes on the shelf with the "
                                "proven badge")
@@ -277,7 +284,7 @@ class LessonFactory:
         except (VideoError, ProveError) as exc:      # these already say what happened plainly
             self._fail(name, str(exc), log=getattr(exc, "detail", ""))
         except MetaError as exc:                     # Meta's own words can be codes and its answer: log them only
-            self._fail(name, _meta_trouble(exc), log=str(exc))
+            self._fail(name, _meta_trouble(exc, names(self.client)[1]), log=str(exc))
         except Exception as exc:
             self.on_line(traceback.format_exc().rstrip())
             self._fail(name, UNEXPECTED, log=f"Something went wrong in the {name} stage: {exc}")
@@ -308,15 +315,15 @@ def exact_words(exc: BaseException) -> str:
     return getattr(exc, "detail", "") or str(exc)
 
 
-def _meta_trouble(exc: MetaError) -> str:
-    """What stopped a call to Meta, in one plain sentence for the screen."""
+def _meta_trouble(exc: MetaError, company: str = "Meta") -> str:
+    """What stopped a call to Meta (or Claude), in one plain sentence for the screen."""
     if isinstance(exc, NoKey):
-        return "Meta's key is missing or was not accepted. Add your Meta key, then try again."
+        return f"{company}'s key is missing or was not accepted. Add your {company} key, then try again."
     if isinstance(exc, SpendLimitReached):
-        return "Meta's spending limit has been reached, so no more lessons can be made for now."
+        return f"{company}'s spending limit has been reached, so no more lessons can be made for now."
     if isinstance(exc, MetaRefused):
-        return "Meta would not take this request. Try another video."
-    return "Meta could not be reached or was busy. Try again in a few minutes."
+        return f"{company} would not take this request. Try another video."
+    return f"{company} could not be reached or was busy. Try again in a few minutes."
 
 
 def _folder_name(video_id: str) -> str:

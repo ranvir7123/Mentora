@@ -19,6 +19,7 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
+from app.ai import make_maker_client
 from app.core.lesson import Lesson, LessonError, load_lesson, save_lesson
 from app.core.plugin import AppPlugin
 from app.factory.input import UserTookOver
@@ -70,7 +71,7 @@ def plugin_for(app: str) -> AppPlugin:
 
 def _make(args: argparse.Namespace) -> int:
     plugin = plugin_for(args.app)
-    factory = LessonFactory(MetaClient(), Path("lessons"), Path("recordings"), test=not args.no_test,
+    factory = LessonFactory(make_maker_client(), Path("lessons"), Path("recordings"), test=not args.no_test,
                             runs=args.runs, on_line=_say)
     result = factory.make(args.url, plugin, lambda name, state, detail: None)     # the log says it all
     if result.lesson is None:

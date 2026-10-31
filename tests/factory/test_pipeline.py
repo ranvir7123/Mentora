@@ -476,3 +476,47 @@ def test_without_a_clip_on_the_last_step_the_goal_picture_is_the_last_still_fram
 
     frames = sorted((tmp_path / "recordings" / "vid1" / "frames").glob("frame_*.png"))
     assert (result.lesson.folder / "goal.png").read_bytes() == frames[-1].read_bytes()
+
+
+class NoCaptions(FakeFetch):
+    """A video with no captions: Claude cannot listen to the sound, so there is no transcript."""
+
+    def __call__(self, url, dest):
+        fetched = super().__call__(url, dest)
+        return Fetched(fetched.info, fetched.video, None)
+
+
+def test_claude_makes_a_lesson_from_the_still_frames_and_the_screen_names_claude(tmp_path, clip):
+    import json
+
+    from app.claude.client import ClaudeClient
+    from tests.claude.test_client import FakeApi, _reply, _text
+
+    api = FakeApi(_reply(_text(json.dumps(_lesson()))))
+    client = ClaudeClient(api=api, log_path=tmp_path / "claude_calls.jsonl")
+    lines, stages, tester = [], Stages(), FakeTester()
+    factory = LessonFactory(client, tmp_path / "lessons", tmp_path / "recordings", fetch=NoCaptions(clip),
+                            tester=tester, hands_off_s=0, test=False, on_line=lines.append)
+
+    result = factory.make(URL, FakePlugin(), stages)
+
+    assert result.reason == "" and shelf_badge(result.lesson) == "proven" and tester.calls == []
+    [request] = api.sent
+    assert len([b for b in request["messages"][0]["content"] if b["type"] == "image"]) == 3
+    assert stages.last()["read"] == ("done", "3 still frames, no transcript (no captions or speech)")
+    assert stages.last()["test"] == ("done", "Not tested: only Meta's agent tests lessons, and Claude wrote this "
+                                             "one, so it goes on the shelf with the proven badge")
+
+
+def test_claude_trouble_names_claude_on_screen(tmp_path, clip):
+    from app.claude.client import ClaudeClient
+    from tests.claude.test_client import FakeApi
+
+    client = ClaudeClient(api=FakeApi(NoKey("Claude did not accept the key")), log_path=tmp_path / "c.jsonl")
+    stages = Stages()
+    factory = LessonFactory(client, tmp_path / "lessons", tmp_path / "recordings", fetch=FakeFetch(clip),
+                            hands_off_s=0, test=False)
+
+    result = factory.make(URL, FakePlugin(), stages)
+
+    assert result.reason == "Claude's key is missing or was not accepted. Add your Claude key, then try again."
