@@ -63,9 +63,9 @@ Window {
             }
 
             Label { text: "Progress" }
-            ProgressBar { width: parent.width; value: 0; label: "1 of 9" }
-            ProgressBar { width: parent.width; value: 3 / 9; label: "4 of 9" }
-            ProgressBar { width: parent.width; value: 1; label: "9 of 9" }
+            ProgressBar { width: parent.width; value: 0; segments: 9; label: "1 of 9" }
+            ProgressBar { width: parent.width; value: 3 / 9; segments: 9; label: "4 of 9" }
+            ProgressBar { width: parent.width; value: 1; segments: 9; label: "9 of 9" }
             ProgressBar { width: parent.width; value: 0.6 }
 
             Label { text: "Hints" }

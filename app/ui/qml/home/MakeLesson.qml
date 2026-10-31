@@ -88,7 +88,7 @@ Rectangle {
                     wrapMode: Text.Wrap
                     color: Theme.text
                     font.family: Theme.fontHeading
-                    font.weight: Font.Bold
+                    font.weight: Font.ExtraBold
                     font.pixelSize: Theme.size20
                 }
             }

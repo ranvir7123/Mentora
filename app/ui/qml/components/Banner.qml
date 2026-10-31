@@ -1,8 +1,8 @@
 import QtQuick
 import Theme
 
-// The message that slides up over the bottom of the panel: right (mint), not yet (rose and gentle, no
-// shake), a step that came undone (a coral link), the app closed (the main button) or an error.
+// The message that slides up over the bottom of the panel: right (green), not yet (pink and gentle, no
+// shake), a step that came undone (a yellow link), the app closed (the main button) or an error.
 // A right banner says one of a few words, picked by `turn` so the panel can vary it step by step.
 Item {
     id: root
@@ -53,25 +53,15 @@ Item {
             width: parent.width - 2 * Theme.space16
             spacing: Theme.space8
 
-            Row {
+            // The heading is a highlighter mark: green for right, pink for not yet.
+            Mark {
                 id: headingRow
                 visible: root.heading !== ""
-                spacing: Theme.space8
-                Glyph {
-                    visible: root.kind === "right"
-                    anchors.verticalCenter: parent.verticalCenter
-                    name: "tick"
-                    colour: Theme.right
-                    size: 24
-                    stroke: 3.2
-                }
-                Text {
-                    text: root.heading
-                    color: root.kind === "right" ? Theme.right : Theme.notYet
-                    font.family: Theme.fontHeading
-                    font.weight: Font.Bold
-                    font.pixelSize: Theme.size24
-                }
+                text: root.heading
+                colour: root.kind === "right" ? Theme.right : Theme.notYet
+                family: Theme.fontDisplay
+                pixelSize: Theme.size20
+                spacing: Theme.tightDisplay
             }
 
             Item {

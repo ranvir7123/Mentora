@@ -1,8 +1,8 @@
 import QtQuick
 import Theme
 
-// A chunky rounded button standing on a darker 4 px edge. Pressing pushes the face down onto the edge
-// and shrinks it to 0.97. Kinds: main (coral, the one main action), quiet, right (mint).
+// A key standing on a darker edge, like one on a keyboard. Pressing pushes the face down onto the edge
+// and shrinks it to 0.97. Kinds: main (yellow, the one main action), quiet, right (green).
 Item {
     id: root
     property string text: ""
@@ -57,7 +57,7 @@ Item {
             text: root.text
             color: root.ink
             font.family: Theme.fontBody
-            font.weight: Font.ExtraBold
+            font.weight: Font.Bold
             font.pixelSize: root.compact ? Theme.size14 : Theme.size16
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight

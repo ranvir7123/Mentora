@@ -24,8 +24,9 @@ Item {
         text: root.learner.name ? "Hi " + root.learner.name : "Hi there"
         elide: Text.ElideRight
         color: Theme.text
-        font.family: Theme.fontHeading
-        font.weight: Font.Bold
+        font.family: Theme.fontDisplay
+        font.weight: Font.ExtraBold
+        font.letterSpacing: Theme.tightDisplay
         font.pixelSize: Theme.size32
     }
 

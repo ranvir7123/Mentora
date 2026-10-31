@@ -4,7 +4,7 @@ import Theme
 import "../components"
 import "../mascot"
 
-// One course opened: its name and who made the videos, then its lessons as circles on a path that winds
+// One course opened: its name and who made the videos, then its lessons as square keys on a path that winds
 // gently up and down (back and forth along the rows when there are many). Done lessons are ticked, the
 // one you are on glows with the mascot sitting on it, later ones are locked. A course with no lessons
 // yet says so and offers to make one.
@@ -74,29 +74,21 @@ Item {
             onClicked: root.back()
         }
 
-        Row {
+        Item {
             width: parent.width
-            spacing: Theme.space16
-            Rectangle {
-                width: 10
-                height: heading.height
-                radius: 5
-                color: Theme.course(root.course.colour)
-            }
+            height: heading.height
             Column {
                 id: heading
-                width: parent.width - 10 - Theme.space16
-                spacing: Theme.space8
-                Text {
-                    width: parent.width
+                width: parent.width
+                spacing: Theme.space12
+                // The course's name, run over in its own highlighter, as on its card.
+                Mark {
+                    width: Math.min(implicitWidth, parent.width)
                     text: root.course.title || ""
-                    wrapMode: Text.Wrap
-                    maximumLineCount: 2
-                    elide: Text.ElideRight
-                    color: Theme.text
-                    font.family: Theme.fontHeading
-                    font.weight: Font.Bold
-                    font.pixelSize: Theme.size32
+                    colour: Theme.course(root.course.colour)
+                    family: Theme.fontDisplay
+                    pixelSize: Theme.size32
+                    spacing: Theme.tightDisplay
                 }
                 Text {
                     visible: (root.course.credits || []).length > 0
@@ -119,6 +111,7 @@ Item {
                     width: Math.min(parent.width, 360)
                     value: root.lessons.length > 0 ? root.done / root.lessons.length : 0
                     label: root.done + " of " + root.lessons.length
+                    segments: root.lessons.length
                 }
             }
         }
@@ -131,7 +124,7 @@ Item {
         width: parent.width
         height: root.headroom + Math.ceil(root.lessons.length / root.perRow) * root.rowHeight - Theme.space48
 
-        // The line between the circles: coral up to the lesson you are on, quiet after it.
+        // The line between the keys: yellow up to the lesson you are on, quiet after it.
         Shape {
             anchors.fill: parent
             preferredRendererType: Shape.CurveRenderer
@@ -196,7 +189,7 @@ Item {
                 y: 44 - 10
                 width: root.circle
                 height: root.circle
-                radius: width / 2
+                radius: Theme.radiusLarge
                 color: Theme.clear
                 border.width: 3
                 border.color: Theme.border
@@ -213,7 +206,7 @@ Item {
             wrapMode: Text.Wrap
             color: Theme.text
             font.family: Theme.fontHeading
-            font.weight: Font.Bold
+            font.weight: Font.ExtraBold
             font.pixelSize: Theme.size24
         }
         Text {

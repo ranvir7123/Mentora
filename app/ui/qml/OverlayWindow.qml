@@ -202,7 +202,7 @@ Window {
             radius: Theme.radiusSmall
             color: Theme.clear
             border.width: 3
-            border.color: Theme.accent
+            border.color: Theme.ring
             opacity: ring.mint ? 0 : 1
             Behavior on opacity { NumberAnimation { duration: Theme.durFast } }
         }
@@ -222,7 +222,7 @@ Window {
             radius: Theme.radiusSmall
             color: Theme.clear
             border.width: 3
-            border.color: Theme.accent
+            border.color: Theme.ring
             opacity: 0
             property real reach: 0
             transform: Scale {

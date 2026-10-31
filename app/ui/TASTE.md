@@ -32,14 +32,25 @@ animations over 500 ms or ones that block input.
 
 ## The scales (from `qml/Theme/Theme.qml`)
 
-- Colours: base `bg` #151A2E; surfaces `surface1` #1E2440, `surface2` #282F52; `border` #363E66; coral
-  `accent` #FF7A45 (progress, the main button, the ring, the mascot's body); gold `reward` #FFC53D (points,
-  streaks, celebrations); mint `right` #3DDC97; rose `notYet` #FF6B81; `text` #EEF1FA; `muted` #9AA3C0.
-  Words on coral, gold, mint or rose are `onColour` (the base navy): near-white on coral is only 2.2:1.
-- Type: Fredoka for headings, Nunito for text and for every number (Nunito's digits are equal width;
-  Fredoka's are not). Sizes 12/14/16/20/24/32/48. Weights paired far apart: 400 with 700 or 800.
+- The look is "Highlighter": a student's desk at night. Warm graphite surfaces, and colour only where a
+  highlighter would go: on progress, on the one thing to press, on the few words that matter.
+- Colours: base `bg` #1C1B19; surfaces `surface1` #262522, `surface2` #312F2B; `border` #433F39; yellow
+  `accent` #F5E15A (progress, the main button, the "you are here" mark); orange `reward` #FFB05C (points,
+  streaks, celebrations); green `right` #8EE88B; pink `notYet` #FF8FB1; `text` #F2EFE8; `muted` #ABA69C.
+  Words on any highlighter colour are `onColour` (the base graphite). The mascot keeps its own coral
+  `mascot` #FF7A45, and the ring round the cell it points at is the same coral (`ring`), so on a white
+  sheet they read as one character.
+- Courses each have a highlighter of their own: Excel blue #9BD7FF, Python lilac #C9B6FF, Meta peach
+  #F2C9A0.
+- The mark (`components/Mark.qml`): dark words on a block of colour, as if run over with a marker. Only
+  for a few words that matter (a course's name, "Lesson done!", "Not yet"), never for running text.
+- Type: Archivo for everything, including every number (its digits are equal width); its wide cut,
+  Archivo Expanded ExtraBold, only for the few big words (the greeting, the lesson to carry on, a course's
+  name, "Lesson done!"), set 0.5 px tight. Sizes 12/14/16/20/24/32/48. Weights: 400 for text, 700 for
+  buttons and labels, 800 for headings.
 - Spacing 4/8/12/16/24/32/48. The panel keeps 16 px side margins.
-- Corners: `radiusSmall` 6, `radiusMedium` 12, `radiusLarge` 20. Circles are circles.
+- Corners: `radiusSmall` 2, `radiusMedium` 4, `radiusLarge` 8: cut paper and keycaps, not pills. Progress
+  marks are tick boxes, not circles; only the mascot, the daily ring and spinners are round.
 - Durations: `durFast` 150, `durNormal` 220, `durPanel` 300. Nothing over 500 ms.
 
 ## Checklist for every screenshot (go line by line; fix every failure, then shoot again)
@@ -47,11 +58,11 @@ animations over 500 ms or ones that block input.
 - [ ] Tokens only: no colour written anywhere in QML except `Theme.qml`.
 - [ ] Every size, gap and margin is on the scales above; panel side margins are 16 px.
 - [ ] No more than three corner sizes on screen.
-- [ ] Coral appears only on progress, the main button, the ring and the mascot; gold only on points,
-      streaks and celebrations.
+- [ ] Yellow appears only on progress, the main button and the "you are here" mark; coral only on the
+      mascot and its ring; orange only on points, streaks and celebrations.
 - [ ] Text contrast is at least 4.5:1 on its surface (muted on `surface2` included).
 - [ ] Nothing is clipped, cut mid-letter or overlapping; long text wraps or ends in "…" cleanly.
-- [ ] Digits are equal width (numbers in Nunito).
+- [ ] Digits are equal width (numbers in Archivo).
 - [ ] Words are plain, second person, sentence case; instructions under 12 words; no "simply" or "just";
       buttons name their action.
 - [ ] Nothing from the banned list: no gradients, no emoji icons, no icon-in-a-circle on every card, no

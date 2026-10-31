@@ -26,7 +26,7 @@ _fonts_loaded = False
 
 
 def load_fonts() -> None:
-    """Fredoka and Nunito, from the files that ship with the program (once per run)."""
+    """Archivo and its wide cut, from the files that ship with the program (once per run)."""
     global _fonts_loaded
     if _fonts_loaded:
         return

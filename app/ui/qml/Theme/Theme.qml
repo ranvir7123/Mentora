@@ -2,46 +2,56 @@ pragma Singleton
 import QtQuick
 
 // Every colour, size, space, corner and duration the screens use. No other QML file holds a colour.
+// The look is "Highlighter": a desk at night. Warm graphite surfaces, and colour only where a highlighter
+// would go: on progress, on the one thing to press, on a word that matters.
 QtObject {
-    // Surfaces: one deep navy base, two steps above it, one border.
-    readonly property color bg: "#151A2E"
-    readonly property color surface1: "#1E2440"
-    readonly property color surface2: "#282F52"
-    readonly property color border: "#363E66"
+    // Surfaces: one warm graphite base, two steps above it, one border.
+    readonly property color bg: "#1C1B19"
+    readonly property color surface1: "#262522"
+    readonly property color surface2: "#312F2B"
+    readonly property color border: "#433F39"
 
-    // Coral: progress, the main button, the ring and the mascot's body only.
-    readonly property color accent: "#FF7A45"
-    readonly property color accentEdge: "#C9521F"
-    readonly property color accentShade: "#E8622E"      // the mascot's belly and cheeks
+    // Yellow highlighter: progress, the main button and the "you are here" mark only.
+    readonly property color accent: "#F5E15A"
+    readonly property color accentEdge: "#B8A522"
 
-    // Gold: points, streaks and celebrations only.
-    readonly property color reward: "#FFC53D"
-    readonly property color rewardEdge: "#C98F0B"
+    // The mascot keeps its own coral, and the ring around the cell it points at is the same coral, so on a
+    // white sheet the two read as one character.
+    readonly property color mascot: "#FF7A45"
+    readonly property color mascotEdge: "#C9521F"        // its curl
+    readonly property color mascotShade: "#E8622E"       // its belly and cheeks
+    readonly property color ring: "#FF7A45"
 
-    readonly property color right: "#3DDC97"
-    readonly property color rightEdge: "#1FA46C"
-    readonly property color notYet: "#FF6B81"
-    readonly property color notYetEdge: "#C9405A"
-    // The banners' backgrounds: mint and rose laid thinly over surface1, so their words keep 4.5:1.
-    readonly property color rightTint: "#23414E"
-    readonly property color notYetTint: "#3E2E49"
+    // Orange highlighter: points, streaks and celebrations only.
+    readonly property color reward: "#FFB05C"
+    readonly property color rewardEdge: "#C47A27"
 
-    readonly property color text: "#EEF1FA"
-    readonly property color muted: "#9AA3C0"
-    readonly property color onColour: "#151A2E"          // words on coral, gold, mint and rose
+    readonly property color right: "#8EE88B"
+    readonly property color rightEdge: "#58B055"
+    readonly property color notYet: "#FF8FB1"
+    readonly property color notYetEdge: "#C25A7A"
+    // The banners' backgrounds: green and pink laid thinly over the base, so their words keep 4.5:1.
+    readonly property color rightTint: "#2A3A27"
+    readonly property color notYetTint: "#3D2830"
 
-    // Course colours: solid, told apart from coral, gold, mint and rose.
-    readonly property color courseExcel: "#36C5E0"
-    readonly property color coursePython: "#7B93FF"
-    readonly property color courseMeta: "#C08BFF"
+    readonly property color text: "#F2EFE8"
+    readonly property color muted: "#ABA69C"
+    readonly property color onColour: "#1C1B19"          // words on any highlighter colour
+
+    // Course colours: three more highlighters, told apart from yellow, orange, green and pink.
+    readonly property color courseExcel: "#9BD7FF"
+    readonly property color coursePython: "#C9B6FF"
+    readonly property color courseMeta: "#F2C9A0"
 
     function course(name) {
         return name === "coursePython" ? coursePython : name === "courseMeta" ? courseMeta : courseExcel
     }
 
-    // Type: Fredoka for headings, Nunito for text and every number (its digits are equal width).
-    readonly property string fontHeading: "Fredoka"
-    readonly property string fontBody: "Nunito"
+    // Type: Archivo for everything (its digits are equal width), and its wide cut for the few big words.
+    readonly property string fontDisplay: "Archivo Expanded"
+    readonly property string fontHeading: "Archivo"
+    readonly property string fontBody: "Archivo"
+    readonly property real tightDisplay: -0.5            // letter spacing on the wide cut, in pixels
     readonly property int size12: 12
     readonly property int size14: 14
     readonly property int size16: 16
@@ -58,18 +68,19 @@ QtObject {
     readonly property int space32: 32
     readonly property int space48: 48
 
-    // Three corner sizes, no more.
-    readonly property int radiusSmall: 6
-    readonly property int radiusMedium: 12
-    readonly property int radiusLarge: 20
+    // Three corner sizes, no more, all small: things here are cut paper and keycaps, not pills.
+    readonly property int radiusSmall: 2
+    readonly property int radiusMedium: 4
+    readonly property int radiusLarge: 8
 
-    readonly property int edge: 4                        // the chunky button's darker bottom edge
+    readonly property int edge: 3                        // a key's darker bottom edge
+    readonly property int hairline: 1                    // a ruled line between parts of a page
 
     readonly property int durFast: 150
     readonly property int durNormal: 220
     readonly property int durPanel: 300
 
     // The see-through veil behind a dialog or a dimmed lesson circle.
-    readonly property color veil: "#B3151A2E"
+    readonly property color veil: "#B31C1B19"
     readonly property color clear: "transparent"
 }

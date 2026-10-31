@@ -46,9 +46,9 @@ _PLACEHOLDER = """
                 PathAngleArc { centerX: 17; centerY: 21; radiusX: 6; radiusY: 7; sweepAngle: 360 } }
             ShapePath { fillColor: "#FFFFFF"; strokeColor: "transparent"
                 PathAngleArc { centerX: 31; centerY: 21; radiusX: 6; radiusY: 7; sweepAngle: 360 } }
-            ShapePath { fillColor: "#151A2E"; strokeColor: "transparent"
+            ShapePath { fillColor: "#1C1B19"; strokeColor: "transparent"
                 PathAngleArc { centerX: 18; centerY: 22; radiusX: 3; radiusY: 3.5; sweepAngle: 360 } }
-            ShapePath { fillColor: "#151A2E"; strokeColor: "transparent"
+            ShapePath { fillColor: "#1C1B19"; strokeColor: "transparent"
                 PathAngleArc { centerX: 32; centerY: 22; radiusX: 3; radiusY: 3.5; sweepAngle: 360 } }
         }
     }

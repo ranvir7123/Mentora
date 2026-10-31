@@ -129,7 +129,7 @@ Item {
                                     Behavior on angle { SpringAnimation { spring: 6; damping: 0.35 } }
                                 }
                                 ShapePath {
-                                    fillColor: Theme.accentEdge
+                                    fillColor: Theme.mascotEdge
                                     strokeColor: Theme.clear
                                     strokeWidth: -1
                                     PathSvg { path: "M20.5 4 C19 -2 23.5 -8.5 31 -9 C28 -6.5 27.2 -2.5 29.5 3 Z" }
@@ -138,13 +138,13 @@ Item {
 
                             // The body: a coral ball with a darker crescent of shade along its lower right
                             // (the part of the ball outside the same circle moved 3 left and 7 up).
-                            Oval { cx: 24; cy: 24; rx: 24; ry: 24; fill: Theme.accent }
+                            Oval { cx: 24; cy: 24; rx: 24; ry: 24; fill: Theme.mascot }
                             Shape {
                                 width: 48
                                 height: 48
                                 preferredRendererType: Shape.CurveRenderer
                                 ShapePath {
-                                    fillColor: Theme.accentShade
+                                    fillColor: Theme.mascotShade
                                     strokeColor: Theme.clear
                                     strokeWidth: -1
                                     PathSvg { path: "M0.72 29.84 A24 24 0 1 0 44.28 11.16 A24 24 0 0 1 0.72 29.84 Z" }

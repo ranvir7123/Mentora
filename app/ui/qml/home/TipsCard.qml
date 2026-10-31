@@ -4,17 +4,23 @@ import Theme
 // Two or three plain sentences Meta's AI (or Claude, when `ai` says so) wrote from how your lessons went. While they are being written,
 // a calm placeholder shows, but only after 200 ms, so a quick answer never flickers. With no finished
 // lesson it says how to get tips; when the AI can't be reached it says lessons still work.
+// No box: a note in the margin, under a ruled line, so it reads quieter than the things you can press.
 Rectangle {
     id: root
     property var tips: ({})
     property string ai: "meta"          // or "claude", when MENTORA_AI=claude
 
     readonly property string kind: tips.state || "none"
-    readonly property real pad: Theme.space24
+    readonly property real pad: Theme.space16
 
-    implicitHeight: words.implicitHeight + 2 * pad
-    radius: Theme.radiusLarge
-    color: Theme.surface1
+    implicitHeight: words.implicitHeight + pad
+    color: Theme.clear
+
+    Rectangle {
+        width: parent.width
+        height: Theme.hairline
+        color: Theme.border
+    }
 
     // Loading that lasts past 200 ms.
     property bool slow: false
@@ -28,9 +34,8 @@ Rectangle {
 
     Column {
         id: words
-        x: root.pad
         y: root.pad
-        width: parent.width - 2 * root.pad
+        width: parent.width
         spacing: Theme.space8
 
         // The heading, with who wrote the tips at the other end of the line.
@@ -42,7 +47,7 @@ Rectangle {
                 text: "Tips for you"
                 color: Theme.text
                 font.family: Theme.fontHeading
-                font.weight: Font.Bold
+                font.weight: Font.ExtraBold
                 font.pixelSize: Theme.size20
             }
             Text {
