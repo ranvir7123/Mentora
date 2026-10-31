@@ -485,6 +485,53 @@ def test_the_agent_may_not_open_a_new_workbook_and_no_person_is_blamed(tmp_path)
     assert "refused keypress ctrl+n: That key opens a new workbook outside the lesson. Stay in this one." in lines
 
 
+class TypingHands(FakeHands):
+    """Records every piece of text the agent types, without reading it as a learner's k{n}={v} step, so a
+    formula split over several type actions can be watched. The lesson's own k{n}={v} steps still land."""
+
+    def do(self, action):
+        if action["type"] == "type" and action["text"].startswith("k") and "=" in action["text"]:
+            super().do(action)
+        else:
+            self.done.append(action)
+
+
+def test_a_formula_split_over_several_type_actions_is_caught_as_a_whole(tmp_path):
+    # Each piece looks harmless on its own; together they spell a banned function in one cell.
+    start = {"type": "type", "text": "=WEBSERVICE"}
+    rest = {"type": "type", "text": "(A1)"}
+    script = Script(act(start, rest), act(typed("k0", 1)), act(typed("k1", 2)), act(typed("k2", 3)))
+    plugin = Excel()
+
+    result, hands, lines = run(script, plugin=plugin, hands=TypingHands(plugin), workdir=tmp_path)
+
+    assert result.passed
+    assert [a["text"] for a in hands.done] == ["=WEBSERVICE", "k0=1", "k1=2", "k2=3"]   # the rest is refused
+    assert "refused type: That text uses WEBSERVICE, which a lesson may not use." in lines
+
+
+def test_the_typed_record_starts_over_when_the_cell_edit_ends(tmp_path):
+    # "=WEBSERVICE" then Enter commits that cell; "(A1)" lands in a fresh cell, so it is allowed.
+    start = {"type": "type", "text": "=WEBSERVICE"}
+    commit = {"type": "keypress", "keys": ["enter"]}
+    rest = {"type": "type", "text": "(A1)"}
+    script = Script(act(start, commit, rest), act(typed("k0", 1)), act(typed("k1", 2)), act(typed("k2", 3)))
+    plugin = Excel()
+
+    result, hands, lines = run(script, plugin=plugin, hands=TypingHands(plugin), workdir=tmp_path)
+
+    assert result.passed
+    assert [a["text"] for a in hands.done if a["type"] == "type"] == ["=WEBSERVICE", "(A1)", "k0=1", "k1=2", "k2=3"]
+    assert not any("WEBSERVICE" in line and "refused" in line for line in lines)
+
+
+def test_typed_text_is_checked_together_with_what_came_before():
+    excel = Excel()
+    assert tester.allowed({"type": "type", "text": "=WEBSERVICE"}, APP, "mouse", plugin=excel) == (True, "")
+    assert tester.allowed({"type": "type", "text": "(A1)"}, APP, "mouse", plugin=excel, typed="=WEBSERVICE") \
+        == (False, "That text uses WEBSERVICE, which a lesson may not use.")
+
+
 class VsCode(Recording):
     app_id, title = "vscode", "VS Code"
 
