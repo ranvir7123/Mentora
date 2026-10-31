@@ -562,6 +562,33 @@ def test_several_keys_pressed_together_are_checked_as_the_text_they_spell():
     assert tester.allowed({"type": "keypress", "keys": list("sum")}, APP, "mouse", plugin=excel, typed="=") == (True, "")
 
 
+def test_shift_changes_only_the_keys_pressed_after_it():
+    excel = Excel()
+    # The hands press keys down in order, so "9" pressed before Shift is held just types "9", not "(". The
+    # record must read it the way Windows types it, not treat Shift as covering keys pressed before it.
+    assert tester.allowed({"type": "keypress", "keys": ["9", "shift"]}, APP, "mouse", plugin=excel,
+                          typed="=WEBSERVICE") == (True, "")
+    # Shift before "9" does type "(", which completes the banned call, so that one is caught.
+    assert tester.allowed({"type": "keypress", "keys": ["shift", "9"]}, APP, "mouse", plugin=excel,
+                          typed="=WEBSERVICE") == (False, "That text uses WEBSERVICE, which a lesson may not use.")
+
+
+def test_the_cursor_cannot_move_while_a_plain_value_is_half_typed():
+    excel = Excel()
+    # Out of a formula, with a value already pending in the cell, moving the caret would let the agent slip
+    # characters in where the append-only record can't see — enough to build a web address Excel turns into a
+    # live link. So caret keys are refused until the value is finished; only Enter, Escape or Tab may follow.
+    for keys in (["home"], ["left"], ["end"], ["up"], ["backspace"], ["ctrl", "z"]):
+        assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse", plugin=excel, typed="ttp://e") \
+            == (False, tester.EDITING_NOTE), keys
+    for keys in (["enter"], ["esc"], ["tab"]):
+        assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse", plugin=excel, typed="ttp://e") \
+            == (True, ""), keys
+    # With nothing pending in the cell, those same keys just move between cells, so they stay allowed.
+    assert tester.allowed({"type": "keypress", "keys": ["home"]}, APP, "mouse", plugin=excel) == (True, "")
+    assert tester.allowed({"type": "keypress", "keys": ["left"]}, APP, "mouse", plugin=excel) == (True, "")
+
+
 def test_ribbon_keys_held_on_a_pointer_action_are_refused_like_a_bare_press():
     assert tester.allowed({"type": "click", "x": 5, "y": 5, "keys": ["alt"]}, APP, "mouse") == (False, tester.ALT_NOTE)
     assert tester.allowed({"type": "click", "x": 5, "y": 5, "keys": ["f10"]}, APP, "mouse") == (False, tester.ALT_NOTE)

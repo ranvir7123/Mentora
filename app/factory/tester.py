@@ -9,10 +9,11 @@ itself acts on (leaving or closing the app) and keys that open the app's macros,
 workbook are refused, the keys that open the ribbon's shortcuts (a bare Alt or F10, or an Alt chord) are
 refused, text it enters keeps the rules a lesson's own text keeps (what it puts in a cell is checked as a
 whole, whether typed at once or a key press at a time, so a link or a forbidden formula cannot be split over
-several actions; while a formula is being typed, Tab and anything but plain text or Enter/Escape are refused,
-so Excel's AutoComplete cannot finish a function name and the record cannot drift from the cell; and because
-the record only follows a cell typed from empty, re-opening a cell's edit on what it already holds, or pasting
-into it, is refused so the agent cannot extend an earlier value where the record cannot see),
+several actions; once a value is half-typed, anything but more text or a key that finishes it (Enter, Escape
+or Tab) is refused, so the caret cannot move to slip text in where the record cannot see, and Tab while a
+formula is open is refused too so Excel's AutoComplete cannot finish a function name; and because the record
+only follows a cell typed from empty, re-opening a cell's edit on what it already holds, or pasting into it,
+is refused so the agent cannot extend an earlier value where the record cannot see),
 and in keyboard mode the mouse is not used at all.
 Once the run has looked at the app, another window coming to the front means a person took over, and the test stops. Only the lesson's own checks decide when a step is done.
 A test passes when at least 4 runs in 5 reach the end; it stops early once that can no longer happen.
@@ -63,6 +64,7 @@ TAB_NOTE = "Type the whole formula yourself; Tab here would let Excel finish a f
 ALT_NOTE = "That key opens the ribbon's shortcuts, which a lesson never needs."
 FORMULA_NOTE = "Type the formula straight through, without moving the cursor or clicking inside it."
 EDIT_NOTE = "Type the whole value into the cell yourself, rather than re-opening its edit or pasting into it."
+EDITING_NOTE = "Finish typing the value and press Enter; don't move the cursor while a cell is half-typed."
 
 Mode = Literal["mouse", "keyboard"]
 _BUTTONS = {"left", "right", "wheel", "middle"}
@@ -212,8 +214,11 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin |
         if text:                                             # keys that type characters go into the cell
             what = _reaches(typed + text, plugin) if plugin is not None else ""
             return (False, f"That text {what}.") if what else (True, "")
-        if in_formula and text is None and codes - {_SHIFT} not in ({_ENTER}, {_ESC}):
-            return False, FORMULA_NOTE                        # while a formula is open: only text, Enter or Esc
+        if text is None and typed and codes - {_SHIFT} not in ({_ENTER}, {_ESC}, {_TAB}):
+            # Once a value is half-typed, moving the caret would let text slip in where the record can't see
+            # (out of a formula too: a typed web address Excel turns into a live link). Only more text, or
+            # Enter/Escape/Tab to finish or cancel, may follow. (Tab mid-formula is already refused above.)
+            return False, FORMULA_NOTE if in_formula else EDITING_NOTE
     if kind in POINTER_ACTIONS:
         if mode == "keyboard":
             return False, KEYBOARD_NOTE
@@ -239,16 +244,18 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin |
 def _key_text(keys: list) -> str | None:
     """The characters a key press types into a cell, in the order the keys are given, or None when it is not
     plain text entry: it holds a Ctrl/Alt/Win modifier, or includes a key that types no character (Enter,
-    Tab, an arrow, a function key). A press of Shift on its own gives "". Working from the ordered list, not
-    a set, so several letter keys sent in one press spell out the text they really type and are checked as a
-    whole, Shift applied to every key."""
+    Tab, an arrow, a function key). A press of Shift on its own gives "". The keys are read in the order the
+    hands press them down (input.py sends them in list order), so Shift changes only the keys that come after
+    it, exactly as Windows types them; several character keys in one press spell out the text they type and
+    are checked as a whole."""
     codes = [vk_for(str(k)) for k in keys]
     if any(c in _MODS for c in codes):
         return None
-    shift = _SHIFT in codes
+    shift = False
     out = []
     for c in codes:
         if c == _SHIFT:
+            shift = True                             # held from here on, as the hands press Shift in turn
             continue
         base = _PRINTABLE.get(c)
         if base is None:
