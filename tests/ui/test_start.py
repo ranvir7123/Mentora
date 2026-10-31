@@ -5,6 +5,7 @@ import time
 
 import pytest
 
+from app.core.runner import StepRecord
 from app.core.types import Rect
 from tests.integration.helpers import write_courses, write_lesson
 
@@ -302,6 +303,44 @@ def test_the_backend_reads_the_shelf_and_the_developer_switch(tmp_path):
 
     assert shelf({}) == ["Proven one"]
     assert sorted(shelf({"MENTORA_SHOW_UNPROVEN": "1"})) == ["Draft one", "Proven one"]
+
+
+def test_when_meta_stalls_the_ask_box_gives_up_within_about_30_s_and_says_so(monkeypatch, tmp_path):
+    import httpx2
+
+    import app.meta.client as meta_client
+    from app.coach.coach import CoachUnavailable
+    from app.main import COACH_TIMEOUT_S, build_backend
+    monkeypatch.setenv("META_API_KEY", "test-" + "k3y" * 8)
+
+    def slow_meta(request):                  # Meta takes a minute: only a client that waits that long hears back
+        if request.extensions["timeout"]["read"] < 60:
+            raise httpx2.ReadTimeout("no answer yet", request=request)
+        return httpx2.Response(200, json={"id": "resp_1", "output": [], "output_text": "Late answer."})
+
+    class SlowMetaClient(meta_client.MetaClient):
+        def __init__(self, **kw):
+            super().__init__(log_path=tmp_path / "calls.jsonl", sleep=lambda s: None,
+                             http_client=httpx2.Client(transport=httpx2.MockTransport(slow_meta)), **kw)
+
+    monkeypatch.setattr(meta_client, "MetaClient", SlowMetaClient)
+    lessons = tmp_path / "lessons"
+    write_courses(lessons)
+    write_lesson(lessons, "proven", title="Proven one")
+    layout = lambda: (Rect(0, 0, 1840, 1504), Rect(1840, 0, 720, 1504))  # noqa: E731
+    backend = build_backend(lessons=lessons, data=tmp_path / "data", recordings=tmp_path / "rec",
+                            layout=layout, environ={})
+    try:
+        coach, maker = backend._coach, backend._maker
+        assert coach.client._timeout_s == COACH_TIMEOUT_S <= 30
+        with pytest.raises(CoachUnavailable, match="^The Ask box can't answer right now"):
+            coach.answer("What do I click?", {"instruction": "Make B1 bold"})
+        with pytest.raises(CoachUnavailable, match="^Tips are offline right now"):
+            coach.tips([StepRecord("bold", 1, 0, 3.0, True)])
+        assert maker.client is not coach.client       # the lesson maker keeps its long wait: making is slow
+        assert maker.client._timeout_s == 600.0
+    finally:
+        backend.shutdown()
 
 
 def test_the_program_keeps_a_log_on_the_laptop(tmp_path):

@@ -39,6 +39,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # Each app a lesson can run in, as "module:class".
 PLUGINS = {"excel": "app.excel.plugin:ExcelPlugin", "vscode": "app.vscode.plugin:VsCodePlugin"}
 
+COACH_TIMEOUT_S = 30.0           # the Ask box and tips wait this long for each try at Meta, not the maker's 10 min
+
 
 # Where the lesson's app and the panel go.
 
@@ -230,13 +232,13 @@ def build_backend(*, lessons: Path, data: Path, recordings: Path, layout: Callab
 
     library = Library(lessons, show_unproven=environ.get("MENTORA_SHOW_UNPROVEN") == "1")
     plugins = load_plugins()
-    client = MetaClient()
 
     def shelf() -> list[str]:
         return [lesson.title for course in library.courses() for lesson in library.lessons(course.id)]
 
-    coach = MetaCoach(client, shelf=shelf)
-    maker = LessonFactory(client, lessons, recordings, on_line=log.info) if "excel" in plugins else None
+    # The learner waits on the coach, so it gives up soon and the panel says so; the maker keeps its long wait.
+    coach = MetaCoach(MetaClient(timeout_s=COACH_TIMEOUT_S), shelf=shelf)
+    maker = LessonFactory(MetaClient(), lessons, recordings, on_line=log.info) if "excel" in plugins else None
     return Backend(library, Progress(data), plugins, coach, maker, workdir=data / "work", layout=layout,
                    front=Front(winstyle.give_keyboard_to), recordings=recordings)
 
