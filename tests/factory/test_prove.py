@@ -85,6 +85,21 @@ def test_dropping_a_step_reproves_the_rest_without_it(tmp_path, fix):
         assert len(fixer.reasons) == 1                         # sent back once, never twice
 
 
+@pytest.mark.parametrize("fix", [None, "same lesson again"])
+def test_a_step_that_undoes_an_earlier_step_is_dropped(tmp_path, fix):
+    # s2 sets k1 to 99, so s1's check (k1 is 2) is no longer true: the lesson could never celebrate.
+    lesson = _lesson(3, s2={"key": "k1", "value": 99, "mistakes": [_wrong("k1", -1)]})
+    fixer = Fixer(lesson) if fix else None
+
+    proved = prove(lesson, FakePlugin(), tmp_path, fix=fixer)
+
+    assert [s.id for s in proved.lesson.steps] == ["s0", "s1"]
+    assert proved.why == {"s2": "it undid step s1, whose check is no longer true"}
+    assert proved.lesson.proof.passed is False
+    if fixer:
+        assert fixer.reasons == ["step s2: it undid step s1, whose check is no longer true"]
+
+
 def test_fewer_than_three_steps_left_is_not_proven(tmp_path):
     lesson = _lesson(3, s2={"check": {"kind": "equals", "args": {"key": "k2", "value": 99}}})
 

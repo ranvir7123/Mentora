@@ -2,7 +2,8 @@
 
 For each step in order: its check must be false before the step; each predicted mistake, performed
 from that state, must be noticed and rejected by the check (its verdict code is kept, so the learner
-sees that mistake's own "Not yet" line); then the step's replay must make the check true. A step that
+sees that mistake's own "Not yet" line); then the step's replay must make the check true and leave every
+earlier step's check true (a step that undoes one would stop the lesson from ever celebrating). A step that
 fails goes back to Muse Spark once with the reason; if it fails again it is dropped and the whole lesson
 is proven again from the start without it, so a later step that needed it is dropped too. A dropped step
 stays out: Muse Spark is told to leave it out of any later rewrite, and it is taken out if it comes back.
@@ -127,8 +128,16 @@ def _prove_step(session: AppSession, plugin: AppPlugin, before: tuple[Step, ...]
         codes[(step.id, j)] = verdict.code
         _back_to(session, plugin, before)
     _perform(session, plugin, step.replay, "the app refused the step's replay")
-    if not _judge(plugin, step, _snap(session, plugin)).ok:
+    snap = _snap(session, plugin)
+    if not _judge(plugin, step, snap).ok:
         raise _StepFailed("its check was still not true after the step")
+    for earlier in before:                       # the lesson celebrates only while every earlier step still holds
+        try:
+            held = _judge(plugin, earlier, snap).ok
+        except _StepFailed:
+            continue                             # as the lesson does: a crashed check says nothing here
+        if not held:
+            raise _StepFailed(f"it undid step {earlier.id}, whose check is no longer true")
 
 
 def _back_to(session: AppSession, plugin: AppPlugin, before: tuple[Step, ...]) -> None:
