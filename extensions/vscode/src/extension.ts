@@ -468,7 +468,13 @@ class Link implements vscode.Disposable {
         const uri = this.uriOf(args);
         await this.closeTabs(uri);
         if (await this.exists(uri)) {
-          await vscode.workspace.fs.delete(uri, { useTrash: false });
+          // Through VS Code's edits, not straight to disk: deleted on disk, the file's closed editor kept
+          // its old text in memory, so the next write after starting over failed (every second time).
+          const edit = new vscode.WorkspaceEdit();
+          edit.deleteFile(uri, { ignoreIfNotExists: true });
+          if (!(await vscode.workspace.applyEdit(edit))) {
+            throw new Error(`VS Code could not delete ${String(args.path)}`);
+          }
         }
         return;
       }
