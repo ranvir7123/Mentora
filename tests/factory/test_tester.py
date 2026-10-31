@@ -532,6 +532,32 @@ def test_typed_text_is_checked_together_with_what_came_before():
         == (False, "That text uses WEBSERVICE, which a lesson may not use.")
 
 
+def test_tab_is_refused_while_a_formula_is_being_typed():
+    excel = Excel()
+    # As a keypress, mid-formula: Excel's AutoComplete would finish a function name the agent never spelled out.
+    assert tester.allowed({"type": "keypress", "keys": ["tab"]}, APP, "mouse", plugin=excel, typed="=WEBS") \
+        == (False, tester.TAB_NOTE)
+    # The same Tab buried inside typed text, mid-formula.
+    assert tester.allowed({"type": "type", "text": "\t"}, APP, "mouse", plugin=excel, typed="=WEBS") \
+        == (False, tester.TAB_NOTE)
+    # Tab to move between plain values, with no formula open, is fine.
+    assert tester.allowed({"type": "keypress", "keys": ["tab"]}, APP, "mouse", plugin=excel) == (True, "")
+    assert tester.allowed({"type": "type", "text": "12\t34"}, APP, "mouse", plugin=excel) == (True, "")
+
+
+def test_the_agent_may_not_press_tab_to_autocomplete_a_formula(tmp_path):
+    start = {"type": "type", "text": "=WEBS"}
+    finish = {"type": "keypress", "keys": ["tab"]}
+    script = Script(act(start, finish), act(typed("k0", 1)), act(typed("k1", 2)), act(typed("k2", 3)))
+    plugin = Excel()
+
+    result, hands, lines = run(script, plugin=plugin, hands=TypingHands(plugin), workdir=tmp_path)
+
+    assert result.passed
+    assert finish not in hands.done                      # the Tab never reached the app
+    assert any(line.startswith("refused keypress tab") and line.endswith(tester.TAB_NOTE) for line in lines)
+
+
 class VsCode(Recording):
     app_id, title = "vscode", "VS Code"
 

@@ -7,7 +7,8 @@ window is over it, so nothing else on the screen reaches Meta. Every action it a
 it must be well formed, the pointer stays inside the app and over the app's own windows, keys that Windows
 itself acts on (leaving or closing the app) and keys that open the app's macros, add a link or open a new
 workbook are refused, text it types keeps the rules a lesson's own text keeps (what it types into a cell is
-checked as a whole, so a link or a forbidden formula cannot be split over several actions), and in keyboard
+checked as a whole, so a link or a forbidden formula cannot be split over several actions, and Tab is refused
+while a formula is being typed so Excel's AutoComplete cannot finish a function name for it), and in keyboard
 mode the mouse is not used at all.
 Once the run has looked at the app, another window coming to the front means a person took over, and the test stops. Only the lesson's own checks decide when a step is done.
 A test passes when at least 4 runs in 5 reach the end; it stops early once that can no longer happen.
@@ -54,6 +55,7 @@ TEXT_NOTE = "Give the text to type."
 MACROS_NOTE = "That key opens the app's macros, which a lesson never needs."
 LINK_KEY_NOTE = "That key adds a link, which would reach outside the app."
 NEW_WORKBOOK_NOTE = "That key opens a new workbook outside the lesson. Stay in this one."
+TAB_NOTE = "Type the whole formula yourself; Tab here would let Excel finish a function name for you."
 
 Mode = Literal["mouse", "keyboard"]
 _BUTTONS = {"left", "right", "wheel", "middle"}
@@ -61,6 +63,7 @@ _BUTTONS = {"left", "right", "wheel", "middle"}
 # ever allowed when no formula is being typed (see `allowed`), and then it moves to the next cell.
 _ENDS_EDIT = {vk_for(k) for k in ("enter", "return", "esc", "escape", "tab")}
 _ARROWS = {vk_for(k) for k in ("left", "right", "up", "down")}
+_TAB = vk_for("tab")
 # Pointer actions that put the edit in another cell (a button press lands somewhere new on the sheet).
 _MOVES_CELL = {"click", "double_click", "drag"}
 # Combinations Windows itself acts on: they switch, close or cover the app, or open the security screen.
@@ -172,6 +175,8 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin |
     for combo, note in refused:
         if combo <= codes:
             return False, note
+    if kind == "keypress" and _TAB in codes and typed.lstrip().startswith(FORMULA_START):
+        return False, TAB_NOTE
     if kind in POINTER_ACTIONS:
         if mode == "keyboard":
             return False, KEYBOARD_NOTE
@@ -182,12 +187,30 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin |
             return False, OUTSIDE_NOTE
         return True, ""
     if kind == "type" and plugin is not None:
+        if _tab_autocompletes(typed, action["text"]):
+            return False, TAB_NOTE
         what = _reaches(typed + action["text"], plugin)
         if what:
             return False, f"That text {what}."
     if kind in ("keypress", "type", "wait", "screenshot"):
         return True, ""
     return False, f"{kind} is not something this test can do."
+
+
+def _tab_autocompletes(typed: str, text: str) -> bool:
+    """True when `text`, typed on top of `typed`, sends a Tab while a formula is open — the moment Excel's
+    AutoComplete could finish a function name the agent never spelled out in full."""
+    pending = typed
+    for ch in text:
+        if ch in "\r\n":
+            pending = ""
+        elif ch == "\t":
+            if pending.lstrip().startswith(FORMULA_START):
+                return True
+            pending = ""                                 # Tab in a plain cell just moves to the next one
+        else:
+            pending += ch
+    return False
 
 
 def _pending(typed: str, text: str) -> str:
