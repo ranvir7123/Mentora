@@ -619,6 +619,19 @@ def test_the_last_step_done_with_an_earlier_one_undone_points_at_what_to_fix(wor
     assert world.backend.lesson()["complete"] is not None
 
 
+def test_a_change_in_the_app_after_lesson_done_leaves_the_top_bar_full(world):
+    world.open()
+    world.learner_sets("k0", 1)
+    world.learner_sets("k1", 2)
+    assert world.backend.lesson()["complete"] is not None
+    world.learner_sets("k0", 9)                           # undone after the celebration
+    lesson = world.backend.lesson()
+    assert (lesson["stepIndex"], lesson["stepCount"], lesson["banner"]) == (2, 2, None)
+    world.learner_sets("k0", 1)                           # and fixed again
+    lesson = world.backend.lesson()
+    assert (lesson["stepIndex"], lesson["stepCount"], lesson["banner"]) == (2, 2, None)
+
+
 def test_home_shows_the_learner_their_courses_and_what_is_locked(tmp_path):
     w = World(tmp_path, lessons={"a": {"title": "A first"}, "b": {"title": "B second"},
                                  "c": {"title": "C third"}})

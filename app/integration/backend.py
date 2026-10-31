@@ -703,6 +703,8 @@ class Backend:
         o.logged = len(run.records())
         if o.goto is not None and o.goto not in run.changed:
             o.goto = None
+        if o.complete is not None:               # the lesson is done: a later change in the app moves nothing
+            return False
         for cue in cues:
             self._cue(cue, earned if cue == "right" else 0)
 
