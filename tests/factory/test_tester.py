@@ -584,9 +584,12 @@ def test_the_cursor_cannot_move_while_a_plain_value_is_half_typed():
     for keys in (["enter"], ["esc"], ["tab"]):
         assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse", plugin=excel, typed="ttp://e") \
             == (True, ""), keys
-    # With nothing pending in the cell, those same keys just move between cells, so they stay allowed.
+    # A click while the value is pending is refused the same way, so it can't land ambiguously mid-edit.
+    assert tester.allowed(click(5, 5), APP, "mouse", plugin=excel, typed="ttp://e") == (False, tester.EDITING_NOTE)
+    # With nothing pending in the cell, those same keys and a click just move between cells, so they stay allowed.
     assert tester.allowed({"type": "keypress", "keys": ["home"]}, APP, "mouse", plugin=excel) == (True, "")
     assert tester.allowed({"type": "keypress", "keys": ["left"]}, APP, "mouse", plugin=excel) == (True, "")
+    assert tester.allowed(click(5, 5), APP, "mouse", plugin=excel) == (True, "")
 
 
 def test_ribbon_keys_held_on_a_pointer_action_are_refused_like_a_bare_press():

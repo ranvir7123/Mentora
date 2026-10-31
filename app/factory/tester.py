@@ -222,8 +222,9 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin |
     if kind in POINTER_ACTIONS:
         if mode == "keyboard":
             return False, KEYBOARD_NOTE
-        if in_formula:                                       # a click mid-formula would insert a cell reference
-            return False, FORMULA_NOTE
+        if typed:                                            # a value is half-typed: a click mid-formula would
+            return False, FORMULA_NOTE if in_formula else EDITING_NOTE   # add a cell reference, and either way
+            #                                                 it lands ambiguously; finish with Enter first
         if action.get("button", "left") not in _BUTTONS:
             return False, BUTTON_NOTE
         points = action.get("path") if kind == "drag" else [action]
