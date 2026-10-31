@@ -163,27 +163,42 @@ def test_a_failed_proof_publishes_nothing_and_says_why(tmp_path, saved, make):
 
     result, stages, lines, tester = make()
 
-    reason = ("Only 2 of 3 steps could be proven, and a lesson needs at least 3. "
-              "Step s2 was dropped: its check was already true before the step.")
+    reason = "Only 2 of 3 steps could be proven, and a lesson needs at least 3. Try another video."
     assert result.lesson is None and result.reason == reason
     assert stages.last()["prove"] == ("failed", reason)
     assert stages.last()["test"] == ("waiting", "") and stages.last()["publish"] == ("waiting", "")
     assert f"prove failed: {reason}" in lines
+    assert "prove: Step s2 was dropped: its check was already true before the step." in lines   # for Ranvir
     assert tester.calls == []
     assert not (tmp_path / "lessons").exists()
 
 
-def test_a_step_that_was_dropped_is_named_but_the_lesson_still_goes_on(tmp_path, saved, make):
-    already_true = _step(4, check={"kind": "equals", "args": {"key": "k0", "value": 0}})
-    steps = [_step(1), _step(2), _step(3), already_true]
+def test_a_step_sent_back_is_said_plainly_on_screen_and_in_full_in_the_log(saved, make):
+    already_true = _step(2, check={"kind": "equals", "args": {"key": "k0", "value": 0}})
+    _written(saved, lesson=_lesson([_step(1), already_true, _step(3)]))
+    _written(saved, "writer_vid1_fix1", _lesson())
+
+    result, stages, lines, _ = make()
+
+    assert result.lesson is not None
+    assert [d for name, state, d in stages.calls if name == "prove" and d] == [
+        "A step did not pass its proof, so it goes back to Muse Spark to be fixed", "3 of 3 steps proven"]
+    assert "prove: Step s2: its check was already true before the step; it goes back to Muse Spark" in lines
+
+
+def test_a_step_that_was_dropped_is_counted_but_the_lesson_still_goes_on(tmp_path, saved, make):
+    loose = _step(4, mistakes=[{"replay": {"kind": "set", "args": {"key": "k4", "value": 4}},
+                                "not_yet": "k4 should be 4."}])                 # the mistake is the right answer
+    steps = [_step(1), _step(2), _step(3), loose]
     _written(saved, lesson=_lesson(steps))
     _written(saved, "writer_vid1_fix1", _lesson(steps))
 
-    result, stages, _, _ = make()
+    result, stages, lines, _ = make()
 
     assert [s.id for s in result.lesson.steps] == ["s1", "s2", "s3"]
-    assert stages.last()["prove"] == ("done", "3 of 4 steps proven, 1 dropped (s4: its check was already true "
-                                              "before the step)")
+    assert stages.last()["prove"] == ("done", "3 of 4 steps proven, 1 dropped")
+    assert ("prove: 3 of 4 steps proven, 1 dropped (s4: its check accepted mistake 1 (set key=k4 value=4), so the "
+            "check is too loose)") in lines
 
 
 def test_test_fallback_goes_keyboard_then_proven_only(tmp_path, saved, make):

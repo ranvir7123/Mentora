@@ -172,7 +172,8 @@ class LessonFactory:
         def fix(current: Lesson, reason: str) -> Lesson | NotReady:
             nonlocal fixes
             fixes += 1
-            self._update("prove", f"{reason[:1].upper()}{reason[1:]}; it goes back to Muse Spark")
+            self._update("prove", "A step did not pass its proof, so it goes back to Muse Spark to be fixed",
+                         log=f"{reason[:1].upper()}{reason[1:]}; it goes back to Muse Spark")
             return write_lesson(prepared, fetched.info, plugin, self.client, feedback=reason,
                                 lessons_dir=self.lessons_dir, label=f"writer_{fetched.info.id}_fix{fixes}")
 
@@ -189,11 +190,13 @@ class LessonFactory:
             else:
                 said = (f"{'None' if kept == 0 else f'Only {kept}'} of {total} steps could be proven, "
                         f"and a lesson needs at least {MIN_STEPS}.")
-            self._fail("prove", " ".join([said] + [f"Step {d} was dropped: {why[d]}." for d in dropped]))
-        detail = f"{kept} of {total} steps proven"
+            self._fail("prove", f"{said} Try another video.",          # why each step went is for Ranvir
+                       log=" ".join(f"Step {d} was dropped: {why[d]}." for d in dropped))
+        detail, log = f"{kept} of {total} steps proven", ""
         if dropped:
-            detail += f", {len(dropped)} dropped ({'; '.join(f'{d}: {why[d]}' for d in dropped)})"
-        self._done("prove", detail)
+            detail += f", {len(dropped)} dropped"
+            log = f"{detail} ({'; '.join(f'{d}: {why[d]}' for d in dropped)})"
+        self._done("prove", detail, log=log)
         return proved.lesson
 
     def _test(self, lesson: Lesson, plugin: AppPlugin, workdir: Path) -> TestResult:
@@ -273,8 +276,8 @@ class LessonFactory:
             self.on_line(traceback.format_exc().rstrip())
             self._fail(name, UNEXPECTED, log=f"Something went wrong in the {name} stage: {exc}")
 
-    def _update(self, name: str, detail: str) -> None:
-        self._tell(name, "running", detail)
+    def _update(self, name: str, detail: str, *, log: str = "") -> None:
+        self._tell(name, "running", detail, log=log)
 
     def _done(self, name: str, detail: str, *, log: str = "") -> None:
         self._tell(name, "done", detail, log=log)
