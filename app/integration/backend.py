@@ -230,6 +230,7 @@ class Backend:
                  layout: Callable[[], tuple[Rect, Rect]], front: Callable[[int, Callable[[], bool]], object],
                  later: Callable[[float, Callable[[], None]], None] = _timer,
                  find_key: Callable[[], tuple[str | None, str]] = _find_key,
+                 find_maker_key: Callable[[], tuple[str | None, str]] = _find_key, ai: str | None = None,
                  recordings: Path = Path("recordings"), maker_app: str = "excel",
                  login_name: str | None = None):
         """`layout()` gives (where the app goes, where the panel is) in physical px; it is called on the app
@@ -237,7 +238,9 @@ class Backend:
         lesson's app is in its place as it opens, to bring it to the front; it must hand that to the screens'
         thread, after the news it has already been sent, and bring the app forward only if `still()` is true
         by then (the learner may have gone home in between). `later(seconds, fn)` runs `fn` once after
-        `seconds`, on any thread. `recordings` holds the lesson maker's saved videos, one folder per YouTube id."""
+        `seconds`, on any thread. `recordings` holds the lesson maker's saved videos, one folder per YouTube id.
+        `find_key()` looks for the key of the coach's AI (`ai`, Meta's or Claude's); `find_maker_key()` for
+        Meta's key, which the lesson maker always uses."""
         self._library = library
         self._progress = progress
         self._front = front
@@ -248,6 +251,7 @@ class Backend:
         self._layout = layout
         self._later = later
         self._find_key = find_key
+        self._find_maker_key = find_maker_key
         self._recordings = Path(recordings)
         self._maker_app = maker_app
         login = os.environ.get("USERNAME", "") if login_name is None else login_name
@@ -261,12 +265,9 @@ class Backend:
         self._tips = {"state": "ready", "text": progress.tips} if progress.tips else {"state": "none", "text": ""}
         self._factory = copy.deepcopy(EMPTY_HOME["factory"])
         self._key_hunt = 0
-        self._ai = ai_name()
-        try:
-            self._meta = "ok" if self._find_key()[0] else "no_key"
-        except Exception:
-            log.exception("could not look for the Meta key")
-            self._meta = "no_key"
+        self._ai = ai or ai_name()
+        self._meta = self._key_state(self._find_key)
+        self._maker_key = self._key_state(self._find_maker_key)
 
         self._idle = threading.Condition()
         self._pending = 0
@@ -444,6 +445,7 @@ class Backend:
             "factory": copy.deepcopy(self._factory),
             "meta": self._meta,
             "ai": self._ai,
+            "makerKey": self._maker_key,
             "muted": self._muted,
         }
 
@@ -1012,10 +1014,18 @@ class Backend:
                 self._meta = meta
             self._publish_home()
 
-    # The Meta key.
+    # The keys: the coach's AI's, and Meta's for the lesson maker (the same key when Meta coaches).
+
+    @staticmethod
+    def _key_state(find: Callable[[], tuple[str | None, str]]) -> str:
+        try:
+            return "ok" if find()[0] else "no_key"
+        except Exception:
+            log.exception("could not look for a key")
+            return "no_key"
 
     def key_setup_copied(self) -> None:
-        """The learner copied the line that saves a Meta key: look for the key every few seconds."""
+        """The learner copied a line that saves a key: look for the missing keys every few seconds."""
         with self._lock:
             self._key_hunt += 1
             hunt = self._key_hunt
@@ -1025,16 +1035,18 @@ class Backend:
         with self._lock:
             if hunt != self._key_hunt:
                 return
-        try:
-            found = bool(self._find_key()[0])
-        except Exception:
-            log.exception("could not look for the Meta key")
-            found = False
-        if found:
+            coach_missing, maker_missing = self._meta == "no_key", self._maker_key == "no_key"
+        coach_found = coach_missing and self._key_state(self._find_key) == "ok"
+        maker_found = maker_missing and self._key_state(self._find_maker_key) == "ok"
+        if coach_found or maker_found:
             with self._lock:
-                self._meta = "ok"
+                if coach_found:
+                    self._meta = "ok"
+                if maker_found:
+                    self._maker_key = "ok"
                 self._publish_home()
-        elif tries < KEY_CHECKS:
+        still_missing = (coach_missing and not coach_found) or (maker_missing and not maker_found)
+        if still_missing and tries < KEY_CHECKS:
             self._after(KEY_CHECK_SECONDS, self._meta_pool, self._look_for_key, hunt, tries + 1)
 
     # Making a lesson from a video.

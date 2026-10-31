@@ -225,7 +225,7 @@ def load_plugins() -> dict[str, AppPlugin]:
 def build_backend(*, lessons: Path, data: Path, recordings: Path, layout: Callable[[], tuple[Rect, Rect]],
                   environ: Mapping[str, str]):
     """The program's backend on the real library, progress, apps, coach and lesson maker."""
-    from app.ai import key_name, make_client
+    from app.ai import ai_name, key_name, make_client
     from app.coach.coach import MetaCoach
     from app.factory.pipeline import LessonFactory
     from app.integration.backend import Backend
@@ -245,7 +245,7 @@ def build_backend(*, lessons: Path, data: Path, recordings: Path, layout: Callab
     coach_key = key_name(environ)
     return Backend(library, Progress(data), plugins, coach, maker, workdir=data / "work", layout=layout,
                    front=Front(winstyle.give_keyboard_to), recordings=recordings,
-                   find_key=lambda: find_key(coach_key))
+                   find_key=lambda: find_key(coach_key), find_maker_key=find_key, ai=ai_name(environ))
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -343,14 +343,14 @@ class Bridge(QObject):
     def makeLesson(self, url: str) -> None:
         self._backend.make_lesson(url)
 
-    @Slot()
-    def copyKeySetup(self) -> None:
-        """Puts the PowerShell line that saves the key of the AI home names (Meta's or Claude's) on the
+    @Slot(str)
+    def copyKeySetup(self, ai: str) -> None:
+        """Puts the PowerShell line that saves the key of `ai` (meta or claude, as the card names it) on the
         clipboard, with a gap where the key goes.
         The key itself is never read here. The backend then looks for the key for a while, so the card
         clears once the learner has saved it."""
         QGuiApplication.clipboard().setText(
-            f'[Environment]::SetEnvironmentVariable("{key_name({SWITCH: self._state["home"].get("ai", "meta")})}", '
+            f'[Environment]::SetEnvironmentVariable("{key_name({SWITCH: ai})}", '
             '"<your key>", "User")')
         self._backend.key_setup_copied()
 

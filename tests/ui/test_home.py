@@ -333,14 +333,52 @@ def test_with_claude_unreachable_tips_name_claude(home, qapp):
 
 def test_with_claude_and_no_key_the_card_asks_for_the_claude_key_and_copies_its_line(home, qapp):
     backend, _, root = home("home_no_key")
-    _with_claude(qapp, backend)
+    _with_claude(qapp, backend, makerKey="ok")          # Meta's key is saved, so lessons can still be made
     texts = _texts(root)
     assert "Add your Claude key" in texts and "Add your Meta key" not in texts
     assert "Tips and the Ask box need it." in texts
+    assert "Tips for you" not in texts
+    assert "Make a lesson" in _buttons(root)            # making lessons uses Meta, not Claude
     QGuiApplication.clipboard().clear()
     _click(qapp, root, _button(root, "Copy the setup line"))
     assert QGuiApplication.clipboard().text() == \
         '[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "<your key>", "User")'
+
+
+def test_with_claude_and_no_meta_key_tips_stay_and_the_maker_asks_for_the_meta_key(home, qapp):
+    backend, _, root = home("home_progress")
+    _with_claude(qapp, backend, makerKey="no_key")
+    texts = _texts(root)
+    assert "From Claude" in texts                        # Claude's tips still show
+    assert "Add your Meta key" in texts and "Add your Claude key" not in texts
+    assert "Lessons from videos need it." in texts
+    assert "Make a lesson" not in _buttons(root)
+    QGuiApplication.clipboard().clear()
+    copy = _button(root, "Copy the setup line")
+    _scroll_to(qapp, root, copy)
+    _click(qapp, root, copy)
+    assert QGuiApplication.clipboard().text() == \
+        '[Environment]::SetEnvironmentVariable("META_API_KEY", "<your key>", "User")'
+    assert ("key_setup_copied", ()) in backend.actions
+
+
+def test_with_claude_and_neither_key_each_card_copies_its_own_line(home, qapp):
+    backend, _, root = home("home_no_key")
+    _with_claude(qapp, backend)
+    texts = _texts(root)
+    assert "Add your Claude key" in texts and "Tips and the Ask box need it." in texts
+    assert "Add your Meta key" in texts and "Lessons from videos need it." in texts
+    assert "Make a lesson" not in _buttons(root) and "Tips for you" not in texts
+    copies = [b for b in _of(root, "ChunkyButton") if b.property("text") == "Copy the setup line"]
+    assert len(copies) == 2
+    lines = []
+    for button in copies:
+        QGuiApplication.clipboard().clear()
+        _scroll_to(qapp, root, button)
+        _click(qapp, root, button)
+        lines.append(QGuiApplication.clipboard().text())
+    assert lines == ['[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "<your key>", "User")',
+                     '[Environment]::SetEnvironmentVariable("META_API_KEY", "<your key>", "User")']
 
 
 def test_with_no_finished_lesson_tips_say_how_to_get_them(home):
@@ -368,6 +406,8 @@ def test_without_a_meta_key_the_card_says_how_to_add_one_and_copies_the_line(hom
     backend, _, root = home("home_no_key")
     texts = _texts(root)
     assert "Add your Meta key" in texts
+    assert "Lessons from videos and tips need it." in texts      # one key, so one card for both
+    assert texts.count("Add your Meta key") == 1 and "Add your Claude key" not in texts
     assert "Paste it in PowerShell, put your key in it, and press Enter." in texts
     assert "Make a lesson" not in _buttons(root)
     assert "Tips for you" not in texts

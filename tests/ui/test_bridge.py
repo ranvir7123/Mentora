@@ -89,7 +89,7 @@ def test_pointing_at_a_changed_step_clearing_the_maker_and_copying_the_key_line_
     bridge = Bridge(backend)
     bridge.goToStep(1)
     bridge.dismissFactory()
-    bridge.copyKeySetup()
+    bridge.copyKeySetup("meta")
     assert backend.actions == [("go_to_step", (1,)), ("dismiss_factory", ()), ("key_setup_copied", ())]
 
 
