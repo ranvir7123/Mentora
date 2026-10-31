@@ -106,6 +106,7 @@ def test_the_real_lessons_all_load_into_a_known_course():
     library = Library(REPO / "lessons", show_unproven=True)
     assert library.problems == []
     assert [c.id for c in library.courses()] == ["excel", "python", "meta-ai"]
-    assert ids(library.lessons("excel")) == ["monthly-budget"]
+    # by title, so the budget lesson the demo opens stays first, never locked behind a newer one
+    assert ids(library.lessons("excel")) == ["monthly-budget", "pet-survey-chart", "running-balance", "student-grades"]
     assert ids(library.lessons("python")) == ["vscode-first-program"]
     assert ids(library.lessons("meta-ai")) == ["vscode-meta-ai-app"]
