@@ -165,7 +165,7 @@ def plain(text: str) -> str:
     star inside a formula like =B2*C2 stays), with tidy spaces and each sentence starting with a capital."""
     text = _MARKS.sub(r"\1", (text or "").replace("**", "").replace("`", ""))
     text = re.sub(r"\s+", " ", _FILLER.sub("", text)).strip()
-    text = re.sub(r"\s+([.,!?;:])", r"\1", text)
+    text = re.sub(r"\s+([.,!?;:])(?!\w)", r"\1", text)          # "in .py" keeps its space
     return re.sub(r"(^|[.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
 
 

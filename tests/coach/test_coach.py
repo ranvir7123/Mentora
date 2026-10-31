@@ -214,3 +214,10 @@ def test_plain_takes_out_markdown_stars_and_backticks():
     assert plain("Click the **B** (Bold) button, or press *Ctrl+B*. Type `=SUM(B2:B5)`.") \
         == "Click the B (Bold) button, or press Ctrl+B. Type =SUM(B2:B5)."
     assert plain("Type =B2*C2 in D2.") == "Type =B2*C2 in D2."
+
+
+def test_plain_keeps_the_space_before_a_file_ending():
+    # Claude wrote "a name ending in .py" and the screen showed "ending in.py".
+    from app.coach.coach import plain
+    assert plain("Type a name ending in .py, like hello.py .") == "Type a name ending in .py, like hello.py."
+    assert plain("Press Enter , then save .") == "Press Enter, then save."
