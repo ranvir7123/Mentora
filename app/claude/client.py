@@ -9,6 +9,11 @@ Claude takes still pictures, not a video file, so upload() is refused with MetaR
 then sends the video's still frames, as it does when Meta refuses a video. There is no transcribe(): a
 video without captions is written from its frames alone.
 
+Claude's JSON mode takes only objects whose fields are all named and few of them optional, so an object
+of any shape (a lesson's starter workbook) or with optional fields (a check's arguments) is asked for as
+JSON text and turned back into an object when the answer comes. Limits the mode does not take (list
+lengths, number ranges) go to Claude as words instead; the callers check the answer themselves.
+
 Every call is appended to its own call log (model, label, tokens, cost, time, ok), and at the limit the
 next call is refused with SpendLimitReached. The key is read with app.meta.key.find_key, so a key saved
 in the user's Windows settings counts without a restart; it is never printed, logged or saved.
@@ -36,7 +41,10 @@ EFFORT = "low"                   # the Ask box, tips and pointing are short jobs
 MAX_TOKENS = 4000
 RETRIES = 1
 PRICE_INPUT, PRICE_CACHED, PRICE_OUTPUT = 4.00, 0.20, 20.00     # dollars per 1M tokens (Opus 5.5)
-_DROP = {"title", "minimum", "maximum"}                          # schema words Claude's JSON mode does not take
+_DROP = {"title", "minLength", "maxLength", "multipleOf"}        # schema words Claude's JSON mode does not take
+_AS_WORDS = {"minItems": "At least {} items.", "maxItems": "At most {} items.",     # ...said in words instead
+             "minimum": "At least {}.", "maximum": "At most {}."}
+OPEN_AS_TEXT = "A JSON object, written as text."
 
 
 def default_log_path() -> Path:
@@ -63,8 +71,10 @@ class ClaudeClient:
             raise SpendLimitReached(f"Claude spending reached the ${self.limit_usd:.0f} limit")
         system, messages = _messages(input)
         output_config: dict[str, Any] = {"effort": self.effort}
+        as_text: list[tuple[str, ...]] = []
         if schema is not None:
-            output_config["format"] = {"type": "json_schema", "schema": _plain_schema(schema)}
+            strict, as_text = _strict_schema(schema)
+            output_config["format"] = {"type": "json_schema", "schema": strict}
         request: dict[str, Any] = {"model": CLAUDE_MODEL, "max_tokens": self.max_tokens, "messages": messages,
                                    "output_config": output_config}
         if self.thinking:
@@ -95,6 +105,8 @@ class ClaudeClient:
                 data = json.loads(text)
             except ValueError:
                 data = None
+            for path in as_text:
+                data = _from_text(data, path)
         return Answer(text=text, data=data, output=list(reply.content), usage=usage,
                       response_id=str(getattr(reply, "id", "")), cost=cost, refusal=refusal)
 
@@ -167,13 +179,59 @@ def _content(content: Any) -> Any:
     return blocks
 
 
-def _plain_schema(schema: Any) -> Any:
-    """The schema without the words Claude's JSON mode refuses; the callers check ranges themselves."""
-    if isinstance(schema, dict):
-        return {k: _plain_schema(v) for k, v in schema.items() if k not in _DROP}
-    if isinstance(schema, list):
-        return [_plain_schema(v) for v in schema]
-    return schema
+def _strict_schema(schema: Any) -> tuple[Any, list[tuple[str, ...]]]:
+    """The schema as Claude's JSON mode takes it, and where each object went as JSON text (a path of field
+    names, "[]" for a list's items): one of any shape, or one with optional fields, named in its
+    description. Limits the mode refuses become words; every other object says it has no other fields."""
+    as_text: list[tuple[str, ...]] = []
+
+    def strict(node: Any, path: tuple[str, ...]) -> Any:
+        if isinstance(node, list):
+            return [strict(v, path) for v in node]
+        if not isinstance(node, dict):
+            return node
+        fields = node.get("properties") or {}
+        if node.get("type") == "object" and (not fields or set(fields) - set(node.get("required", []))):
+            as_text.append(path)
+            named = f" Its fields: {', '.join(fields)}; leave out the ones that do not apply." if fields else ""
+            return {"type": "string", "description": OPEN_AS_TEXT + named}
+        out: dict[str, Any] = {}
+        words = []
+        for key, value in node.items():
+            if key == "properties":
+                out[key] = {name: strict(sub, path + (name,)) for name, sub in value.items()}
+            elif key == "items":
+                out[key] = strict(value, path + ("[]",))
+            elif key == "minItems" and value in (0, 1):
+                out[key] = value
+            elif key in _AS_WORDS:
+                words.append(_AS_WORDS[key].format(value))
+            elif key not in _DROP:
+                out[key] = strict(value, path)
+        if words:
+            out["description"] = " ".join(filter(None, [out.get("description"), *words]))
+        if "properties" in out:
+            out["additionalProperties"] = False
+        return out
+
+    return strict(schema, ()), as_text
+
+
+def _from_text(data: Any, path: tuple[str, ...]) -> Any:
+    """`data` with the JSON text at `path` read back into an object; text that is not JSON stays text."""
+    if not path:
+        if isinstance(data, str):
+            try:
+                return json.loads(data)
+            except ValueError:
+                return data
+        return data
+    head, rest = path[0], path[1:]
+    if head == "[]":
+        return [_from_text(v, rest) for v in data] if isinstance(data, list) else data
+    if isinstance(data, dict) and head in data:
+        data[head] = _from_text(data[head], rest)
+    return data
 
 
 def _usage(reply: Any) -> Usage:
@@ -202,5 +260,15 @@ def _classify(exc: Exception) -> MetaError:
     if isinstance(exc, anthropic.APIStatusError):
         if exc.status_code >= 500:
             return MetaUnavailable(f"Claude is busy ({exc.status_code})")
-        return MetaRefused(exc.status_code, "Claude refused the request")
+        said = _said(exc)
+        return MetaRefused(exc.status_code, f"Claude refused the request: {said}" if said else
+                           "Claude refused the request")
     return MetaUnavailable(f"Claude call failed: {type(exc).__name__}")
+
+
+def _said(exc: Exception) -> str:
+    """Claude's own words for an error, for the log: what was wrong with the request, never the key."""
+    body = getattr(exc, "body", None)
+    error = body.get("error") if isinstance(body, dict) else None
+    message = error.get("message") if isinstance(error, dict) else None
+    return " ".join(str(message).split())[:300] if message else ""

@@ -75,7 +75,7 @@ def test_a_picture_and_a_schema_go_across_and_the_json_comes_back(tmp_path):
     sent_schema = api.sent[0]["output_config"]["format"]
     assert sent_schema["type"] == "json_schema"
     assert "title" not in sent_schema["schema"]
-    assert sent_schema["schema"]["properties"]["left"] == {"type": "integer"}
+    assert sent_schema["schema"]["properties"]["left"] == {"type": "integer", "description": "At least 0. At most 1000."}
 
 
 def test_a_refusal_is_an_answer_with_its_refusal_set(tmp_path):
@@ -190,3 +190,75 @@ def test_the_ask_box_does_not_ask_claude_to_think(tmp_path):
     client, api = _client(tmp_path, _reply(_text("Select A1 first.")))
     client.respond("muse-spark-1.3", "How?", label="coach_answer")
     assert "thinking" not in api.sent[0] and api.sent[0]["max_tokens"] == 4000
+
+
+OPEN = {"type": "object", "properties": {
+    "title": {"type": "string"},
+    "starter": {"type": "object"},
+    "steps": {"type": "array", "items": {"type": "object", "properties": {"state": {"type": "object"}},
+                                         "required": ["state"]}}},
+    "required": ["title", "starter", "steps"], "additionalProperties": False}
+
+
+def test_an_open_object_goes_to_claude_as_json_text_and_comes_back_as_an_object(tmp_path):
+    said = {"title": "Pie", "starter": json.dumps({"sheets": [{"name": "Sheet1"}]}),
+            "steps": [{"state": json.dumps({"k1": 1})}]}
+    client, api = _client(tmp_path, _reply(_text(json.dumps(said))))
+
+    answer = client.respond("muse-spark-1.3", "Write it.", label="writer_vid1", schema=OPEN)
+
+    sent = api.sent[0]["output_config"]["format"]["schema"]
+    assert sent["properties"]["starter"]["type"] == "string"           # Claude cannot take an object of any shape
+    assert sent["properties"]["steps"]["items"]["properties"]["state"]["type"] == "string"
+    assert sent["properties"]["steps"]["items"]["additionalProperties"] is False   # Claude needs it said
+    assert answer.data == {"title": "Pie", "starter": {"sheets": [{"name": "Sheet1"}]}, "steps": [{"state": {"k1": 1}}]}
+
+
+def test_open_object_text_that_is_not_json_stays_text_for_the_caller_to_reject(tmp_path):
+    said = {"title": "Pie", "starter": "not json", "steps": []}
+    client, _ = _client(tmp_path, _reply(_text(json.dumps(said))))
+    assert client.respond("m", "Write it.", label="w", schema=OPEN).data["starter"] == "not json"
+
+
+def test_claudes_own_reason_for_refusing_a_request_reaches_the_call_log(tmp_path):
+    request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    error = anthropic.BadRequestError("bad", response=httpx2.Response(400, request=request), body={
+        "type": "error", "error": {"type": "invalid_request_error", "message": "schema: say additionalProperties"}})
+    client, _ = _client(tmp_path, error)
+
+    with pytest.raises(MetaRefused) as caught:
+        client.respond("m", "Write it.", label="writer_vid1")
+
+    assert "schema: say additionalProperties" in str(caught.value)
+    logged = json.loads((tmp_path / "claude_calls.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert "schema: say additionalProperties" in logged["error"]
+
+
+def test_an_object_with_optional_fields_goes_as_json_text_naming_its_fields(tmp_path):
+    schema = {"type": "object", "properties": {"args": {"type": "object", "properties": {
+        "cell": {"type": "string"}, "value": {"type": ["number", "string"]}}, "required": ["cell"],
+        "additionalProperties": False}}, "required": ["args"], "additionalProperties": False}
+    said = {"args": json.dumps({"cell": "B6"})}
+    client, api = _client(tmp_path, _reply(_text(json.dumps(said))))
+
+    answer = client.respond("m", "Write it.", label="w", schema=schema)
+
+    sent = api.sent[0]["output_config"]["format"]["schema"]["properties"]["args"]
+    assert sent["type"] == "string" and "cell" in sent["description"] and "value" in sent["description"]
+    assert answer.data == {"args": {"cell": "B6"}}
+
+
+def test_list_and_number_limits_claude_does_not_take_become_words(tmp_path):
+    schema = {"type": "object", "properties": {
+        "hints": {"type": "array", "items": {"type": "string", "maxLength": 80}, "minItems": 3, "maxItems": 3},
+        "notes": {"type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 1}},
+        "required": ["hints", "notes"], "additionalProperties": False}
+    client, api = _client(tmp_path, _reply(_text('{"hints": [], "notes": []}')))
+
+    client.respond("m", "Write it.", label="w", schema=schema)
+
+    sent = api.sent[0]["output_config"]["format"]["schema"]["properties"]
+    assert "minItems" not in sent["hints"] and "maxItems" not in sent["hints"]
+    assert sent["hints"]["description"] == "At least 3 items. At most 3 items."
+    assert "maxLength" not in sent["hints"]["items"] and "minimum" not in sent["notes"]["items"]
+    assert sent["notes"]["minItems"] == 1                                # 0 and 1 Claude does take
