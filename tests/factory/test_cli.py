@@ -88,7 +88,7 @@ def test_a_test_that_reaches_a_verdict_is_saved(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "HANDS_OFF_S", 0)
     calls = []
 
-    def passes(lesson, plugin, workdir, client, *, runs, mode, hands, on_line):
+    def passes(lesson, plugin, workdir, client, *, runs, mode, hands, on_line, on_progress):
         calls.append((runs, mode, hands))
         on_line("run 1 passed")
         return TestResult(True, AT, mode, runs, runs)

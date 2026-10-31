@@ -205,18 +205,22 @@ def _keys_allowed(keys: Any) -> tuple[bool, str]:
 
 def test_lesson(lesson: Lesson, plugin: AppPlugin, workdir: Path, client, *, model: str = MODEL, runs: int = 5,
                 mode: Mode = "mouse", max_actions_per_step: int = 25, hands=None,
-                on_line: Callable[[str], None] | None = None) -> TestResult:
+                on_line: Callable[[str], None] | None = None,
+                on_progress: Callable[[str], None] | None = None) -> TestResult:
     """Run the lesson `runs` times with Meta's agent as the learner. Raises NotForAgent before anything opens
     when the agent may not play this app, UserTookOver when a person moves the mouse, ProveError when the app
-    itself gets in the way, and NoKey or SpendLimitReached from Meta."""
+    itself gets in the way, and NoKey or SpendLimitReached from Meta. `on_line` hears everything, Meta's and
+    the checks' own words too, for the log; `on_progress` hears only which run is playing, in plain words."""
     refusal = agent_refusal(plugin)
     if refusal:
         raise NotForAgent(refusal)
     hands = hands or WindowsHands()
     say = on_line or (lambda line: None)
+    progress = on_progress or (lambda line: None)
     need = -(-runs * PASS_OF[0] // PASS_OF[1])
     passes = done = 0
     for number in range(1, runs + 1):
+        progress(f"run {number} of {runs} is playing" + (f", {passes} passed so far" if number > 1 else ""))
         failure = _Run(lesson, plugin, Path(workdir), client, hands, say, model=model, mode=mode, number=number,
                        budget=max_actions_per_step).go()
         done += 1

@@ -65,26 +65,31 @@ class Tested:
 
 
 def run_test(lesson: Lesson, plugin: AppPlugin, workdir: Path, client: MetaClient, *, say: Say, runs: int = 5,
-             hands=None, play=None) -> Tested:
-    """The mouse test, then the keyboard-only test if that fails. `say` hears each run and each switch.
+             hands=None, play=None, show: Say | None = None) -> Tested:
+    """The mouse test, then the keyboard-only test if that fails. `say` hears each run and each switch, in
+    full; `show`, for the screen, hears only plain words: which run is playing, and each switch.
     A test that cannot finish raises, as `test_lesson` does: UserTookOver, ProveError or a MetaError.
     Both tests use the same hands, so a person who moves the mouse between them is noticed."""
     if hands is None and play is None:
         hands = tester.WindowsHands()
     play = play or tester.test_lesson
+    show = show or (lambda line: None)
     results = {}
     for mode in ("mouse", "keyboard"):
         where = Path(workdir) / mode
         where.mkdir(parents=True, exist_ok=True)
         name = TESTS[mode]
         got = play(lesson, plugin, where, client, runs=runs, mode=mode, hands=hands,
-                   on_line=lambda line, name=name: say(f"{name}: {line}"))
+                   on_line=lambda line, name=name: say(f"{name}: {line}"),
+                   on_progress=lambda line, name=name: show(f"{name}: {line}"))
         results[mode] = got
         if got.passed:
             keys = ", using the keyboard only" if mode == "keyboard" else ""
             return Tested(got, f"{got.passes} of {got.runs} test runs passed{keys}")
         if mode == "mouse":
-            say(f"The mouse test passed {got.passes} of {got.runs} runs, so the keyboard-only test runs now")
+            switch = f"The mouse test passed {got.passes} of {got.runs} runs, so the keyboard-only test runs now"
+            say(switch)
+            show(switch)
     kb = results["keyboard"]
     return Tested(replace(kb, mode="skipped"),
                   f"The keyboard-only test passed {kb.passes} of {kb.runs} runs too, so the lesson goes on the "
@@ -208,8 +213,9 @@ class LessonFactory:
             self._update("test", f"Hands off the mouse and keyboard: Meta's agent takes over in {self.hands_off_s:g} s")
             time.sleep(self.hands_off_s)
         try:
-            tested = run_test(lesson, plugin, workdir, self.client, say=lambda line: self._update("test", line),
-                              runs=self.runs, hands=self.hands, play=self.tester)
+            tested = run_test(lesson, plugin, workdir, self.client, say=lambda line: self.on_line(f"test: {line}"),
+                              runs=self.runs, hands=self.hands, play=self.tester,
+                              show=lambda line: self._on_stage("test", "running", line))   # the log has the rest
         except UserTookOver as exc:
             said, why = str(exc), ""
         except (ProveError, MetaError, OSError) as exc:

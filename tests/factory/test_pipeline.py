@@ -64,14 +64,17 @@ class FakeTester:
     def __init__(self, *results, during=None):
         self.results, self.calls, self.during = list(results), [], during
 
-    def __call__(self, lesson, plugin, workdir, client, *, runs, mode, hands, on_line):
+    def __call__(self, lesson, plugin, workdir, client, *, runs, mode, hands, on_line, on_progress=None):
         self.calls.append({"lesson": lesson, "workdir": workdir, "runs": runs, "mode": mode, "hands": hands})
         if self.during:
             self.during()
         result = self.results.pop(0)
         if isinstance(result, BaseException):
             raise result
-        on_line("run 1 passed" if result.passed else "run 1 failed: step s1 was not done after 25 actions")
+        if on_progress:
+            on_progress(f"run 1 of {runs} is playing")
+        on_line("refused keypress win: That key would leave the app. Stay in the app's window.")
+        on_line("run 1 passed" if result.passed else "run 1 failed: Meta is busy right now (503: upstream reset)")
         return result
 
 
@@ -217,6 +220,21 @@ def test_test_fallback_goes_keyboard_then_proven_only(tmp_path, saved, make):
             "not proven and tested")
     assert stages.last()["test"] == ("done", last) and f"test done: {last}" in lines
     assert stages.last()["publish"] == ("done", 'On the shelf as "Fill in the keys", with the proven badge')
+
+
+def test_the_card_hears_only_plain_progress_while_the_test_runs_and_the_log_hears_everything(saved, make):
+    _written(saved)
+
+    result, stages, lines, _ = make(tester=FakeTester(outcome(2), outcome(4, mode="keyboard")))
+
+    assert [d for name, state, d in stages.calls if name == "test" and state == "running" and d] == [
+        "Mouse test: run 1 of 5 is playing",
+        "The mouse test passed 2 of 5 runs, so the keyboard-only test runs now",
+        "Keyboard-only test: run 1 of 5 is playing",
+    ]
+    assert "test: Mouse test: run 1 failed: Meta is busy right now (503: upstream reset)" in lines   # for Ranvir
+    assert ("test: Keyboard-only test: refused keypress win: That key would leave the app. Stay in the app's "
+            "window.") in lines
 
 
 def test_a_lesson_the_agent_can_play_by_keyboard_is_proven_and_tested(saved, make):
@@ -401,7 +419,7 @@ def test_one_pair_of_hands_plays_both_tests(tmp_path, monkeypatch):
         def __init__(self):
             made.append(self)
 
-    def play(lesson, plugin, workdir, client, *, runs, mode, hands, on_line):
+    def play(lesson, plugin, workdir, client, *, runs, mode, hands, on_line, on_progress):
         played.append(hands)
         return outcome(0, mode=mode)
 

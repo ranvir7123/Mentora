@@ -8,7 +8,7 @@ from app.core.types import Rect
 from app.factory import tester
 from app.factory.input import UserTookOver
 from app.factory.prove import ProveError
-from app.meta.client import Answer, MetaRefused, SpendLimitReached
+from app.meta.client import Answer, MetaRefused, MetaUnavailable, SpendLimitReached
 from app.meta.prices import Usage
 from tests.core.conftest import build_fake_lesson
 
@@ -132,6 +132,20 @@ def run(script, lesson=None, *, plugin=None, hands=None, lines=None, **kwargs):
     result = tester.test_lesson(lesson or three_steps(), plugin, kwargs.pop("workdir"), script, hands=hands,
                                 on_line=lines.append, **{"runs": 1, **kwargs})
     return result, hands, lines
+
+
+def test_progress_is_plain_words_while_the_log_keeps_what_meta_and_the_checks_said(tmp_path):
+    progress, lines = [], []
+    script = Script(act({"type": "keypress", "keys": ["win"]}), act(typed("k0", 1)), act(typed("k1", 2)),
+                    act(typed("k2", 3)), MetaUnavailable("Meta is busy right now (503: upstream reset)"))
+
+    plugin = Recording()
+    tester.test_lesson(three_steps(), plugin, tmp_path, script, hands=FakeHands(plugin), runs=2,
+                       on_line=lines.append, on_progress=progress.append)
+
+    assert progress == ["run 1 of 2 is playing", "run 2 of 2 is playing, 1 passed so far"]
+    assert "run 2 failed: Meta is busy right now (503: upstream reset)" in lines
+    assert "refused keypress win: That key would leave the app. Stay in the app's window." in lines
 
 
 def _texts(sent):
