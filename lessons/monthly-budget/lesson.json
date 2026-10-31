@@ -73,7 +73,7 @@
             }
           },
           "not_yet": "Not yet: Share in C1 needs bold too.",
-          "code": ""
+          "code": "partial:C1"
         }
       ],
       "clip": null
@@ -116,7 +116,7 @@
             }
           },
           "not_yet": "Not yet: your total skips B6. Include Fun too.",
-          "code": ""
+          "code": "covers_missing:B6"
         },
         {
           "replay": {
@@ -127,7 +127,7 @@
             }
           },
           "not_yet": "Not yet: that's a typed number. Start with = instead.",
-          "code": ""
+          "code": "typed_value"
         }
       ],
       "clip": null
@@ -169,7 +169,7 @@
             }
           },
           "not_yet": "Not yet: that's percent. Pick Currency instead.",
-          "code": ""
+          "code": "kind:percent"
         }
       ],
       "clip": null
@@ -215,18 +215,18 @@
             }
           },
           "not_yet": "Not yet: lock the total as $B$8 so it stays put.",
-          "code": ""
+          "code": "not_absolute:B8"
         },
         {
           "replay": {
             "kind": "set_formula",
             "args": {
               "cell": "Budget!C2",
-              "formula": "=B8/B2"
+              "formula": "=$B$8/B2"
             }
           },
           "not_yet": "Not yet: divide the amount by the total, not the other way.",
-          "code": ""
+          "code": "value:1.9167"
         }
       ],
       "clip": null
@@ -268,7 +268,7 @@
             }
           },
           "not_yet": "Not yet: fill all the way down to C6.",
-          "code": ""
+          "code": "gap:C6"
         }
       ],
       "clip": null
@@ -310,7 +310,7 @@
             }
           },
           "not_yet": "Not yet: that's currency. Use percent here.",
-          "code": ""
+          "code": "kind:currency"
         }
       ],
       "clip": null
@@ -352,7 +352,7 @@
             }
           },
           "not_yet": "Not yet: that's a column chart. Pick the pie.",
-          "code": ""
+          "code": "type:column"
         }
       ],
       "clip": null
@@ -394,7 +394,7 @@
             }
           },
           "not_yet": "Not yet: freeze only the top row.",
-          "code": ""
+          "code": "frozen:1,1"
         }
       ],
       "clip": null
@@ -441,7 +441,7 @@
             }
           },
           "not_yet": "Not yet: that's smallest first. Flip it.",
-          "code": ""
+          "code": "order"
         }
       ],
       "clip": null
@@ -449,6 +449,17 @@
   ],
   "made_by": "hand",
   "edited_by_hand": false,
-  "proof": null,
-  "test": null
+  "proof": {
+    "passed": true,
+    "at": "2026-10-31T08:37:30+00:00",
+    "dropped": [],
+    "notes": []
+  },
+  "test": {
+    "passed": false,
+    "at": "2026-10-31T08:37:30+00:00",
+    "mode": "skipped",
+    "runs": 0,
+    "passes": 0
+  }
 }
