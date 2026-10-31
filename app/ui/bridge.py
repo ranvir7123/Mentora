@@ -370,3 +370,8 @@ class Bridge(QObject):
     @Slot(int)
     def goToStep(self, index: int) -> None:
         self._backend.go_to_step(index)
+
+    @Slot(str, int)
+    def practise(self, lesson_id: str, step_index: int) -> None:
+        """Practise this again, from Your common mistakes on home."""
+        self._backend.practise(lesson_id, step_index)

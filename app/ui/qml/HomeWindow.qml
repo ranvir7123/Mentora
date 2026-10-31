@@ -5,8 +5,8 @@ import "components"
 import "home"
 
 // The app's main window. At the top, hello, your streak and today's points. Below, the lesson you are
-// part way through (or your first one), your courses, tips from Meta's AI and making a lesson from a
-// video. Opening a course shows its path instead, until you go back to all courses.
+// part way through (or your first one), your courses, your common mistakes, tips from Meta's AI and making
+// a lesson from a video. Opening a course shows its path instead, until you go back to all courses.
 Window {
     id: root
     required property var bridge
@@ -126,6 +126,12 @@ Window {
                         featuredId: root.resumeCourse ? root.resumeCourse.id : ""
                         onOpen: (id) => root.courseId = id
                     }
+                }
+
+                MistakesCard {
+                    width: parent.width
+                    mistakes: root.home.mistakes || []
+                    onPractise: (lessonId, stepIndex) => root.bridge.practise(lessonId, stepIndex)
                 }
             }
 

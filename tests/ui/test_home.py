@@ -4,8 +4,8 @@ import copy
 import time
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QEvent, QPointF, QRectF, Qt
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, QRectF, Qt
+from PySide6.QtGui import QGuiApplication, QWheelEvent
 from PySide6.QtQuick import QQuickItem, QQuickWindow  # noqa: F401  (so windows come back as Quick windows)
 from PySide6.QtTest import QTest
 
@@ -100,6 +100,25 @@ def _click(qapp, root, item):
     centre = item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint()
     QTest.mouseClick(root, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, centre)
     _settle(qapp, 0.3)
+
+
+def _scroll_to(qapp, root, item):
+    """Turns the mouse wheel over the page until `item` is wholly inside the window, then waits for the page
+    to stop gliding: a click on a moving page only stops it."""
+    for _ in range(40):
+        if _scene_rect(item).bottom() <= root.height() - 8:
+            was = None
+            while was != _scene_rect(item).y():
+                was = _scene_rect(item).y()
+                _settle(qapp, 0.1)
+            return
+        centre = QPointF(root.width() / 2, root.height() / 2)
+        wheel = QWheelEvent(centre, root.mapToGlobal(centre), QPoint(0, 0), QPoint(0, -120),
+                            Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase,
+                            False)
+        QGuiApplication.sendEvent(root, wheel)
+        _settle(qapp, 0.05)
+    raise AssertionError("could not scroll the item into view")
 
 
 def _link_field(root):
@@ -379,6 +398,41 @@ def test_a_ready_lesson_lands_on_the_shelf_with_a_short_highlight(home, qapp):
     assert ("dismiss_factory", ()) in backend.actions
     _settle(qapp, 1.6)
     assert not [i for i in _items(root.contentItem()) if i.objectName() == "highlight" and _shown(i)]
+
+
+
+# Your common mistakes.
+
+def test_your_common_mistakes_name_each_step_its_slip_its_tries_and_a_tip(home):
+    _, _, root = home("home_progress")
+    texts = _texts(root)
+    assert "Your common mistakes" in texts and "From your checks" in texts
+    assert "Add up the amounts in B8." in texts
+    assert "Typed the answer instead of a formula" in texts
+    assert "Took 3 tries" in texts
+    assert "Start with = so Excel works it out and keeps it up to date." in texts
+    assert "Monthly budget, step 2" in texts
+
+
+def test_practise_this_again_reopens_that_lesson_at_that_step(home, qapp):
+    backend, _, root = home("home_progress")
+    buttons = [b for b in _of(root, "ChunkyButton") if b.property("text") == "Practise this again"]
+    assert len(buttons) == 2                          # the step got right since has none
+    _scroll_to(qapp, root, buttons[0])                # the card sits under your courses
+    _click(qapp, root, buttons[0])
+    assert ("practise", ("monthly-budget", 1)) in backend.actions
+
+
+def test_a_step_got_right_since_says_so(home):
+    _, _, root = home("home_progress")
+    assert "Got it right last time" in _texts(root)
+
+
+def test_with_no_mistakes_yet_a_friendly_line_says_where_they_will_show(home):
+    _, _, root = home("first_run")
+    assert "Your common mistakes" in _texts(root)
+    assert "No mistakes yet. Steps that take a few tries show up here, with a tip." in _texts(root)
+    assert "Practise this again" not in _buttons(root)
 
 
 # Long text and small windows.
