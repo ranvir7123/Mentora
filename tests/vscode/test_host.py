@@ -53,6 +53,16 @@ def test_a_file_still_to_make_points_at_the_new_file_button_or_the_files_explore
     assert pick([folder], "new_file", "") is None
 
 
+def test_the_trust_button_is_the_dialogs_or_else_the_restricted_mode_status():
+    # Names as UI Automation gave them in real VS Code (1.11x, 31 Oct 2026).
+    dialog = Element("button", "Trust Folder & Continue", "monaco-button monaco-text-button", Rect(809, 905, 289, 53))
+    status = Element("button", "Restricted Mode: Some features are disabled because this folder is not trusted.",
+                     "statusbar-item-label", Rect(74, 1452, 245, 48))
+    assert pick([status, dialog], "trust", "") == Rect(809, 905, 289, 53)
+    assert pick([status], "trust", "") == Rect(74, 1452, 245, 48)
+    assert pick(ELEMENTS, "trust", "") is None
+
+
 def test_the_welcome_pages_new_file_button_is_not_the_explorers():
     # VS Code's Welcome page has its own "New File..." button, in the editor area: it makes an
     # untitled file, not one in the lesson's folder.

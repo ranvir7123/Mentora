@@ -656,6 +656,8 @@ export function activate(context: vscode.ExtensionContext): void {
     return; // the learner's own projects: stay asleep
   }
   const log = vscode.window.createOutputChannel("Mentora", { log: true });
+  // Beside Mentora's panel the window is narrow: the Chat side bar would take a third of it from the code.
+  void vscode.commands.executeCommand("workbench.action.closeAuxiliaryBar").then(undefined, () => undefined);
   const link = new Link(context, folder, log, file);
   const recheck = () => link.tryConnect();
   fs.watchFile(file, { interval: RETRY_MS }, recheck);

@@ -278,6 +278,9 @@ def test_the_lesson_folder_gets_its_editor_settings(opened):
     # With Code Runner installed, its "Run Code" took the Run button's place: it runs the program where
     # input() can't be answered and the run is never seen.
     assert settings["code-runner.showRunIconInEditorTitleMenu"] is False
+    # VS Code shows the Explorer's New File button only while the mouse is over the Explorer, so in
+    # real VS Code lesson 1's first step pointed at the whole file list instead of the button.
+    assert settings["workbench.view.alwaysShowHeaderActions"] is True
     session.read_now().result(timeout=5)
     assert ".vscode/settings.json" not in session.latest().files
 
@@ -513,6 +516,21 @@ def test_locate_a_file_still_to_make_points_at_new_file(opened):
     assert spot == Spot(Rect(200, 104, 32, 32), "New File here")
     # A file that is there but whose row cannot be seen (scrolled away) is not one to make.
     assert session.locate(Target("explorer_item", "hello.py")).result(timeout=5) is None
+
+
+def test_while_vs_code_asks_to_trust_the_folder_every_step_points_at_its_button(opened):
+    # In real VS Code a new lesson folder opened in Restricted Mode behind a "Do you trust the authors"
+    # dialog: until the learner trusts it, the folder's settings are ignored and runs are not seen.
+    session, host, *_ = opened()
+    session.read_now().result(timeout=5)
+    host.rects[("new_file", "")] = Rect(200, 104, 32, 32)
+    host.rects[("trust", "")] = Rect(800, 900, 290, 54)
+    trust = Spot(Rect(800, 900, 290, 54), "Trust this folder first")
+    assert session.locate(Target("explorer_item", "ask.py")).result(timeout=5) == trust
+    assert session.locate(Target("editor_line", "hello.py:1")).result(timeout=5) == trust
+    del host.rects[("trust", "")]
+    assert session.locate(Target("explorer_item", "ask.py")).result(timeout=5) == Spot(Rect(200, 104, 32, 32),
+                                                                                         "New File here")
 
 
 def test_locate_other_targets_asks_ui_automation(opened):
