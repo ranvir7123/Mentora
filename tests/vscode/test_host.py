@@ -53,6 +53,17 @@ def test_a_file_still_to_make_points_at_the_new_file_button_or_the_files_explore
     assert pick([folder], "new_file", "") is None
 
 
+def test_the_welcome_pages_new_file_button_is_not_the_explorers():
+    # VS Code's Welcome page has its own "New File..." button, in the editor area: it makes an
+    # untitled file, not one in the lesson's folder.
+    empty_tree = Element("tree", "Files Explorer", "monaco-list", Rect(0, 140, 300, 760))
+    welcome = Element("button", "New File...", "button-link", Rect(700, 300, 120, 30))
+    new_file = Element("button", "New File...", "action-label", Rect(200, 104, 32, 32))
+    assert pick([welcome, new_file, empty_tree], "new_file", "") == Rect(200, 104, 32, 32)
+    assert pick([welcome, empty_tree], "new_file", "") == Rect(0, 140, 300, 760)
+    assert pick([welcome], "new_file", "") is None
+
+
 def test_the_terminal_and_the_run_button():
     assert pick(ELEMENTS, "terminal", "") == Rect(320, 900, 1200, 300)
     assert pick(ELEMENTS, "run_button", "") == Rect(1480, 120, 32, 32)

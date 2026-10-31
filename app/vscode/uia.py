@@ -77,9 +77,13 @@ def pick(elements: Iterable[Element], kind: str, ref: str) -> Rect | None:
         buttons = [e for e in shown if e.control == "button" and e.name.startswith("Run Python File")]
         return buttons[0].rect if buttons else None
     if kind == "new_file":
-        buttons = [e for e in shown if e.control == "button" and e.name.startswith("New File")]
         trees = [e for e in shown if e.control == "tree" and e.name == FILES_EXPLORER]
-        return buttons[0].rect if buttons else trees[0].rect if trees else None
+        if not trees:
+            return None
+        side = trees[0].rect                  # the Welcome page's own "New File..." sits in the editor area
+        buttons = [e for e in shown if e.control == "button" and e.name.startswith("New File")
+                   and side.x <= e.rect.x + e.rect.w / 2 <= side.x + side.w]
+        return buttons[0].rect if buttons else side
     if kind == "explorer_item":
         trees = [e for e in shown if e.control == "tree" and e.name == FILES_EXPLORER]
         if not trees:
