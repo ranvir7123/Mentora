@@ -225,11 +225,10 @@ def load_plugins() -> dict[str, AppPlugin]:
 def build_backend(*, lessons: Path, data: Path, recordings: Path, layout: Callable[[], tuple[Rect, Rect]],
                   environ: Mapping[str, str]):
     """The program's backend on the real library, progress, apps, coach and lesson maker."""
-    from app.ai import key_name, make_client
+    from app.ai import key_name, make_client, make_maker_client
     from app.coach.coach import MetaCoach
     from app.factory.pipeline import LessonFactory
     from app.integration.backend import Backend
-    from app.meta.client import MetaClient
     from app.meta.key import find_key
 
     library = Library(lessons, show_unproven=environ.get("MENTORA_SHOW_UNPROVEN") == "1")
@@ -241,7 +240,8 @@ def build_backend(*, lessons: Path, data: Path, recordings: Path, layout: Callab
     # The learner waits on the coach, so it gives up soon and the panel says so; the maker keeps its long wait.
     # The coach uses the AI MENTORA_AI chooses (Meta unless it says claude); the maker always uses Meta.
     coach = MetaCoach(make_client(timeout_s=COACH_TIMEOUT_S, environ=environ), shelf=shelf)
-    maker = LessonFactory(MetaClient(), lessons, recordings, on_line=log.info) if "excel" in plugins else None
+    maker = LessonFactory(make_maker_client(environ), lessons, recordings, on_line=log.info) \
+        if "excel" in plugins else None
     coach_key = key_name(environ)
     return Backend(library, Progress(data), plugins, coach, maker, workdir=data / "work", layout=layout,
                    front=Front(winstyle.give_keyboard_to), recordings=recordings,
