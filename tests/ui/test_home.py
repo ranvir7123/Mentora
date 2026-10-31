@@ -231,6 +231,19 @@ def test_the_course_you_are_in_names_the_lesson_up_next_even_with_no_credits(hom
     assert _scene_rect(card).bottom() - lesson.bottom() <= 24 + 4 + 2, "the lesson up next is not at the foot"
 
 
+def test_the_lesson_up_next_comes_back_after_a_course_had_nothing_up_next(home, qapp):
+    _, _, root = home("home_progress")
+    card = _holder(_text_item(root, "Excel"), "CourseCard")
+    finished = {**_long_course(1, 0), "credits": []}
+    finished["lessons"] = [{**finished["lessons"][0], "state": "done"}]
+    card.setProperty("course", finished)                                  # all done, no credits: an empty foot
+    _settle(qapp)
+    card.setProperty("course", {**_long_course(1, 0), "credits": []})     # then a lesson is up next again
+    _settle(qapp)
+    lesson = _scene_rect(_text_item(root, "Lesson 0"))
+    assert _scene_rect(card).contains(lesson) and "Up next" in _texts(root)
+
+
 def _long_course(count, done):
     states = ["done"] * done + ["current"] + ["locked"] * (count - done - 1)
     return {"id": "excel", "title": "Excel", "colour": "courseExcel", "credits": ["Sheet School"], "ready": True,

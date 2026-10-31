@@ -40,6 +40,10 @@ Item {
         readonly property int done: lessons.filter(l => l.state === "done").length
         readonly property var credits: course.credits || []
         readonly property var next: lessons.find(l => l.state === "current") || null
+        // What the foot shows, decided from the course: never from the parts' own `visible`, which turns
+        // false with the foot's and would keep a hidden foot hidden for good.
+        readonly property bool showsNext: big && ready && next !== null
+        readonly property bool showsCredits: credits.length > 0
         readonly property real spine: 10
         readonly property real pad: big ? Theme.space24 : Theme.space16
         readonly property bool down: area.pressed && ready
@@ -151,7 +155,7 @@ Item {
             // author's name on a cover.
             Column {
                 id: foot
-                visible: upNext.visible || madeBy.visible
+                visible: card.showsNext || card.showsCredits
                 x: words.x
                 y: Math.max(words.y + words.height + words.spacing, parent.height - card.pad - height)
                 width: words.width
@@ -159,7 +163,7 @@ Item {
 
                 Column {
                     id: upNext
-                    visible: card.big && card.ready && card.next !== null
+                    visible: card.showsNext
                     width: parent.width
                     spacing: Theme.space4
                     Text {
@@ -183,7 +187,7 @@ Item {
 
                 Text {
                     id: madeBy
-                    visible: card.credits.length > 0
+                    visible: card.showsCredits
                     width: parent.width
                     text: {
                         const names = card.credits

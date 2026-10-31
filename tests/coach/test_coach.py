@@ -98,6 +98,27 @@ def test_an_answer_uses_the_step_and_the_hints_already_shown(saved, spy):
     assert "Type =SUM(B2:B5)" not in said                    # hints not yet shown are not given away
 
 
+@pytest.mark.parametrize("app, named", [("excel", "Microsoft Excel"), ("vscode", "VS Code")])
+def test_an_answer_names_the_app_and_says_the_laptop_runs_windows(saved, spy, app, named):
+    # Told nothing, Claude answered "press Ctrl+S (or Cmd+S on a Mac)" on a Windows laptop.
+    saved.answer("coach_answer", "Press Ctrl+S to save.")
+
+    MetaCoach(spy).answer("How do I save?", {**CONTEXT, "app": app})
+
+    (call,) = spy.responds
+    assert f"The app: {named} on Windows" in _said(call)
+    rules = call["input"][0]["content"]
+    assert "Windows" in rules and "Cmd" in rules and "Mac" in rules and "ribbon" in rules
+
+
+def test_an_answer_for_an_unknown_app_still_says_windows(saved, spy):
+    saved.answer("coach_answer", "Press Ctrl+S to save.")
+
+    MetaCoach(spy).answer("How do I save?", CONTEXT)              # no "app" given
+
+    assert "The app: the lesson's app on Windows" in _said(spy.responds[0])
+
+
 @pytest.mark.parametrize("claim", [
     "Yes, that step is done now, nice work!",
     "You've finished this step.",
@@ -134,7 +155,7 @@ def test_a_long_answer_is_cut_to_sixty_words(saved, spy):
 
     answer = MetaCoach(spy).answer("Tell me everything", CONTEXT)
 
-    assert answer == " ".join(words[:60]) + "…"
+    assert answer == " ".join(words[:60]) + "â€¦"
 
 
 def test_an_empty_question_is_not_sent(spy):
@@ -193,3 +214,10 @@ def test_plain_takes_out_markdown_stars_and_backticks():
     assert plain("Click the **B** (Bold) button, or press *Ctrl+B*. Type `=SUM(B2:B5)`.") \
         == "Click the B (Bold) button, or press Ctrl+B. Type =SUM(B2:B5)."
     assert plain("Type =B2*C2 in D2.") == "Type =B2*C2 in D2."
+
+
+def test_plain_keeps_the_space_before_a_file_ending():
+    # Claude wrote "a name ending in .py" and the screen showed "ending in.py".
+    from app.coach.coach import plain
+    assert plain("Type a name ending in .py, like hello.py .") == "Type a name ending in .py, like hello.py."
+    assert plain("Press Enter , then save .") == "Press Enter, then save."

@@ -44,13 +44,17 @@ _ANSWER_RULES = (
     "question in at most 60 words, plainly, speaking to them as \"you\". Help them do the step themselves. You "
     "cannot see or change the app and you cannot tick a step: only the app's own check does that, so never say "
     "the step is done, finished, correct or ticked. If the question is not about this step or the app, say "
-    "kindly that you can help with this step. Never use the words \"simply\" or \"just\".")
+    "kindly that you can help with this step. Never use the words \"simply\" or \"just\". The learner is on a "
+    "Windows laptop: name only Windows keys such as Ctrl and Alt, never Cmd or Option, and never mention a Mac. "
+    "In Microsoft Excel, the buttons at the top are the ribbon, not a toolbar.")
+_APPS = {"excel": "Microsoft Excel", "vscode": "VS Code"}      # how the Ask box's question names the app
+_SOME_APP = "the lesson's app"
 
 _FILLER = re.compile(r"\b(?:simply|just)\b,?\s*", re.I)
 _MARKS = re.compile(r"(?<![\w*])\*(?=\S)([^*]+?)(?<=\S)\*(?![\w*])")      # *word*, not =B2*C2
 _CLAIM = re.compile(
     r"\b(?:ticked|tick(?:s|ed)? off|well done|nailed it|you did it|you got it|all set)\b"
-    r"|(?:\bis|\bare|\bwas|\bhas been|\bhave been|['’]s|['’]re|['’]ve|\bhave)\s+(?:now\s+|already\s+|all\s+)?"
+    r"|(?:\bis|\bare|\bwas|\bhas been|\bhave been|['â€™]s|['â€™]re|['â€™]ve|\bhave)\s+(?:now\s+|already\s+|all\s+)?"
     r"(?:done|complete|completed|finished|correct|right|passed)\b"
     r"|\b(?:check|step)\s+(?:has\s+)?pass(?:ed|es)\b", re.I)
 _IF = re.compile(r"^\s*(?:once|when|whenever|after|if|until|before|as soon as)\b", re.I)
@@ -80,8 +84,8 @@ class MetaCoach:
         return fit(text, TIP_WORDS)
 
     def answer(self, question: str, context: Mapping) -> str:
-        """An answer about the current step. `context` holds the step's "instruction" and "why", its
-        "hints" and how many are shown ("hints_shown"), the last "Not yet" line ("verdict") and a small
+        """An answer about the current step. `context` holds the lesson's "app", the step's "instruction" and
+        "why", its "hints" and how many are shown ("hints_shown"), the last "Not yet" line ("verdict") and a small
         "state" mapping the plug-in reads from the app (for Excel: the target cell's value and formula and
         the selected cell)."""
         question = " ".join(question.split())[:MAX_QUESTION]
@@ -139,6 +143,7 @@ def _step_summary(context: Mapping) -> str:
     state = context.get("state") or {}
     seen = [f"- {key}: {_short(value)}" for key, value in list(state.items())[:MAX_STATE]]
     return "\n".join([
+        f"The app: {_APPS.get(str(context.get('app') or ''), _SOME_APP)} on Windows",
         f"The step: {context.get('instruction') or ''}",
         f"Why: {context.get('why') or ''}",
         f"Hints already shown: {' '.join(shown) if shown else 'none'}",
@@ -150,7 +155,7 @@ def _step_summary(context: Mapping) -> str:
 
 def _short(value: Any) -> str:
     text = " ".join(str(value).split()) if value not in (None, "") else "(empty)"
-    return text if len(text) <= MAX_VALUE else text[:MAX_VALUE - 1] + "…"
+    return text if len(text) <= MAX_VALUE else text[:MAX_VALUE - 1] + "â€¦"
 
 
 # What comes back.
@@ -160,7 +165,7 @@ def plain(text: str) -> str:
     star inside a formula like =B2*C2 stays), with tidy spaces and each sentence starting with a capital."""
     text = _MARKS.sub(r"\1", (text or "").replace("**", "").replace("`", ""))
     text = re.sub(r"\s+", " ", _FILLER.sub("", text)).strip()
-    text = re.sub(r"\s+([.,!?;:])", r"\1", text)
+    text = re.sub(r"\s+([.,!?;:])(?!\w)", r"\1", text)          # "in .py" keeps its space
     return re.sub(r"(^|[.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
 
 
@@ -185,7 +190,7 @@ def fit(text: str, limit: int) -> str:
         used += words
     if kept:
         return " ".join(kept)
-    return " ".join(text.split()[:limit]).rstrip(".,;:!?") + "…"
+    return " ".join(text.split()[:limit]).rstrip(".,;:!?") + "â€¦"
 
 
 def next_hint(context: Mapping) -> str:
