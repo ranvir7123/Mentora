@@ -445,7 +445,9 @@ def test_excels_macro_keys_are_refused_in_excel(tmp_path):
     assert result.passed and [a["type"] for a in hands.done] == ["type", "type", "type"]
     assert "refused keypress alt+f11: That key opens the app's macros, which a lesson never needs." in lines
     assert "refused keypress alt+f8: That key opens the app's macros, which a lesson never needs." in lines
-    assert tester.allowed({"type": "keypress", "keys": ["alt", "f11"]}, APP, "mouse") == (True, "")   # elsewhere
+    # Without the Excel list it is no longer the macro note, but an Alt chord still opens the ribbon, so it
+    # is refused everywhere; only the wording differs.
+    assert tester.allowed({"type": "keypress", "keys": ["alt", "f11"]}, APP, "mouse") == (False, tester.ALT_NOTE)
 
 
 def test_text_the_agent_types_is_held_to_the_lessons_own_rules(tmp_path):
@@ -549,6 +551,46 @@ def test_the_agent_may_not_open_the_ribbon_key_tips_with_a_bare_alt(tmp_path):
     assert result.passed
     assert bare_alt not in hands.done
     assert any(line.startswith("refused keypress alt") and line.endswith(tester.ALT_NOTE) for line in lines)
+
+
+def test_a_formula_typed_one_key_at_a_time_is_caught(tmp_path):
+    # The agent presses letter and symbol keys one by one to build a banned function, dodging type actions.
+    letters = [{"type": "keypress", "keys": [k]} for k in "=webservice"]
+    paren = {"type": "keypress", "keys": ["shift", "9"]}          # "(" completes the call
+    script = Script(act(*letters, paren), act(typed("k0", 1)), act(typed("k1", 2)), act(typed("k2", 3)))
+    plugin = Excel()
+
+    result, hands, lines = run(script, plugin=plugin, hands=TypingHands(plugin), workdir=tmp_path)
+
+    assert result.passed
+    assert paren not in hands.done                               # the key that completes the call is refused
+    assert any("uses WEBSERVICE" in line and line.startswith("refused") for line in lines)
+
+
+def test_keys_that_produce_text_are_checked_together_with_what_came_before():
+    excel = Excel()
+    assert tester.allowed({"type": "keypress", "keys": ["e"]}, APP, "mouse", plugin=excel, typed="=WEBSERVIC") \
+        == (True, "")
+    assert tester.allowed({"type": "keypress", "keys": ["shift", "9"]}, APP, "mouse", plugin=excel,
+                          typed="=WEBSERVICE") == (False, "That text uses WEBSERVICE, which a lesson may not use.")
+
+
+def test_the_cursor_cannot_move_or_click_inside_a_formula_being_typed():
+    excel = Excel()
+    for keys in (["left"], ["right"], ["home"], ["end"], ["backspace"], ["delete"], ["f2"], ["alt", "enter"]):
+        assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse", plugin=excel, typed="=SUM(A1") \
+            == (False, tester.FORMULA_NOTE), keys
+    assert tester.allowed(click(5, 5), APP, "mouse", plugin=excel, typed="=SUM(A1") == (False, tester.FORMULA_NOTE)
+    # Out of a formula those same keys just move between cells, so they stay allowed.
+    assert tester.allowed({"type": "keypress", "keys": ["left"]}, APP, "mouse", plugin=excel) == (True, "")
+    assert tester.allowed({"type": "keypress", "keys": ["f2"]}, APP, "mouse", plugin=excel) == (True, "")
+    assert tester.allowed(click(5, 5), APP, "mouse", plugin=excel) == (True, "")
+
+
+def test_a_tab_held_on_any_action_is_refused_while_a_formula_is_being_typed():
+    excel = Excel()
+    assert tester.allowed({"type": "screenshot", "keys": ["tab"]}, APP, "mouse", plugin=excel, typed="=WEBS") \
+        == (False, tester.TAB_NOTE)
 
 
 def test_tab_is_refused_while_a_formula_is_being_typed():
