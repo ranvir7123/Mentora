@@ -79,6 +79,34 @@ def test_a_progress_file_of_the_wrong_shape_is_set_aside_too(tmp_path):
     assert len(list(tmp_path.glob("progress.broken-*.json"))) == 1
 
 
+THREE_DAYS = json.dumps({"format": 1, "days": {"2026-10-28": 10, "2026-10-29": 10, "2026-10-30": 20}})
+
+
+def test_a_progress_file_saved_with_a_bom_keeps_the_streak(tmp_path):
+    # Notepad's "UTF-8 with BOM" puts an invisible marker at the start of the file.
+    (tmp_path / "progress.json").write_text(THREE_DAYS, encoding="utf-8-sig")
+    p = Progress(tmp_path, today=Clock())
+    assert p.streak() == 3 and p.points_today() == 20
+    assert not list(tmp_path.glob("progress.broken-*.json"))
+
+
+def test_a_progress_file_saved_as_utf16_keeps_the_streak(tmp_path):
+    # Notepad's "Unicode" and PowerShell's Out-File save text as UTF-16.
+    (tmp_path / "progress.json").write_text(THREE_DAYS, encoding="utf-16")
+    p = Progress(tmp_path, today=Clock())
+    assert p.streak() == 3 and p.points_today() == 20
+    assert not list(tmp_path.glob("progress.broken-*.json"))
+    p.step_passed("budget", 0, 10)                       # saved back as plain UTF-8
+    assert json.loads((tmp_path / "progress.json").read_text(encoding="utf-8"))["days"]["2026-10-30"] == 30
+
+
+def test_a_progress_file_that_is_not_text_is_set_aside(tmp_path):
+    (tmp_path / "progress.json").write_bytes(b'{"format": 1, "days": {"\xff\xfe\xfa": 10}}')
+    p = Progress(tmp_path, today=Clock())
+    assert p.streak() == 0
+    assert len(list(tmp_path.glob("progress.broken-*.json"))) == 1
+
+
 def test_a_failed_save_keeps_the_last_good_file(tmp_path, monkeypatch):
     p = Progress(tmp_path, today=Clock())
     p.step_passed("budget", 0, 10)

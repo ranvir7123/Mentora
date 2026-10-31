@@ -112,7 +112,10 @@ class Progress:
     def _load(self) -> dict:
         for attempt in range(1, READ_TRIES + 1):
             try:
-                text = self._file.read_text(encoding="utf-8")
+                try:
+                    text: str | bytes = self._file.read_text(encoding="utf-8-sig")   # skips an editor's BOM
+                except UnicodeDecodeError:
+                    text = self._file.read_bytes()   # json works out UTF-16 or UTF-32 from the bytes
                 break
             except FileNotFoundError:
                 return {}
@@ -125,7 +128,7 @@ class Progress:
                 time.sleep(READ_GAP_S)
         try:
             return _read(json.loads(text))
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError) as e:     # UnicodeDecodeError too: bytes that are no kind of text
             aside = self._root / f"progress.broken-{datetime.now():%Y%m%d-%H%M%S-%f}.json"
             log.warning("progress.json is broken (%s); set aside as %s", e, aside.name)
             try:
