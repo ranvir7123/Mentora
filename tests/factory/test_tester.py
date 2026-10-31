@@ -562,6 +562,20 @@ def test_several_keys_pressed_together_are_checked_as_the_text_they_spell():
     assert tester.allowed({"type": "keypress", "keys": list("sum")}, APP, "mouse", plugin=excel, typed="=") == (True, "")
 
 
+def test_a_key_press_may_not_mix_typed_characters_with_other_keys():
+    excel = Excel()
+    # With nothing typed yet, character keys pressed together with Enter (or an arrow) would type a banned
+    # formula and enter it in one go, without the typed text ever being checked; so would characters pressed
+    # before Ctrl, which type before the shortcut starts. Neither is ever needed, so both are refused.
+    for keys in (list("=webservice") + ["shift", "9", "enter"], list("=sum") + ["shift", "9", "ctrl"],
+                 ["a", "down", "b"], ["h", "ctrl", "b"]):
+        assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse", plugin=excel) \
+            == (False, tester.MIXED_NOTE), keys
+    # Shortcuts with their modifier pressed first, plain text, and keys that type nothing all stay allowed.
+    for keys in (["ctrl", "b"], ["ctrl", "shift", "4"], list("sum"), ["shift", "a"], ["alt", "enter"], ["enter"]):
+        assert tester.allowed({"type": "keypress", "keys": keys}, APP, "mouse", plugin=excel) == (True, ""), keys
+
+
 def test_shift_changes_only_the_keys_pressed_after_it():
     excel = Excel()
     # The hands press keys down in order, so "9" pressed before Shift is held just types "9", not "(". The

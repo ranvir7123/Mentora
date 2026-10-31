@@ -65,6 +65,7 @@ ALT_NOTE = "That key opens the ribbon's shortcuts, which a lesson never needs."
 FORMULA_NOTE = "Type the formula straight through, without moving the cursor or clicking inside it."
 EDIT_NOTE = "Type the whole value into the cell yourself, rather than re-opening its edit or pasting into it."
 EDITING_NOTE = "Finish typing the value and press Enter; don't move the cursor while a cell is half-typed."
+MIXED_NOTE = "Type text on its own, and press a shortcut with its Ctrl or Alt first; don't mix the two in one press."
 
 Mode = Literal["mouse", "keyboard"]
 _BUTTONS = {"left", "right", "wheel", "middle"}
@@ -210,6 +211,8 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin |
     if codes == {_ALT} or codes == {_F10} or (_ALT in codes and codes not in _ALT_OK):
         return False, ALT_NOTE                               # a bare Alt or F10, or an Alt chord: the ribbon
     if kind == "keypress":
+        if _mixed(action.get("keys") or []):
+            return False, MIXED_NOTE
         text = _key_text(action.get("keys") or [])
         if text:                                             # keys that type characters go into the cell
             what = _reaches(typed + text, plugin) if plugin is not None else ""
@@ -240,6 +243,17 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin |
     if kind in ("keypress", "type", "wait", "screenshot"):
         return True, ""
     return False, f"{kind} is not something this test can do."
+
+
+def _mixed(keys: list) -> bool:
+    """True when one key press would type characters and also do something else, so the text it types could
+    go in unchecked: a character key pressed before Ctrl, Alt or Win (it types before the shortcut starts), or,
+    with none of those held, character keys pressed together with a key that types nothing (Enter, an arrow)."""
+    codes = [vk_for(str(k)) for k in keys]
+    first_mod = next((i for i, c in enumerate(codes) if c in _MODS), None)
+    if first_mod is not None:
+        return any(c in _PRINTABLE for c in codes[:first_mod])
+    return any(c in _PRINTABLE for c in codes) and any(c not in _PRINTABLE and c != _SHIFT for c in codes)
 
 
 def _key_text(keys: list) -> str | None:
