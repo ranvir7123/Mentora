@@ -63,9 +63,8 @@ program", in VS Code.
 - A switch for showing Mentora without a Meta key ([app/ai.py](app/ai.py), [app/claude/](app/claude/)):
   with `MENTORA_AI=claude`, the Ask box, the tips and the pointing fallback ask Claude (Opus 5.5) instead of
   Muse Spark, using the `ANTHROPIC_API_KEY` key, with its own call log and a $20 spending stop. Meta stays
-  the default, and the lesson factory always uses Meta, so home asks for each missing key on its own card:
-  Claude's for the tips and the Ask box, Meta's for making a lesson from a video. One real Ask box question
-  has been answered by Claude (in 4.4 s); the pointing fallback on Claude has run only in tests.
+  the default, and the lesson factory always uses Meta. One real Ask box question has been answered by
+  Claude (in 4.4 s); the pointing fallback on Claude has run only in tests.
 
 ## Built during the hackathon (27 Oct - 4 Nov 2026)
 

@@ -137,7 +137,7 @@ class Later:
 
 
 class World:
-    def __init__(self, tmp_path, *, lessons=None, coach=True, maker=True, key="k", maker_key="m"):
+    def __init__(self, tmp_path, *, lessons=None, coach=True, maker=True, key="k"):
         self.tmp = tmp_path
         self.lessons_dir = tmp_path / "lessons"
         write_courses(self.lessons_dir)
@@ -146,8 +146,7 @@ class World:
         self.plugin = RecordingPlugin()
         self.coach = FakeCoach() if coach else None
         self.maker = FakeMaker(self.lessons_dir) if maker else None
-        self.key = key                                      # the coach's key (Meta's, or Claude's)
-        self.maker_key = maker_key                          # the Meta key making lessons always needs
+        self.key = key
         self.later = Later()
         self.sent: list[tuple[str, dict]] = []
         self.fronts: list[int] = []                         # the windows brought to the front, in order
@@ -160,7 +159,6 @@ class World:
         self.backend = Backend(self.library, self.progress, {"fake": self.plugin}, self.coach, self.maker,
                                workdir=self.tmp / "mentora" / "work", layout=lambda: (APP_RECT, PANEL_RECT),
                                later=self.later, find_key=lambda: (self.key, "test"),
-                               find_maker_key=lambda: (self.maker_key, "test"),
                                recordings=self.tmp / "recordings", maker_app="fake", login_name="ranvir",
                                front=self._front)
         self.backend.subscribe(lambda name, payload: self.sent.append((name, payload)))
@@ -548,61 +546,6 @@ def test_the_key_is_checked_again_after_the_setup_line_is_copied(tmp_path):
         assert w.later.waiting == []                  # it stops looking once the key is there
     finally:
         w.backend.shutdown()
-
-
-def test_making_lessons_follows_the_meta_key_and_tips_follow_the_coach_key(tmp_path):
-    w = World(tmp_path / "claude-missing", key=None, maker_key="m")    # Claude coaches, its key isn't saved
-    try:
-        assert (w.backend.home()["meta"], w.backend.home()["makerKey"]) == ("no_key", "ok")
-    finally:
-        w.backend.shutdown()
-    w = World(tmp_path / "meta-missing", key="c", maker_key=None)      # the coach's key is there, Meta's isn't
-    try:
-        assert (w.backend.home()["meta"], w.backend.home()["makerKey"]) == ("ok", "no_key")
-    finally:
-        w.backend.shutdown()
-
-
-def test_after_the_setup_line_is_copied_the_meta_key_is_looked_for_too(tmp_path):
-    w = World(tmp_path, key="c", maker_key=None)
-    try:
-        w.backend.key_setup_copied()
-        w.idle()
-        w.run_later()
-        assert w.backend.home()["makerKey"] == "no_key"
-        w.maker_key = "saved-now"
-        w.run_later()
-        assert w.backend.home()["makerKey"] == "ok"
-        assert w.later.waiting == []                  # both keys are there: it stops looking
-    finally:
-        w.backend.shutdown()
-
-
-def test_the_program_names_the_ai_and_finds_each_key_where_it_lives(tmp_path, monkeypatch):
-    import app.meta.key
-    from app.main import build_backend
-    monkeypatch.delenv("MENTORA_AI", raising=False)     # the program's own environment says nothing
-    lessons = tmp_path / "lessons"
-    write_courses(lessons)
-    write_lesson(lessons, "proven", title="Proven one")
-
-    def home(environ, saved):
-        monkeypatch.setattr(app.meta.key, "find_key",
-                            lambda name="META_API_KEY": (saved.get(name), "test"))
-        backend = build_backend(lessons=lessons, data=tmp_path / "data", recordings=tmp_path / "rec",
-                                layout=lambda: (APP_RECT, PANEL_RECT), environ=environ)
-        try:
-            shown = backend.home()
-            return shown["ai"], shown["meta"], shown["makerKey"]
-        finally:
-            backend.shutdown()
-
-    claude = {"MENTORA_AI": "claude"}
-    assert home({}, {}) == ("meta", "no_key", "no_key")
-    assert home({}, {"META_API_KEY": "m"}) == ("meta", "ok", "ok")
-    assert home(claude, {"ANTHROPIC_API_KEY": "c"}) == ("claude", "ok", "no_key")
-    assert home(claude, {"META_API_KEY": "m"}) == ("claude", "no_key", "ok")
-    assert home(claude, {"ANTHROPIC_API_KEY": "c", "META_API_KEY": "m"}) == ("claude", "ok", "ok")
 
 
 def test_finished_lesson_refreshes_tips(world):

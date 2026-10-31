@@ -19,8 +19,7 @@ Window {
     readonly property bool wide: width >= 1000
     readonly property real margin: wide ? Theme.space32 : Theme.space24
     readonly property real sideWidth: 352
-    readonly property bool coachKeyMissing: home.meta === "no_key"        // the key of the AI that writes tips
-    readonly property bool makerKeyMissing: home.makerKey === "no_key"    // Meta's, for making lessons
+    readonly property bool keyMissing: home.meta === "no_key"
     readonly property bool claude: home.ai === "claude"     // MENTORA_AI=claude: Claude writes the tips
 
     // Read from `home` itself: inside onHomeChanged, `courses` may not have caught up yet.
@@ -146,27 +145,15 @@ Window {
                 spacing: Theme.space24
 
                 TipsCard {
-                    visible: !root.coachKeyMissing
+                    visible: !root.keyMissing
                     width: parent.width
                     tips: root.home.tips || ({})
                     ai: root.home.ai || "meta"
                 }
 
-                // A missing key: tips and the Ask box wait for the coach's AI's key, making lessons for Meta's.
-                // When Meta coaches that is one key, so one card asks for it.
-                KeyCard {
-                    id: coachKey
-                    visible: root.coachKeyMissing
-                    width: parent.width
-                    ai: root.claude ? "claude" : "meta"
-                    need: root.makerKeyMissing && !root.claude ? "Lessons from videos and tips need it."
-                                                               : "Tips and the Ask box need it."
-                    onCopy: root.bridge.copyKeySetup(ai)
-                }
-
                 MakeLesson {
                     id: maker
-                    visible: !root.makerKeyMissing
+                    visible: !root.keyMissing
                     width: parent.width
                     factory: root.home.factory || ({})
                     courses: root.courses
@@ -175,13 +162,69 @@ Window {
                     onDismiss: root.bridge.dismissFactory()
                 }
 
-                KeyCard {              // not when Meta coaches without its key: the card above asks for it
-                    id: metaKey
-                    visible: root.makerKeyMissing && !(root.coachKeyMissing && !root.claude)
+                // Without a Meta key, tips and making lessons wait for one; lessons themselves still work. The
+                // card copies the PowerShell line that saves a key, with a gap where the key goes.
+                Rectangle {
+                    visible: root.keyMissing
                     width: parent.width
-                    ai: "meta"
-                    need: "Lessons from videos need it."
-                    onCopy: root.bridge.copyKeySetup(ai)
+                    height: noKey.implicitHeight + 2 * Theme.space24
+                    radius: Theme.radiusLarge
+                    color: Theme.clear
+                    border.width: 2
+                    border.color: Theme.border
+
+                    Column {
+                        id: noKey
+                        x: Theme.space24
+                        y: Theme.space24
+                        width: parent.width - 2 * Theme.space24
+                        spacing: Theme.space16
+
+                        Column {
+                            width: parent.width
+                            spacing: Theme.space4
+                            Text {
+                                width: parent.width
+                                text: root.claude ? "Add your Claude key" : "Add your Meta key"
+                                wrapMode: Text.Wrap
+                                color: Theme.text
+                                font.family: Theme.fontHeading
+                                font.weight: Font.Bold
+                                font.pixelSize: Theme.size20
+                            }
+                            Text {
+                                width: parent.width
+                                text: root.claude ? "Tips and the Ask box need it." : "Lessons from videos and tips need it."
+                                wrapMode: Text.Wrap
+                                color: Theme.muted
+                                font.family: Theme.fontBody
+                                font.pixelSize: Theme.size16
+                            }
+                        }
+
+                        ChunkyButton {
+                            id: copyLine
+                            property bool copied: false
+                            width: parent.width
+                            kind: "quiet"
+                            text: copied ? "Copied" : "Copy the setup line"
+                            onClicked: {
+                                root.bridge.copyKeySetup()
+                                copied = true
+                                copiedFor.restart()
+                            }
+                            Timer { id: copiedFor; interval: 2000; onTriggered: copyLine.copied = false }
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: "Paste it in PowerShell, put your key in it, and press Enter."
+                            wrapMode: Text.Wrap
+                            color: Theme.muted
+                            font.family: Theme.fontBody
+                            font.pixelSize: Theme.size14
+                        }
+                    }
                 }
             }
 
@@ -193,11 +236,10 @@ Window {
                 course: root.openCourse || ({})
                 onOpenLesson: (lessonId) => root.bridge.openLesson(lessonId)
                 onBack: root.courseId = ""
-                onMakeLesson: {        // to the maker, or to the card asking for the key it waits for
+                onMakeLesson: {
                     root.courseId = ""
-                    const target = !root.makerKeyMissing ? maker : metaKey.visible ? metaKey : coachKey
                     maker.focusLink()
-                    scroller.contentY = Math.max(0, Math.min(side.y + target.y,
+                    scroller.contentY = Math.max(0, Math.min(side.y + maker.y,
                                                              scroller.contentHeight - scroller.height))
                 }
             }

@@ -227,7 +227,7 @@ def _build(state: str) -> tuple[dict, dict, dict, str | None, dict]:
                          "picking the range. Try the chart review next, then the lookup lesson when you "
                          "feel ready for something new.")})
     elif state == "home_no_key":
-        home = _home(meta="no_key", makerKey="no_key", tips={"state": "none", "text": ""})
+        home = _home(meta="no_key", tips={"state": "none", "text": ""})
     elif state == "home_offline":
         home = _home(meta="unreachable", tips={"state": "error", "text": ""})
     elif state == "course_empty":

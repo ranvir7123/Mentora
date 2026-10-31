@@ -85,9 +85,8 @@ class HomeState(TypedDict):
     tips: Tips
     mistakes: list[MistakeCard]
     factory: Factory
-    meta: Literal["ok", "no_key", "unreachable"]     # whether the AI below has its key and can be reached
+    meta: Literal["ok", "no_key", "unreachable"]
     ai: Literal["meta", "claude"]      # which AI writes the tips and answers the Ask box
-    makerKey: Literal["ok", "no_key"]  # Meta's key, which making a lesson from a video always needs
     muted: bool
 
 
@@ -187,7 +186,6 @@ EMPTY_HOME: HomeState = {
     "factory": {"state": "idle", "url": "", "stages": [], "reason": "", "lessonId": None},
     "meta": "ok",
     "ai": "meta",
-    "makerKey": "ok",
     "muted": False,
 }
 
