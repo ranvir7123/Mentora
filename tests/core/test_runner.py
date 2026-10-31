@@ -75,7 +75,7 @@ def test_finishing_the_last_step_reports_points_time_and_first_tries(fake_lesson
     now[0] = 95.0
     assert run.on_snapshot({"a": 1, "b": 2}) == [StepPassed(1, False, 10), LessonDone(95.0, 20, 1, 2)]
     assert run.done and run.index == 2
-    assert run.records() == [StepRecord("s0", 1, 0, 10.0, True), StepRecord("s1", 2, 0, 85.0, False)]
+    assert run.records() == [StepRecord("s0", 1, 0, 10.0, True), StepRecord("s1", 2, 0, 85.0, False, ("differs:b",))]
     assert run.on_snapshot({"a": 1, "b": 2}) == []  # done is said once
 
 
@@ -126,3 +126,14 @@ def test_a_check_that_raises_is_treated_as_waiting_and_recorded(fake_lesson):
         assert run.on_snapshot({"a": 1}) == []
     assert run.index == 0
     assert len(run.errors) == 20 and run.errors[0] == "KeyError: 'Budget'"
+
+
+def test_a_record_keeps_the_kind_of_each_not_yet_the_check_named(fake_lesson):
+    run, _ = start(fake_lesson({}, AB))
+    run.on_snapshot({"a": 2})
+    run.on_snapshot({"a": 2})                       # the same answer re-read is not a new slip
+    run.on_snapshot({"a": 3})
+    run.on_snapshot({"a": 1})
+    assert run.records()[0].mistakes == ("differs:a", "differs:a")
+    run.on_snapshot({"a": 1, "b": 2})
+    assert run.records()[1].mistakes == ()
