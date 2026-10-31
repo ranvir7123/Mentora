@@ -491,7 +491,9 @@ def _run_ok(snap: VsSnapshot, args: Mapping) -> Verdict:
 
 
 def _last_run(snap: VsSnapshot) -> Run | None:
-    """A run step counts only a run made after it opened: one from before ran older code."""
+    """The run a run step judges. The runner waits while it equals the run there when the step opened,
+    which ran older code. A Run has no id, so a new run exactly equal to that one also waits; in the
+    lessons a program waits at input() or for Meta, so a still-running reading comes in between."""
     return snap.run
 
 
