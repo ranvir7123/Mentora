@@ -1,0 +1,333 @@
+{
+  "format": 1,
+  "id": "running-balance",
+  "title": "Running balance",
+  "app": "excel",
+  "course": "excel",
+  "source": null,
+  "goal": {
+    "sentence": "Track money in and out, with a balance that updates itself.",
+    "picture": "goal.png"
+  },
+  "starter": {
+    "sheets": [
+      {
+        "name": "Money",
+        "cells": {
+          "A1": "Item",
+          "B1": "In",
+          "C1": "Out",
+          "D1": "Balance",
+          "A2": "Pocket money",
+          "B2": 3000,
+          "A3": "Books",
+          "C3": 450,
+          "A4": "Snacks",
+          "C4": 120,
+          "A5": "Birthday gift",
+          "B5": 1000,
+          "A6": "Bus pass",
+          "C6": 600,
+          "A7": "Movie",
+          "C7": 350
+        },
+        "widths": {
+          "A": 16,
+          "B": 10,
+          "C": 10,
+          "D": 12
+        }
+      }
+    ],
+    "active": "Money"
+  },
+  "steps": [
+    {
+      "id": "bold",
+      "instruction": "Make the headings bold.",
+      "why": "Bold headings show where the table starts.",
+      "target": {
+        "kind": "range",
+        "ref": "Money!A1:D1"
+      },
+      "check": {
+        "kind": "bold",
+        "args": {
+          "range": "Money!A1:D1"
+        }
+      },
+      "replay": {
+        "kind": "set_bold",
+        "args": {
+          "range": "Money!A1:D1"
+        }
+      },
+      "hints": [
+        "Headings are the top row: Item, In, Out, Balance.",
+        "Select A1 to D1, then Bold on Home.",
+        "Select A1:D1 and press Ctrl+B."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_bold",
+            "args": {
+              "range": "Money!A1:C1"
+            }
+          },
+          "not_yet": "Not yet: D1 needs bold too.",
+          "code": "partial:D1"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "first",
+      "instruction": "Work out the first balance in D2.",
+      "why": "Balance is money in minus money out.",
+      "target": {
+        "kind": "cell",
+        "ref": "Money!D2"
+      },
+      "check": {
+        "kind": "formula",
+        "args": {
+          "cell": "Money!D2",
+          "value": 3000,
+          "covers": "Money!B2:C2"
+        }
+      },
+      "replay": {
+        "kind": "set_formula",
+        "args": {
+          "cell": "Money!D2",
+          "formula": "=B2-C2"
+        }
+      },
+      "hints": [
+        "Click D2, at the end of the first row.",
+        "Take the Out amount away from the In amount.",
+        "Type =B2-C2 and press Enter."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Money!D2",
+              "formula": "=B2"
+            }
+          },
+          "not_yet": "Not yet: take away the Out amount in C2 too.",
+          "code": "covers_missing:C2"
+        },
+        {
+          "replay": {
+            "kind": "set_value",
+            "args": {
+              "cell": "Money!D2",
+              "value": 3000
+            }
+          },
+          "not_yet": "Not yet: that's a typed number. Start with = instead.",
+          "code": "typed_value"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "next",
+      "instruction": "Work out the new balance in D3.",
+      "why": "Each balance starts from the one above it.",
+      "target": {
+        "kind": "cell",
+        "ref": "Money!D3"
+      },
+      "check": {
+        "kind": "formula",
+        "args": {
+          "cell": "Money!D3",
+          "value": 2550
+        }
+      },
+      "replay": {
+        "kind": "set_formula",
+        "args": {
+          "cell": "Money!D3",
+          "formula": "=D2+B3-C3"
+        }
+      },
+      "hints": [
+        "Start from the balance above, in D2.",
+        "Add this row's In, take away its Out.",
+        "Type =D2+B3-C3 and press Enter."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Money!D3",
+              "formula": "=D2+B3+C3"
+            }
+          },
+          "not_yet": "Not yet: money out should be taken away, not added.",
+          "code": "value:3,450"
+        },
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Money!D3",
+              "formula": "=B3-C3"
+            }
+          },
+          "not_yet": "Not yet: start from the balance above, in D2.",
+          "code": "value:-450"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "filldown",
+      "instruction": "Copy the balance formula down to D7.",
+      "why": "One formula, filled down, does every row.",
+      "target": {
+        "kind": "range",
+        "ref": "Money!D3:D7"
+      },
+      "check": {
+        "kind": "filled_formula",
+        "args": {
+          "range": "Money!D3:D7",
+          "first": "=D2+B3-C3"
+        }
+      },
+      "replay": {
+        "kind": "fill_down",
+        "args": {
+          "source": "Money!D3",
+          "range": "Money!D3:D7"
+        }
+      },
+      "hints": [
+        "Click D3 and find the small square at its corner.",
+        "Drag that square down to D7.",
+        "Or select D3:D7 and press Ctrl+D."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "fill_down",
+            "args": {
+              "source": "Money!D3",
+              "range": "Money!D3:D5"
+            }
+          },
+          "not_yet": "Not yet: fill all the way down to D7.",
+          "code": "gap:D7"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "rupees",
+      "instruction": "Show the money as rupees.",
+      "why": "Money is easier to read with a ₹ sign.",
+      "target": {
+        "kind": "range",
+        "ref": "Money!B2:D7"
+      },
+      "check": {
+        "kind": "number_format",
+        "args": {
+          "range": "Money!B2:D7",
+          "kind": "currency"
+        }
+      },
+      "replay": {
+        "kind": "set_format",
+        "args": {
+          "range": "Money!B2:D7",
+          "kind": "currency"
+        }
+      },
+      "hints": [
+        "Select B2 to D7 first.",
+        "Open the number format list on Home.",
+        "Pick Currency from that list."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_format",
+            "args": {
+              "range": "Money!B2:D7",
+              "kind": "percent"
+            }
+          },
+          "not_yet": "Not yet: that's percent. Pick Currency instead.",
+          "code": "kind:percent"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "chart",
+      "instruction": "Make a line chart of the balance.",
+      "why": "A line shows your money going up and down.",
+      "target": {
+        "kind": "control",
+        "ref": "Insert > Line"
+      },
+      "check": {
+        "kind": "chart",
+        "args": {
+          "chart_type": "line",
+          "over": "Money!D2:D7"
+        }
+      },
+      "replay": {
+        "kind": "add_chart",
+        "args": {
+          "chart_type": "line",
+          "source": "Money!D1:D7"
+        }
+      },
+      "hints": [
+        "Select D1 to D7: the balance column.",
+        "Open the Insert tab and find the line chart.",
+        "Insert, Line, then the first 2-D line."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "add_chart",
+            "args": {
+              "chart_type": "column",
+              "source": "Money!D1:D7"
+            }
+          },
+          "not_yet": "Not yet: that's a column chart. Pick the line.",
+          "code": "type:column"
+        }
+      ],
+      "clip": null
+    }
+  ],
+  "made_by": "hand",
+  "edited_by_hand": false,
+  "proof": {
+    "passed": true,
+    "at": "2026-10-31T08:38:13+00:00",
+    "dropped": [],
+    "notes": []
+  },
+  "test": {
+    "passed": false,
+    "at": "2026-10-31T08:38:13+00:00",
+    "mode": "skipped",
+    "runs": 0,
+    "passes": 0
+  }
+}

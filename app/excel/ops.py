@@ -24,6 +24,7 @@ CHART_TYPE_NUMBERS = {"column": 51, "bar": 57, "line": 4, "pie": 5}   # Excel's 
 CHART_WIDTH_PT, CHART_HEIGHT_PT, CHART_GAP_PT = 360, 216, 12
 XL_ASCENDING, XL_DESCENDING = 1, 2
 XL_YES, XL_NO = 1, 2                                   # does the sort range have a header row
+XL_TOP_TO_BOTTOM = 1                                   # sort the rows; left to right would sort the columns
 
 
 def _sheet(wb, area: Area):
@@ -109,8 +110,10 @@ def _filter(app, wb, a: Mapping) -> None:
 def _sort(app, wb, a: Mapping) -> None:
     sheet, target, area = _at(wb, a["range"])
     key = sheet.Range(f"{a['column'].upper()}{area.top}")
+    # Excel keeps the last sort's direction and uses it when none is given, and in a lesson's Excel that was
+    # left to right: the columns were sorted by their headings and the sheet was scrambled. So always say it.
     target.Sort(Key1=key, Order1=XL_ASCENDING if a["order"] == "asc" else XL_DESCENDING,
-                Header=XL_YES if a["header"] else XL_NO)
+                Header=XL_YES if a["header"] else XL_NO, Orientation=XL_TOP_TO_BOTTOM)
 
 
 def _rename_sheet(app, wb, a: Mapping) -> None:

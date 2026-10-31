@@ -28,6 +28,36 @@ def test_prove_saves_the_proof_when_every_step_passes(tmp_path, capsys):
     assert f"Proven: all 3 steps passed. The proof is saved in {folder / 'lesson.json'}" in capsys.readouterr().out
 
 
+def test_prove_alone_leaves_the_lesson_off_the_shelf_until_it_is_tested(tmp_path):
+    folder = _saved(tmp_path)
+
+    assert main(["prove", str(folder)]) == 0
+
+    assert load_lesson(folder).test is None and shelf_badge(load_lesson(folder)) is None
+
+
+def test_prove_with_no_test_records_the_test_as_skipped_so_the_lesson_shows_proven(tmp_path, capsys):
+    # As `make --no-test` does: the shelf needs a test result, and this one says "proven", never "tested".
+    folder = _saved(tmp_path)
+
+    assert main(["prove", str(folder), "--no-test"]) == 0
+
+    saved = load_lesson(folder)
+    assert saved.proof.passed is True
+    assert (saved.test.mode, saved.test.passed, saved.test.runs) == ("skipped", False, 0)
+    assert shelf_badge(saved) == "proven"
+    assert "The test with Meta's agent was skipped, so the lesson shows the proven badge." in capsys.readouterr().out
+
+
+def test_prove_with_no_test_saves_nothing_when_a_step_is_dropped(tmp_path):
+    folder = _saved(tmp_path, ({}, {"check": {"kind": "has", "args": {"key": "k0"}}}, {}, {}))
+    before = (folder / "lesson.json").read_text(encoding="utf-8")
+
+    assert main(["prove", str(folder), "--no-test"]) == 1
+
+    assert (folder / "lesson.json").read_text(encoding="utf-8") == before
+
+
 def test_prove_saves_nothing_when_a_step_is_dropped(tmp_path, capsys):
     # s1's check is already true before it (s0 sets k0), so it is dropped; three steps would still be enough.
     folder = _saved(tmp_path, ({}, {"check": {"kind": "has", "args": {"key": "k0"}}}, {}, {}))

@@ -1,0 +1,346 @@
+{
+  "format": 1,
+  "id": "student-grades",
+  "title": "Student grades",
+  "app": "excel",
+  "course": "excel",
+  "source": null,
+  "goal": {
+    "sentence": "Work out each student's average and whether they passed.",
+    "picture": "goal.png"
+  },
+  "starter": {
+    "sheets": [
+      {
+        "name": "Grades",
+        "cells": {
+          "A1": "Name",
+          "B1": "Maths",
+          "C1": "Science",
+          "D1": "Average",
+          "E1": "Result",
+          "A2": "Asha",
+          "B2": 88,
+          "C2": 92,
+          "A3": "Ravi",
+          "B3": 45,
+          "C3": 51,
+          "A4": "Meera",
+          "B4": 72,
+          "C4": 65,
+          "A5": "Kabir",
+          "B5": 38,
+          "C5": 40,
+          "A6": "Zoya",
+          "B6": 60,
+          "C6": 55
+        },
+        "widths": {
+          "A": 12,
+          "B": 10,
+          "C": 10,
+          "D": 10,
+          "E": 10
+        }
+      }
+    ],
+    "active": "Grades"
+  },
+  "steps": [
+    {
+      "id": "bold",
+      "instruction": "Make the headings bold.",
+      "why": "Bold headings show where the table starts.",
+      "target": {
+        "kind": "range",
+        "ref": "Grades!A1:E1"
+      },
+      "check": {
+        "kind": "bold",
+        "args": {
+          "range": "Grades!A1:E1"
+        }
+      },
+      "replay": {
+        "kind": "set_bold",
+        "args": {
+          "range": "Grades!A1:E1"
+        }
+      },
+      "hints": [
+        "Headings are the top row: Name to Result.",
+        "Select A1 to E1, then Bold on Home.",
+        "Select A1:E1 and press Ctrl+B."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_bold",
+            "args": {
+              "range": "Grades!A1:D1"
+            }
+          },
+          "not_yet": "Not yet: E1 needs bold too.",
+          "code": "partial:E1"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "average",
+      "instruction": "Work out Asha's average mark in D2.",
+      "why": "AVERAGE adds the marks and divides for you.",
+      "target": {
+        "kind": "cell",
+        "ref": "Grades!D2"
+      },
+      "check": {
+        "kind": "formula",
+        "args": {
+          "cell": "Grades!D2",
+          "value": 90,
+          "covers": "Grades!B2:C2",
+          "uses": "AVERAGE"
+        }
+      },
+      "replay": {
+        "kind": "set_formula",
+        "args": {
+          "cell": "Grades!D2",
+          "formula": "=AVERAGE(B2:C2)"
+        }
+      },
+      "hints": [
+        "Click D2, next to Asha's marks.",
+        "Type =AVERAGE( then select B2 to C2.",
+        "Type =AVERAGE(B2:C2) and press Enter."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Grades!D2",
+              "formula": "=SUM(B2:C2)"
+            }
+          },
+          "not_yet": "Not yet: SUM gives the total. Use AVERAGE here.",
+          "code": "uses_missing:AVERAGE"
+        },
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Grades!D2",
+              "formula": "=AVERAGE(B2)"
+            }
+          },
+          "not_yet": "Not yet: include the Science mark in C2 too.",
+          "code": "covers_missing:C2"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "averages",
+      "instruction": "Copy the average formula down to D6.",
+      "why": "One formula, filled down, does every student.",
+      "target": {
+        "kind": "range",
+        "ref": "Grades!D2:D6"
+      },
+      "check": {
+        "kind": "filled_formula",
+        "args": {
+          "range": "Grades!D2:D6",
+          "first": "=AVERAGE(B2:C2)"
+        }
+      },
+      "replay": {
+        "kind": "fill_down",
+        "args": {
+          "source": "Grades!D2",
+          "range": "Grades!D2:D6"
+        }
+      },
+      "hints": [
+        "Click D2 and find the small square at its corner.",
+        "Drag that square down to D6.",
+        "Or select D2:D6 and press Ctrl+D."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "fill_down",
+            "args": {
+              "source": "Grades!D2",
+              "range": "Grades!D2:D4"
+            }
+          },
+          "not_yet": "Not yet: fill all the way down to D6.",
+          "code": "gap:D6"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "result",
+      "instruction": "Show Pass or Fail in E2: Pass is 50 or more.",
+      "why": "IF picks a word for you from the mark.",
+      "target": {
+        "kind": "cell",
+        "ref": "Grades!E2"
+      },
+      "check": {
+        "kind": "formula",
+        "args": {
+          "cell": "Grades!E2",
+          "value": "Pass",
+          "covers": "Grades!D2",
+          "uses": "IF"
+        }
+      },
+      "replay": {
+        "kind": "set_formula",
+        "args": {
+          "cell": "Grades!E2",
+          "formula": "=IF(D2>=50,\"Pass\",\"Fail\")"
+        }
+      },
+      "hints": [
+        "IF checks a test, then picks one of two answers.",
+        "The test is D2>=50.",
+        "Type =IF(D2>=50,\"Pass\",\"Fail\") and press Enter."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Grades!E2",
+              "formula": "=IF(D2>=50,\"Fail\",\"Pass\")"
+            }
+          },
+          "not_yet": "Not yet: Pass and Fail are swapped. Pass comes first.",
+          "code": "value:Fail"
+        },
+        {
+          "replay": {
+            "kind": "set_value",
+            "args": {
+              "cell": "Grades!E2",
+              "value": "Pass"
+            }
+          },
+          "not_yet": "Not yet: that's typed text. Start with =IF( instead.",
+          "code": "typed_value"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "results",
+      "instruction": "Copy the result formula down to E6.",
+      "why": "Now every student gets a result.",
+      "target": {
+        "kind": "range",
+        "ref": "Grades!E2:E6"
+      },
+      "check": {
+        "kind": "filled_formula",
+        "args": {
+          "range": "Grades!E2:E6",
+          "first": "=IF(D2>=50,\"Pass\",\"Fail\")"
+        }
+      },
+      "replay": {
+        "kind": "fill_down",
+        "args": {
+          "source": "Grades!E2",
+          "range": "Grades!E2:E6"
+        }
+      },
+      "hints": [
+        "Click E2 and find the small square at its corner.",
+        "Drag that square down to E6.",
+        "Or select E2:E6 and press Ctrl+D."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "fill_down",
+            "args": {
+              "source": "Grades!E2",
+              "range": "Grades!E2:E4"
+            }
+          },
+          "not_yet": "Not yet: fill all the way down to E6.",
+          "code": "gap:E6"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "sort",
+      "instruction": "Sort the students from highest average to lowest.",
+      "why": "The top marks come first.",
+      "target": {
+        "kind": "control",
+        "ref": "Data > Sort Largest to Smallest"
+      },
+      "check": {
+        "kind": "sorted",
+        "args": {
+          "range": "Grades!A2:E6",
+          "column": "D",
+          "order": "desc"
+        }
+      },
+      "replay": {
+        "kind": "sort",
+        "args": {
+          "range": "Grades!A1:E6",
+          "column": "D",
+          "order": "desc",
+          "header": true
+        }
+      },
+      "hints": [
+        "Click any average in column D.",
+        "Open the Data tab.",
+        "Choose Sort Largest to Smallest."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "sort",
+            "args": {
+              "range": "Grades!A1:E6",
+              "column": "D",
+              "order": "asc",
+              "header": true
+            }
+          },
+          "not_yet": "Not yet: that's lowest first. Flip it.",
+          "code": "order"
+        }
+      ],
+      "clip": null
+    }
+  ],
+  "made_by": "hand",
+  "edited_by_hand": false,
+  "proof": {
+    "passed": true,
+    "at": "2026-10-31T08:38:02+00:00",
+    "dropped": [],
+    "notes": []
+  },
+  "test": {
+    "passed": false,
+    "at": "2026-10-31T08:38:02+00:00",
+    "mode": "skipped",
+    "runs": 0,
+    "passes": 0
+  }
+}

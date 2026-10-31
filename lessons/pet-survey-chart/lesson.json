@@ -1,0 +1,294 @@
+{
+  "format": 1,
+  "id": "pet-survey-chart",
+  "title": "Pet survey chart",
+  "app": "excel",
+  "course": "excel",
+  "source": null,
+  "goal": {
+    "sentence": "Count a class's pet votes and show them as a column chart.",
+    "picture": "goal.png"
+  },
+  "starter": {
+    "sheets": [
+      {
+        "name": "Pets",
+        "cells": {
+          "A1": "Pet",
+          "B1": "Votes",
+          "A2": "Cat",
+          "B2": 9,
+          "A3": "Dog",
+          "B3": 12,
+          "A4": "Bird",
+          "B4": 2,
+          "A5": "Fish",
+          "B5": 4,
+          "A6": "Rabbit",
+          "B6": 3,
+          "A7": "Total",
+          "A8": "Most votes"
+        },
+        "widths": {
+          "A": 14,
+          "B": 10
+        }
+      }
+    ],
+    "active": "Pets"
+  },
+  "steps": [
+    {
+      "id": "bold",
+      "instruction": "Make the headings bold.",
+      "why": "Bold headings show where the table starts.",
+      "target": {
+        "kind": "range",
+        "ref": "Pets!A1:B1"
+      },
+      "check": {
+        "kind": "bold",
+        "args": {
+          "range": "Pets!A1:B1"
+        }
+      },
+      "replay": {
+        "kind": "set_bold",
+        "args": {
+          "range": "Pets!A1:B1"
+        }
+      },
+      "hints": [
+        "Headings are the top row: Pet, Votes.",
+        "Select A1 to B1, then Bold on Home.",
+        "Select A1:B1 and press Ctrl+B."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_bold",
+            "args": {
+              "range": "Pets!A1:A1"
+            }
+          },
+          "not_yet": "Not yet: Votes in B1 needs bold too.",
+          "code": "partial:B1"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "total",
+      "instruction": "Add up the votes in B7.",
+      "why": "A formula keeps the total right when votes change.",
+      "target": {
+        "kind": "cell",
+        "ref": "Pets!B7"
+      },
+      "check": {
+        "kind": "formula",
+        "args": {
+          "cell": "Pets!B7",
+          "value": 30,
+          "covers": "Pets!B2:B6"
+        }
+      },
+      "replay": {
+        "kind": "set_formula",
+        "args": {
+          "cell": "Pets!B7",
+          "formula": "=SUM(B2:B6)"
+        }
+      },
+      "hints": [
+        "Click B7, below the votes.",
+        "Type =SUM( then select B2 to B6.",
+        "Type =SUM(B2:B6) and press Enter."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Pets!B7",
+              "formula": "=SUM(B2:B5)"
+            }
+          },
+          "not_yet": "Not yet: your total skips B6. Include Rabbit too.",
+          "code": "covers_missing:B6"
+        },
+        {
+          "replay": {
+            "kind": "set_value",
+            "args": {
+              "cell": "Pets!B7",
+              "value": 30
+            }
+          },
+          "not_yet": "Not yet: that's a typed number. Start with = instead.",
+          "code": "typed_value"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "most",
+      "instruction": "Find the most votes in B8.",
+      "why": "MAX finds the biggest number for you.",
+      "target": {
+        "kind": "cell",
+        "ref": "Pets!B8"
+      },
+      "check": {
+        "kind": "formula",
+        "args": {
+          "cell": "Pets!B8",
+          "value": 12,
+          "covers": "Pets!B2:B6",
+          "uses": "MAX"
+        }
+      },
+      "replay": {
+        "kind": "set_formula",
+        "args": {
+          "cell": "Pets!B8",
+          "formula": "=MAX(B2:B6)"
+        }
+      },
+      "hints": [
+        "Click B8, below the total.",
+        "Type =MAX( then select B2 to B6.",
+        "Type =MAX(B2:B6) and press Enter."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Pets!B8",
+              "formula": "=MAX(B2:B7)"
+            }
+          },
+          "not_yet": "Not yet: leave out the total in B7. Use B2 to B6.",
+          "code": "refers_extra:B7"
+        },
+        {
+          "replay": {
+            "kind": "set_formula",
+            "args": {
+              "cell": "Pets!B8",
+              "formula": "=MIN(B2:B6)"
+            }
+          },
+          "not_yet": "Not yet: MIN finds the smallest. Use MAX here.",
+          "code": "uses_missing:MAX"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "sort",
+      "instruction": "Sort the pets from most votes to fewest.",
+      "why": "The favourite pet comes first.",
+      "target": {
+        "kind": "control",
+        "ref": "Data > Sort Largest to Smallest"
+      },
+      "check": {
+        "kind": "sorted",
+        "args": {
+          "range": "Pets!A2:B6",
+          "column": "B",
+          "order": "desc"
+        }
+      },
+      "replay": {
+        "kind": "sort",
+        "args": {
+          "range": "Pets!A1:B6",
+          "column": "B",
+          "order": "desc",
+          "header": true
+        }
+      },
+      "hints": [
+        "Click any vote in column B.",
+        "Open the Data tab.",
+        "Choose Sort Largest to Smallest."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "sort",
+            "args": {
+              "range": "Pets!A1:B6",
+              "column": "B",
+              "order": "asc",
+              "header": true
+            }
+          },
+          "not_yet": "Not yet: that's fewest first. Flip it.",
+          "code": "order"
+        }
+      ],
+      "clip": null
+    },
+    {
+      "id": "chart",
+      "instruction": "Make a column chart of the votes.",
+      "why": "Taller bars show the favourites at a glance.",
+      "target": {
+        "kind": "control",
+        "ref": "Insert > Column"
+      },
+      "check": {
+        "kind": "chart",
+        "args": {
+          "chart_type": "column",
+          "over": "Pets!B2:B6"
+        }
+      },
+      "replay": {
+        "kind": "add_chart",
+        "args": {
+          "chart_type": "column",
+          "source": "Pets!A1:B6"
+        }
+      },
+      "hints": [
+        "Select A1 to B6: pets and votes.",
+        "Open the Insert tab and find the column chart.",
+        "Insert, Column, then the first 2-D column."
+      ],
+      "mistakes": [
+        {
+          "replay": {
+            "kind": "add_chart",
+            "args": {
+              "chart_type": "pie",
+              "source": "Pets!A1:B6"
+            }
+          },
+          "not_yet": "Not yet: that's a pie chart. Pick the column.",
+          "code": "type:pie"
+        }
+      ],
+      "clip": null
+    }
+  ],
+  "made_by": "hand",
+  "edited_by_hand": false,
+  "proof": {
+    "passed": true,
+    "at": "2026-10-31T08:37:50+00:00",
+    "dropped": [],
+    "notes": []
+  },
+  "test": {
+    "passed": false,
+    "at": "2026-10-31T08:37:50+00:00",
+    "mode": "skipped",
+    "runs": 0,
+    "passes": 0
+  }
+}
