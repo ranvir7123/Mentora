@@ -257,7 +257,8 @@ def _build(state: str) -> tuple[dict, dict, dict, str | None, dict]:
         lesson = _lesson(3, appState="closed")
     elif state == "lesson_complete":
         lesson = _lesson(len(budget.steps), points=90,
-                         complete={"points": 90, "seconds": 372.0, "firstTry": 7, "steps": 9, "streak": 5})
+                         complete={"points": 90, "seconds": 372.0, "firstTry": 7, "steps": 9, "streak": 5,
+                                   "streakBefore": 4})
         cue = "complete"
     elif state == "lesson_undone":
         lesson = _lesson(len(budget.steps), step=_step_view(1), changed=[1], banner=_banner(
@@ -389,7 +390,8 @@ class DemoBackend:
                 if stop.wait(interval):
                     return
             self._publish(lesson=_lesson(len(steps), points=90, complete={
-                "points": 90, "seconds": 372.0, "firstTry": 8, "steps": len(steps), "streak": 5}),
+                "points": 90, "seconds": 372.0, "firstTry": 8, "steps": len(steps), "streak": 5,
+                "streakBefore": 4}),
                 pointer=copy.deepcopy(HIDDEN_POINTER), cue="complete")
 
         self._thread = threading.Thread(target=run, name="demo-walkthrough", daemon=True)

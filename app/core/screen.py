@@ -109,6 +109,7 @@ class Complete(TypedDict):
     firstTry: int
     steps: int
     streak: int
+    streakBefore: int            # the streak when the lesson opened: the same when today already counted
 
 
 class GoalView(TypedDict):

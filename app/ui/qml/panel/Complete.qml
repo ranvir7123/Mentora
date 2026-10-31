@@ -3,10 +3,11 @@ import Theme
 import "../components"
 
 // What the finished lesson earned. Once `start()` runs, the results fill in one by one, 250 ms apart:
-// points, time, right first try, then the streak ticks up by one.
+// points, time, right first try, then the streak, ticking up by one only when this lesson made today count.
 Card {
     id: root
-    property var complete: ({ "points": 0, "seconds": 0, "firstTry": 0, "steps": 0, "streak": 0 })
+    property var complete: ({ "points": 0, "seconds": 0, "firstTry": 0, "steps": 0, "streak": 0,
+                              "streakBefore": 0 })
     property int filled: 0              // how many rows have filled in
 
     function start() {
@@ -103,8 +104,9 @@ Card {
 
         StreakFlame {
             id: flame
-            // One less until the row fills in, then it ticks up and the flame pops.
-            days: streakRow.shown ? root.complete.streak : Math.max(0, root.complete.streak - 1)
+            // The streak from before the lesson until the row fills in, then today's. When today already
+            // counted the two are the same, so nothing ticks up and the flame stays still.
+            days: streakRow.shown ? root.complete.streak : (root.complete.streakBefore ?? root.complete.streak)
             size: 28
             transformOrigin: Item.Center
             onDaysChanged: if (streakRow.shown) pop.restart()

@@ -376,6 +376,33 @@ def test_the_finished_lesson_celebrates_and_offers_what_next(panel, qapp):
     assert ("go_home", ()) in backend.actions
 
 
+def _flame_while_it_fills(qapp, root, seconds=1.6):
+    """Every (days, scale) the celebration's streak flame shows while the results fill in."""
+    flame = next(i for i in _items(root.contentItem()) if i.metaObject().className().startswith("StreakFlame"))
+    seen, end = [], time.monotonic() + seconds
+    while time.monotonic() < end:
+        qapp.processEvents()
+        seen.append((flame.property("days"), round(flame.scale(), 2)))
+        time.sleep(0.005)
+    return seen
+
+
+def test_the_streak_ticks_up_only_when_today_newly_counts(panel, qapp):
+    from app.ui.demo_backend import _lesson
+    for before, after in ((4, 5), (5, 5)):
+        backend, _, root = panel("lesson_step")
+        backend._publish(lesson=_lesson(9, points=90, complete={
+            "points": 90, "seconds": 372.0, "firstTry": 7, "steps": 9, "streak": after, "streakBefore": before}),
+            cue="complete")
+        seen = _flame_while_it_fills(qapp, root)
+        days = sorted({d for d, _ in seen})
+        popped = max(s for _, s in seen) > 1.01
+        if before == after:                 # a second lesson today: the streak was already 5
+            assert (days, popped) == ([5], False), f"the streak moved though it did not change: {days}"
+        else:
+            assert (days, popped) == ([4, 5], True), f"the streak did not tick up from 4 to 5: {days}"
+
+
 def test_the_mascot_rests_on_the_step_card_and_hides_while_it_is_out(panel, qapp):
     _, bridge, root = panel("lesson_step")
     mascot = _mascot(root)

@@ -212,6 +212,8 @@ class _Open:
     landed: bool = False
     flight: int = 0
     pointer: dict = field(default_factory=lambda: copy.deepcopy(HIDDEN_POINTER))
+    streak_before: int = 0           # the days in a row when the lesson opened, so the celebration ticks
+                                     # the streak up only when this lesson made today count
 
 
 class Backend:
@@ -483,7 +485,8 @@ class Backend:
                 return
             old = self._detach(self._open)
             self._gen += 1
-            o = self._open = _Open(lesson=lesson, plugin=plugin, gen=self._gen)
+            o = self._open = _Open(lesson=lesson, plugin=plugin, gen=self._gen,
+                                   streak_before=self._progress.streak())
             resume = not self._progress.lesson_state(lesson_id).done
             self._publish_lesson()
             self._publish_pointer()
@@ -739,7 +742,7 @@ class Backend:
         self._progress.lesson_done(o.lesson.id, done)
         o.complete = {"points": o.points, "seconds": round(done.seconds, 1) if done else 0.0,
                       "firstTry": done.first_try if done else 0, "steps": done.steps if done else 0,
-                      "streak": self._progress.streak()}
+                      "streak": self._progress.streak(), "streakBefore": o.streak_before}
         o.shown, o.banner, o.cheering, o.goto = len(o.lesson.steps), None, None, None
         o.pointer = copy.deepcopy(HIDDEN_POINTER)
         self._publish_pointer()

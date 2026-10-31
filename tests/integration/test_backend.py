@@ -541,7 +541,7 @@ def test_finished_lesson_refreshes_tips(world):
 
     lesson = world.backend.lesson()
     assert lesson["complete"] == {"points": 20, "seconds": lesson["complete"]["seconds"], "firstTry": 2,
-                                  "steps": 2, "streak": 1}
+                                  "steps": 2, "streak": 1, "streakBefore": 0}
     assert world.cues()[-1] == "complete" and not world.backend.pointer()["visible"]
     assert world.progress.lesson_state("two-keys").done
     assert [r.step_id for r in world.progress.attempts()] == ["two-keys/s0", "two-keys/s1"]
@@ -549,6 +549,24 @@ def test_finished_lesson_refreshes_tips(world):
     assert world.backend.home()["tips"] == {"state": "ready", "text": "You finished 2 steps. Try the next lesson."}
     assert world.progress.tips == "You finished 2 steps. Try the next lesson."
     assert not world.plugin.session.waiting
+
+
+def test_a_second_lesson_on_the_same_day_keeps_the_streak_as_it_was(tmp_path):
+    w = World(tmp_path, lessons={"a": {"title": "A first"}, "b": {"title": "B second"}})
+    try:
+        w.open("a")
+        w.learner_sets("k0", 1)
+        w.learner_sets("k1", 2)
+        complete = w.backend.lesson()["complete"]
+        assert (complete["streakBefore"], complete["streak"]) == (0, 1)     # today counts now: it ticks up
+        w.backend.next_lesson()
+        w.idle()
+        w.learner_sets("k0", 1)
+        w.learner_sets("k1", 2)
+        complete = w.backend.lesson()["complete"]
+        assert (complete["streakBefore"], complete["streak"]) == (1, 1)     # today already counted
+    finally:
+        w.backend.shutdown()
 
 
 def test_tips_that_cannot_come_say_so_on_home(world):

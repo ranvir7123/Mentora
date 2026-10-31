@@ -314,7 +314,7 @@ Window {
                 visible: root.finished
                 width: parent.width
                 complete: root.lesson.complete || ({ "points": 0, "seconds": 0, "firstTry": 0, "steps": 0,
-                                                     "streak": 0 })
+                                                     "streak": 0, "streakBefore": 0 })
             }
         }
     }
