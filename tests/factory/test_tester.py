@@ -432,6 +432,21 @@ def test_excels_macro_keys_are_refused_in_excel(tmp_path):
     assert tester.allowed({"type": "keypress", "keys": ["alt", "f11"]}, APP, "mouse") == (True, "")   # elsewhere
 
 
+def test_text_the_agent_types_is_held_to_the_lessons_own_rules(tmp_path):
+    fetch = {"type": "type", "text": "=WEBSERVICE(A1)"}
+    link = {"type": "type", "text": "see www.evil.example"}
+    script = Script(act(fetch), act(link), act({"type": "keypress", "keys": ["ctrl", "K"]}),
+                    act(typed("k0", 1)), act(typed("k1", 2)), act(typed("k2", 3)))
+
+    result, hands, lines = run(script, plugin=Excel(), workdir=tmp_path)
+
+    assert result.passed and [a["text"] for a in hands.done] == ["k0=1", "k1=2", "k2=3"]
+    assert "refused type: That text uses WEBSERVICE, which a lesson may not use." in lines
+    assert "refused type: That text reaches outside Excel; a lesson must stay inside it." in lines
+    assert "refused keypress ctrl+K: That key adds a link, which would reach outside the app." in lines
+    assert tester.allowed({"type": "type", "text": "=SUM(B2:B6)"}, APP, "mouse", plugin=Excel()) == (True, "")
+
+
 class VsCode(Recording):
     app_id, title = "vscode", "VS Code"
 

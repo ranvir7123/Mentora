@@ -5,9 +5,9 @@ gives the agent one step at a time, each step in a fresh conversation. The agent
 app's window only, taken only while the app is in front, still where it was put, and no other program's
 window is over it, so nothing else on the screen reaches Meta. Every action it asks for is checked first:
 it must be well formed, the pointer stays inside the app and over the app's own windows, keys that Windows
-itself acts on (leaving or closing the app) and keys that open the app's macros are refused, and in keyboard
-mode the mouse is not used at all. Once the run has looked at the app, another window coming to the front
-means a person took over, and the test stops. Only the lesson's own checks decide when a step is done.
+itself acts on (leaving or closing the app) and keys that open the app's macros or add a link are refused,
+text it types keeps the rules a lesson's own text keeps, and in keyboard mode the mouse is not used at all.
+Once the run has looked at the app, another window coming to the front means a person took over, and the test stops. Only the lesson's own checks decide when a step is done.
 A test passes when at least 4 runs in 5 reach the end; it stops early once that can no longer happen.
 """
 from __future__ import annotations
@@ -27,6 +27,7 @@ from app.core.runner import LessonRun, NotYet, StepChanged
 from app.core.types import Rect
 from app.factory.input import POINTER_ACTIONS, UserTookOver, WindowsHands, vk_for
 from app.factory.prove import ProveError
+from app.factory.writer import _reaches
 from app.meta.client import MetaError, NoKey, SpendLimitReached
 
 MODEL = "muse-wonder-1.0"
@@ -49,6 +50,7 @@ PATH_NOTE = "Give a drag's path as a list of points, each with x and y as number
 SCROLL_NOTE = "Give scroll_x and scroll_y as numbers."
 TEXT_NOTE = "Give the text to type."
 MACROS_NOTE = "That key opens the app's macros, which a lesson never needs."
+LINK_KEY_NOTE = "That key adds a link, which would reach outside the app."
 
 Mode = Literal["mouse", "keyboard"]
 _BUTTONS = {"left", "right", "wheel", "middle"}
@@ -58,8 +60,10 @@ _BUTTONS = {"left", "right", "wheel", "middle"}
 _LEAVING = [{vk_for(k) for k in keys} for keys in
             (["win"], ["alt", "tab"], ["alt", "esc"], ["ctrl", "esc"], ["alt", "f4"], ["ctrl", "f4"], ["ctrl", "w"],
              ["alt", "space"], ["ctrl", "alt", "delete"])]
-# Keys that open an app's macros, where code runs. A lesson never needs them.
-APP_REFUSED = {"excel": [{vk_for(k) for k in keys} for keys in (["alt", "f11"], ["alt", "f8"])]}
+# An app's own keys a lesson never needs, each with the note the agent is told: those that open its macros,
+# where code runs, and those that add a link to a web page or a file.
+APP_REFUSED = {"excel": [({vk_for(k) for k in keys}, note) for keys, note in
+                         ((["alt", "f11"], MACROS_NOTE), (["alt", "f8"], MACROS_NOTE), (["ctrl", "k"], LINK_KEY_NOTE))]}
 # Apps whose lessons Meta's agent may play. Its keys and clicks land on this computer, so an app is added only
 # once nothing the agent can reach in it would let it run commands of its own.
 AGENT_APPS = {"excel", "fake"}
@@ -142,16 +146,18 @@ def _number(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
 
-def allowed(action: dict, app: Rect, mode: Mode, refused=()) -> tuple[bool, str]:
+def allowed(action: dict, app: Rect, mode: Mode, refused=(), plugin: AppPlugin | None = None) -> tuple[bool, str]:
     """Whether to do this well-formed action (in screen pixels); when not, the note the agent is told.
-    `refused` lists the app's own key combinations to refuse (APP_REFUSED)."""
+    `refused` lists the app's own key combinations to refuse, each with its note (APP_REFUSED). Text to type
+    is held to the rules of `plugin`'s lessons, since it lands in the app just as a lesson's text would."""
     kind = action.get("type")
     ok, note = _keys_allowed(action.get("keys") or [])       # any action may carry keys; all are checked
     if not ok:
         return ok, note
     codes = {vk_for(str(k)) for k in action.get("keys") or []}
-    if any(combo <= codes for combo in refused):
-        return False, MACROS_NOTE
+    for combo, note in refused:
+        if combo <= codes:
+            return False, note
     if kind in POINTER_ACTIONS:
         if mode == "keyboard":
             return False, KEYBOARD_NOTE
@@ -161,6 +167,10 @@ def allowed(action: dict, app: Rect, mode: Mode, refused=()) -> tuple[bool, str]
         if not points or not all(_inside(p, app) for p in points):
             return False, OUTSIDE_NOTE
         return True, ""
+    if kind == "type" and plugin is not None:
+        what = _reaches(action["text"], plugin)
+        if what:
+            return False, f"That text {what}."
     if kind in ("keypress", "type", "wait", "screenshot"):
         return True, ""
     return False, f"{kind} is not something this test can do."
@@ -324,7 +334,7 @@ class _Run:
                 note = well_formed(action)
                 if not note:
                     action = to_screen(action, self.app, self.shot)
-                    ok, note = allowed(action, self.app, self.mode, self.refused)
+                    ok, note = allowed(action, self.app, self.mode, self.refused, self.plugin)
                 if not note:
                     self._ready()
                     if not self._over_app(action):
