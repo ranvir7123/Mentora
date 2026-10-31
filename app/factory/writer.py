@@ -59,8 +59,11 @@ NEXT_CELL = re.compile(r"[\r\n\t]")         # Enter and Tab move to the next cel
 # In running text a formula can start at any "=", or at a "+", "-" or "@" that begins a word.
 FORMULA_IN_TEXT = re.compile(r"=|(?:^|(?<=[\s\"'(]))[+\-@](?=[A-Za-z_(])")
 CALLED = re.compile(r"([A-Za-z_][A-Za-z0-9_.]*)\s*\(")
-CALLED_IN_TEXT = re.compile(r"([A-Za-z_][A-Za-z0-9_.]*)\(")   # in a sentence, "total (net)" is not a call
+# In a sentence, "total (net)" is not a call, but a name with a space before "(" right after a formula sign,
+# an operator or a comma is, as in "=WEBSERVICE (A1)".
+CALLED_IN_TEXT = re.compile(r"([A-Za-z_][A-Za-z0-9_.]*)\(|(?<=[=+\-*/^&,;(<>@{])\s*([A-Za-z_][A-Za-z0-9_.]*)\s+\(")
 QUOTED = re.compile(r'"[^"]*"')
+JOINED = re.compile(r'"\s*&\s*"')           # where "&" glues two pieces of text into one
 # What reaches outside in a formula: the "|" of a DDE link to another program, another file, or a drive.
 REACHING = re.compile(r"\||\.(?:xl[a-z]{1,2}|csv|ods|txt)\b|\b[a-z]:\\", re.IGNORECASE)
 
@@ -243,8 +246,12 @@ def _reaches(text: str, plugin: AppPlugin) -> str:
         return outside
     for formula, called in _formulas(text):
         bare = QUOTED.sub('""', formula)             # quoted text in a formula is only text
-        for name in called.findall(bare):
-            name = name.upper()
+        if LINK.search(JOINED.sub("", formula)):
+            return outside
+        # In a sentence, quotes may wrap a formula to type, so its quoted text is searched too.
+        searched = bare if called is CALLED else formula
+        for found in called.finditer(searched):
+            name = next(n for n in found.groups() if n).upper()
             for prefix in FILE_PREFIXES:
                 name = name.removeprefix(prefix)
             if name not in ALLOWED_FUNCTIONS:
@@ -257,12 +264,10 @@ def _reaches(text: str, plugin: AppPlugin) -> str:
 def _formulas(text: str) -> list[tuple[str, re.Pattern]]:
     """The formulas a piece of text could put in a cell, each with the pattern that finds the functions it
     calls. A line starting with a formula sign is one, as a cell holds it or as typing puts it in the next
-    cell. In a sentence, everything from the first sign on could be typed as one, by the learner or by
-    Meta's agent, who types what the step says."""
+    cell. In a sentence, everything from any sign on could be typed as one, by the learner or by Meta's
+    agent, who types what the step says."""
     found = [(line, CALLED) for line in NEXT_CELL.split(text) if line.lstrip().startswith(FORMULA_START)]
-    sign = FORMULA_IN_TEXT.search(text)
-    if sign:
-        found.append((text[sign.start():], CALLED_IN_TEXT))
+    found += [(text[sign.start():], CALLED_IN_TEXT) for sign in FORMULA_IN_TEXT.finditer(text)]
     return found
 
 

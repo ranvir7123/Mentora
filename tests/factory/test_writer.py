@@ -156,6 +156,7 @@ def _sent_back_then_not_ready(prepared, saved, spy, lessons, answer, problem):
     ("the starter", "=[Budget.xlsx]Sheet1!A1", _in_starter),
     ("step s1", "See www.example.com for the numbers.", _in_hint),
     ("step s1", "Write to mailto:help@example.com.", _in_hint),
+    ("the starter", '="ht"&"tp:"&"//example.com"', _in_starter),          # a link glued together with "&"
 ])
 def test_a_lesson_that_reaches_outside_the_app_is_sent_back_then_not_ready(prepared, saved, spy, lessons,
                                                                           where, text, put):
@@ -173,6 +174,9 @@ def test_a_lesson_that_reaches_outside_the_app_is_sent_back_then_not_ready(prepa
     ("step s1", "k1\t=WEBSERVICE(A1)", _in_replay, "WEBSERVICE"),        # Tab moves to the next cell when typed
     ("step s1", "Type =WEBSERVICE(A1) in k1.", _in_instruction, "WEBSERVICE"),   # the agent types what it reads
     ("step s1", "Type =SUM(A1) + WEBSERVICE(B1) in k1.", _in_hint, "WEBSERVICE"),
+    ("step s1", 'Type =SUM(B2:B5) in B6, or "=WEBSERVICE(A2)" there', _in_hint, "WEBSERVICE"),  # a second formula
+    ("step s1", 'Check that A1=1, then type "=WEBSERVICE(A2)" in B3', _in_hint, "WEBSERVICE"),  # after an "="
+    ("step s1", "Type =WEBSERVICE (A1) in B3", _in_hint, "WEBSERVICE"),                       # a space before "("
 ])
 def test_a_formula_using_a_function_lessons_may_not_use_is_sent_back_then_not_ready(prepared, saved, spy, lessons,
                                                                                    where, text, put, name):
@@ -184,7 +188,8 @@ def test_formulas_that_stay_in_the_workbook_are_fine(prepared, saved, spy, lesso
     inside = ["=SUM(Table1[Sales])", "=B2+B3", "Save the file: it keeps your work.", "-5", "Call it Total.",
               '=TEXTJOIN("|",TRUE,A1:A3)', "=IFERROR(VLOOKUP(A2,B:C,2,FALSE),0)", "=_xlfn.XLOOKUP(A1,B:B,C:C)",
               "=@INDEX(B2:B9,3)", "Type =B2*12 in B3 (the yearly total).", "Make k1 = 5 (five).",
-              "Step 2 - insert an image (PNG) later.", "=sum(b2:b5)"]
+              "Step 2 - insert an image (PNG) later.", "=sum(b2:b5)",
+              "Type =SUM(B2:B5) in B6", 'Type "Total" in A6', "Type =B2 * 12 (yearly) in B3."]
     saved.file("writer_vid1_upload")
     saved.answer("writer_vid1", {**_lesson(), "starter": {f"k{i}": t for i, t in enumerate(inside)}})
 
