@@ -84,12 +84,15 @@ def parse_line_ref(ref: str) -> tuple[str, int] | None:
 def editor_line_spot(area: Rect, active: Active, line: int, scale: float) -> Spot:
     """Where `line` of the open file is, from the editor's text area (physical px), the lines on
     screen and the line height. A line off screen points at the edge it is past, saying which way to
-    scroll. A line scrolled partly out of view at the top can put the rest up to one line out."""
+    scroll. A line scrolled partly out of view at the top can put the rest up to one line out.
+
+    A line past the last one on screen that would still start inside the editor is past the end of
+    the file (one that existed would be on screen), so it points where that line will go."""
     height = active.line_height * scale
     top = area.y + (line - active.visible_from) * height
     if line < active.visible_from:
         return Spot(Rect(area.x, area.y, area.w, height), f"Scroll up to line {line}")
-    if line > active.visible_to or top >= area.y + area.h:
+    if top >= area.y + area.h:
         return Spot(Rect(area.x, area.y + area.h - height, area.w, height), f"Scroll down to line {line}")
     return Spot(Rect(area.x, top, area.w, min(height, area.y + area.h - top)))
 

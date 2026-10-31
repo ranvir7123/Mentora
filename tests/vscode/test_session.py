@@ -474,6 +474,18 @@ def test_editor_line_rect_from_visible_range():
     assert editor_line_spot(area, active, 40, 2.0) == Spot(Rect(100, 762, 800, 38), "Scroll down to line 40")
 
 
+def test_editor_line_past_the_end_of_a_short_file_points_where_it_will_go():
+    # A 2-line file: VS Code says lines 1-2 are on screen, and line 3 is the one the learner types next.
+    area = Rect(100, 100, 800, 700)
+    short = Active("hello.py", 2, 1, visible_from=1, visible_to=2, line_height=19.0, font_size=14.0)
+    spot = editor_line_spot(area, short, 3, 2.0)
+    assert "Scroll" not in spot.bubble
+    assert area.y <= spot.rect.y < area.y + area.h
+    assert spot == Spot(Rect(100, 176, 800, 38))
+    # Far enough past the end that it would be below the editor: that still needs scrolling.
+    assert editor_line_spot(area, short, 30, 2.0) == Spot(Rect(100, 762, 800, 38), "Scroll down to line 30")
+
+
 def test_locate_a_line_of_the_open_file(opened):
     session, host, *_ = opened()
     session.perform(Call("open_file", {"path": "hello.py"})).result(timeout=5)
