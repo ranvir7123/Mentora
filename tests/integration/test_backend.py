@@ -491,6 +491,7 @@ def test_ask_never_ticks_a_step(world):
     assert context["hints"] == ["Find k0.", "k0 needs a value.", "Set k0 to 1."] and context["hints_shown"] == 1
     assert context["verdict"] == "Not yet: k0 says 5. It should say 1."
     assert context["state"] == {"k0": 5}
+    assert context["app"] == "fake"                      # the coach is told which app the lesson is in
 
 
 def test_a_coach_that_cannot_answer_says_its_calm_line(world):

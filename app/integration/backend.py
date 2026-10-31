@@ -957,8 +957,8 @@ class Backend:
             index = min(self._helped(o), len(o.lesson.steps) - 1)
             step = o.lesson.steps[index]
             verdict = o.verdict[1] if o.verdict is not None and o.verdict[0] == index else ""  # never another step's
-            context = {"instruction": step.instruction, "why": step.why, "hints": list(step.hints),
-                       "hints_shown": len(o.hints.get(index, [])), "verdict": verdict,
+            context = {"app": o.lesson.app, "instruction": step.instruction, "why": step.why,
+                       "hints": list(step.hints), "hints_shown": len(o.hints.get(index, [])), "verdict": verdict,
                        "state": coach_state(o.snap, step)}
         self._submit(self._meta_pool, self._answer, o, asked, text, context)
 
