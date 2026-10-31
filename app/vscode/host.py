@@ -17,7 +17,7 @@ class Host(Protocol):
     def scale(self, hwnd: int) -> float: ...                # physical pixels per CSS pixel at zoom 0
     def place(self, hwnd: int, rect: Rect) -> None: ...
     def minimize(self, hwnd: int) -> None: ...
-    def find(self, hwnd: int, kind: str, ref: str) -> Rect | None: ...   # editor, explorer_item, terminal, run_button
+    def find(self, hwnd: int, kind: str, ref: str) -> Rect | None: ...   # editor, explorer_item, new_file, terminal, run_button
     def screen_setup(self) -> None: ...                     # once, on the thread that calls find
 
 

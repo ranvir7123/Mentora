@@ -483,8 +483,15 @@ class VsCodeSession:
             return self._locate_line(hwnd, target.ref)
         if target.kind in TARGET_KINDS:
             rect = self._host.find(hwnd, target.kind, target.ref)
+            if rect is None and target.kind == "explorer_item" and not self._has_file(target.ref):
+                rect = self._host.find(hwnd, "new_file", "")         # its row only exists once it is made
+                return None if rect is None else Spot(rect, "New File here")
             return None if rect is None else Spot(rect)
         return None
+
+    def _has_file(self, path: str) -> bool:
+        files = self._latest.files if self._latest is not None else {}
+        return clean_path(path).lower() in {clean_path(p).lower() for p in files}
 
     def _locate_line(self, hwnd: int, ref: str) -> Spot | None:
         parsed = parse_line_ref(ref)

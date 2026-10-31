@@ -43,6 +43,16 @@ def test_a_file_in_a_shut_folder_points_at_the_folder():
     assert pick(ELEMENTS, "explorer_item", "other/readme.txt") is None
 
 
+def test_a_file_still_to_make_points_at_the_new_file_button_or_the_files_explorer():
+    # Lesson 1's first step asks for hello.py, whose row only exists once the step is done.
+    empty_tree = Element("tree", "Files Explorer", "monaco-list", Rect(0, 140, 300, 760))
+    folder = Element("button", "Explorer Section: lesson", "pane-header", Rect(0, 100, 300, 40))
+    new_file = Element("button", "New File...", "action-label", Rect(200, 104, 32, 32))
+    assert pick([folder, new_file, empty_tree], "new_file", "") == Rect(200, 104, 32, 32)
+    assert pick([folder, empty_tree], "new_file", "") == Rect(0, 140, 300, 760)
+    assert pick([folder], "new_file", "") is None
+
+
 def test_the_terminal_and_the_run_button():
     assert pick(ELEMENTS, "terminal", "") == Rect(320, 900, 1200, 300)
     assert pick(ELEMENTS, "run_button", "") == Rect(1480, 120, 32, 32)

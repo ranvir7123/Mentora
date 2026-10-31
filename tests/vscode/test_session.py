@@ -504,6 +504,17 @@ def test_locate_a_line_of_another_file_points_at_it_in_the_explorer(opened):
     assert spot == Spot(Rect(10, 300, 200, 44), "Open readme.txt first")
 
 
+def test_locate_a_file_still_to_make_points_at_new_file(opened):
+    # Lesson 1's first step: the row for the file to make is not there yet, so point where it is made.
+    session, host, *_ = opened()
+    session.read_now().result(timeout=5)
+    host.rects[("new_file", "")] = Rect(200, 104, 32, 32)
+    spot = session.locate(Target("explorer_item", "ask.py")).result(timeout=5)
+    assert spot == Spot(Rect(200, 104, 32, 32), "New File here")
+    # A file that is there but whose row cannot be seen (scrolled away) is not one to make.
+    assert session.locate(Target("explorer_item", "hello.py")).result(timeout=5) is None
+
+
 def test_locate_other_targets_asks_ui_automation(opened):
     session, host, *_ = opened()
     session.read_now().result(timeout=5)

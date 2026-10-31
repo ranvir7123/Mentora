@@ -14,6 +14,8 @@ What each kind is (probes/vscode_session.py prints what each one finds in the re
   biggest one, since the search box and other small inputs are editors too).
 - explorer_item: the file's row in the "Files Explorer" tree, or its top folder's row while the
   folder is shut.
+- new_file: the Explorer's "New File..." button, or the Files Explorer itself when that button is
+  hidden: where a file still to make is made, as its row only exists once it is made.
 - terminal: the terminal's text area (class "xterm").
 - run_button: the Python add-on's "Run Python File" button, when the learner has it.
 """
@@ -74,6 +76,10 @@ def pick(elements: Iterable[Element], kind: str, ref: str) -> Rect | None:
     if kind == "run_button":
         buttons = [e for e in shown if e.control == "button" and e.name.startswith("Run Python File")]
         return buttons[0].rect if buttons else None
+    if kind == "new_file":
+        buttons = [e for e in shown if e.control == "button" and e.name.startswith("New File")]
+        trees = [e for e in shown if e.control == "tree" and e.name == FILES_EXPLORER]
+        return buttons[0].rect if buttons else trees[0].rect if trees else None
     if kind == "explorer_item":
         trees = [e for e in shown if e.control == "tree" and e.name == FILES_EXPLORER]
         if not trees:
