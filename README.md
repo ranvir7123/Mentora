@@ -14,8 +14,9 @@ and the build plans are in [docs/superpowers/plans/](docs/superpowers/plans/).
 
 Each part below is built and tested, and the program now joins them. In real Excel, clicking the budget
 lesson on the home screen opens it with Excel in front, the lesson panel docked beside it, and the
-mascot on empty cells beside the first step's cells. One lesson is proven so far: "Your first Python
-program", in VS Code.
+mascot on empty cells beside the first step's cells. Five lessons are proven so far: the four Excel
+lessons (proven in real Excel on 31 Oct 2026, not yet tested by Meta's agent) and "Your first Python
+program" in VS Code.
 
 - The program ([app/main.py](app/main.py), [app/integration/](app/integration/)): `python -m app` opens
   the home screen with your streak, points and courses, and "Your common mistakes": the steps that took
@@ -24,11 +25,12 @@ program", in VS Code.
   on a fresh copy and does the steps before that one for you; it is checked by tests only and has not
   run in real Excel yet. Opening a lesson hides home, docks the lesson
   panel on the right and puts the app beside it. Your progress stays on your computer, in
-  `%LOCALAPPDATA%\mentora\`. Only lessons that passed their proof and test are on the shelf (a VS Code
-  lesson skips the test, so its proof is enough), so today the shelf holds only "Your first Python
-  program" unless the developer switch `MENTORA_SHOW_UNPROVEN=1` is set, which shows the others marked
-  "not proven yet". For a cell step, the mascot and its words stay on the sheet's empty cells,
-  off Excel's ribbon, formula bar and Name Box, so the button a step needs stays in view; only when the
+  `%LOCALAPPDATA%\mentora\`. Only lessons that passed their proof and have a test result are on the
+  shelf. A VS Code lesson skips the test, and so does a lesson proven with
+  `python -m app.factory prove <lesson folder> --no-test`; both show the "proven" badge, never "tested".
+  Today the shelf holds the four Excel lessons and "Your first Python program"; the developer switch
+  `MENTORA_SHOW_UNPROVEN=1` also shows "Your first app with Meta's AI", marked "not proven yet". For a
+  cell step, the mascot and its words stay on the sheet's empty cells, off Excel's ribbon, formula bar and Name Box, so the button a step needs stays in view; only when the
   visible sheet has no room for them do they go elsewhere on the screen. Tried in real Excel on the
   budget lesson's first step; its other steps are checked by tests only.
 - The screens ([app/ui/](app/ui/)): the home screen, the lesson panel and the flying mascot pointer. See
@@ -54,8 +56,15 @@ program", in VS Code.
   showed its "Not yet", when a script did each step through the add-on. Not yet tried in real VS Code:
   the run step (6) with the folder trusted, steps done by hand, and "Your first app with Meta's AI",
   which needs a Meta key.
-- Three hand-written lessons ([lessons/](lessons/)): a monthly budget in Excel, and two beginner
-  Python lessons in VS Code.
+- Six lessons ([lessons/](lessons/)), all written by hand; none was made from a video:
+  - Four in Excel, in one course: "Monthly budget", "Pet survey chart", "Student grades" and "Running
+    balance". The last three cover the same everyday tasks as approved videos on the shortlist (charts
+    from a survey table, a class grade sheet, a running balance), but were written by hand, not made from
+    those videos. All four are proven: on 31 Oct 2026 a program did every step in a hidden real Excel,
+    and each step's check was false before it, true after it, and said "Not yet" to each planted mistake.
+    Meta's agent has not tested them, because that needs a Meta key.
+  - Two beginner Python lessons in VS Code: "Your first Python program" (proven) and "Your first app
+    with Meta's AI" (not proven yet).
 - A guard that refuses any commit or push holding an API key or a `.env` file
   ([tools/secret_scan.py](tools/secret_scan.py), wired in by `git config core.hooksPath tools/hooks`).
 - The Meta key is read from the `META_API_KEY` environment variable, or from the user's saved Windows
