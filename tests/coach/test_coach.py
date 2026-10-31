@@ -186,3 +186,10 @@ def test_tips_muse_spark_will_not_write_are_offline_not_empty(saved):
 
     with pytest.raises(CoachUnavailable, match="^Tips are offline right now"):
         MetaCoach(saved.client).tips(LOG)
+
+
+def test_plain_takes_out_markdown_stars_and_backticks():
+    from app.coach.coach import plain
+    assert plain("Click the **B** (Bold) button, or press *Ctrl+B*. Type `=SUM(B2:B5)`.") \
+        == "Click the B (Bold) button, or press Ctrl+B. Type =SUM(B2:B5)."
+    assert plain("Type =B2*C2 in D2.") == "Type =B2*C2 in D2."

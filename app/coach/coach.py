@@ -24,13 +24,13 @@ WONT_ANSWER = "I can't help with that one. Ask me about this step."
 _DOWN = {
     "tips": {
         "offline": "Tips are offline right now. Your lessons still work.",
-        "no_key": "Tips need a Meta key, which isn't set up yet. Your lessons still work.",
-        "paused": "Tips are paused: Meta spending reached its limit. Your lessons still work.",
+        "no_key": "Tips need a {ai} key, which isn't set up yet. Your lessons still work.",
+        "paused": "Tips are paused: {ai} spending reached its limit. Your lessons still work.",
     },
     "answer": {
         "offline": "The Ask box can't answer right now. Your lesson still works: try Hint or Show me.",
-        "no_key": "The Ask box needs a Meta key, which isn't set up yet. Try Hint or Show me.",
-        "paused": "The Ask box is paused: Meta spending reached its limit. Try Hint or Show me.",
+        "no_key": "The Ask box needs a {ai} key, which isn't set up yet. Try Hint or Show me.",
+        "paused": "The Ask box is paused: {ai} spending reached its limit. Try Hint or Show me.",
     },
 }
 
@@ -47,6 +47,7 @@ _ANSWER_RULES = (
     "kindly that you can help with this step. Never use the words \"simply\" or \"just\".")
 
 _FILLER = re.compile(r"\b(?:simply|just)\b,?\s*", re.I)
+_MARKS = re.compile(r"(?<![\w*])\*(?=\S)([^*]+?)(?<=\S)\*(?![\w*])")      # *word*, not =B2*C2
 _CLAIM = re.compile(
     r"\b(?:ticked|tick(?:s|ed)? off|well done|nailed it|you did it|you got it|all set)\b"
     r"|(?:\bis|\bare|\bwas|\bhas been|\bhave been|['’]s|['’]re|['’]ve|\bhave)\s+(?:now\s+|already\s+|all\s+)?"
@@ -102,7 +103,8 @@ class MetaCoach:
         except MetaError as exc:
             cause = "no_key" if isinstance(exc, NoKey) else "paused" if isinstance(exc, SpendLimitReached) \
                 else "offline"
-            raise CoachUnavailable(_DOWN[what][cause]) from exc
+            ai = getattr(self.client, "name", "Meta")
+            raise CoachUnavailable(_DOWN[what][cause].format(ai=ai)) from exc
 
     def _shelf_rule(self) -> str:
         titles = [t for t in (self.shelf() if self.shelf else ()) if t][:MAX_SHELF]
@@ -154,8 +156,10 @@ def _short(value: Any) -> str:
 # What comes back.
 
 def plain(text: str) -> str:
-    """Without "simply" and "just", with tidy spaces and each sentence starting with a capital."""
-    text = re.sub(r"\s+", " ", _FILLER.sub("", text or "")).strip()
+    """Without "simply" and "just", without markdown's stars and backticks (the panel shows plain text; a
+    star inside a formula like =B2*C2 stays), with tidy spaces and each sentence starting with a capital."""
+    text = _MARKS.sub(r"\1", (text or "").replace("**", "").replace("`", ""))
+    text = re.sub(r"\s+", " ", _FILLER.sub("", text)).strip()
     text = re.sub(r"\s+([.,!?;:])", r"\1", text)
     return re.sub(r"(^|[.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
 
